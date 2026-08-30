@@ -122,15 +122,54 @@ say $dry_run ? 'Dry-run concluído.' : 'Dotfiles instalados.';
 exit 0;
 
 sub ensure_fonts {
-    ensure_repo_packages('adobe-source-sans-fonts');
+    ensure_lexend_font();
 
-    if (font_present('Source Sans 3')) {
-        say 'FONT    Source Sans 3 disponível';
+    if (font_present('Lexend')) {
+        say 'FONT    Lexend disponível';
     } elsif ($dry_run) {
-        say 'FONT?   Source Sans 3 será usada após a instalação do pacote';
+        say 'FONT?   Lexend será usada após o download dos arquivos';
     } else {
-        die "Source Sans 3 não foi encontrada após instalar adobe-source-sans-fonts\n";
+        die "Lexend não foi encontrada após o download dos arquivos\n";
     }
+}
+
+sub ensure_lexend_font {
+    my $font_dir = File::Spec->catdir($target, '.local', 'share', 'fonts', 'lexend');
+    my %weight_of_file = (
+        'Lexend-Regular.ttf' => 400,
+        'Lexend-Bold.ttf'    => 700,
+    );
+
+    if (!grep { !-f File::Spec->catfile($font_dir, $_) } keys %weight_of_file) {
+        say 'OK      arquivos da fonte Lexend já baixados';
+        return;
+    }
+
+    if ($dry_run) {
+        say 'FONT?   Lexend seria baixada do Google Fonts em ' . $font_dir;
+        return;
+    }
+
+    make_path($font_dir) unless -d $font_dir;
+
+    # Um user-agent genérico faz a API do Google Fonts responder com TrueType
+    # (em vez de woff2), que é o formato que o fontconfig/Linux espera.
+    my $css = qx{curl -sL -A 'Mozilla/5.0' 'https://fonts.googleapis.com/css2?family=Lexend:wght\@400;700'};
+    die "Não foi possível obter o CSS do Google Fonts para Lexend\n" unless $css;
+
+    my %url_of_weight;
+    while ($css =~ /font-weight:\s*(\d+);\s*\n\s*src:\s*url\(([^)]+)\)/g) {
+        $url_of_weight{$1} = $2;
+    }
+
+    for my $file (sort keys %weight_of_file) {
+        my $weight = $weight_of_file{$file};
+        my $url    = $url_of_weight{$weight}
+            or die "URL da fonte Lexend (peso $weight) não encontrada no CSS do Google Fonts\n";
+        run_command('curl', '-sL', $url, '-o', File::Spec->catfile($font_dir, $file));
+    }
+
+    run_command('fc-cache', '-f', $font_dir);
 }
 
 sub ensure_apps {
@@ -303,7 +342,7 @@ Uso: perl omarchy.pl [opções]
   --dry-run          mostra as ações sem criar links ou executar comandos
   --backup           move conflitos para ~/.local/state/dotfiles/backups/
   --apps             remove itens antigos e instala apps/web apps pedidos
-  --fonts            instala Source Sans 3 e ativa o perfil de fontes
+  --fonts            instala Lexend e ativa o perfil de fontes
   --plugin           instala/habilita o Feader-RSS
   --theme            instala/aplica o tema Sword Art Omarchy
   --all              executa --apps --fonts --plugin --theme
