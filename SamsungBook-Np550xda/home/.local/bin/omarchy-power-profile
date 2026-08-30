@@ -1,0 +1,52 @@
+#!/usr/bin/env perl
+use 5.036;
+use strict;
+use warnings;
+
+my $powerprofilesctl = find_powerprofilesctl();
+exit 0 unless defined $powerprofilesctl;
+
+my ($status, $capacity) = battery_state();
+my $profile = 'balanced';
+
+if (defined $status && $status eq 'Discharging'
+    && defined $capacity && $capacity <= 25) {
+    $profile = 'power-saver';
+}
+if (system($powerprofilesctl, 'set', $profile) != 0) {
+    warn "Não foi possível selecionar o perfil de energia '$profile'\n";
+    exit 1;
+}
+
+exit 0;
+
+sub find_powerprofilesctl {
+    for my $candidate (qw(/usr/bin/powerprofilesctl /bin/powerprofilesctl)) {
+        return $candidate if -x $candidate;
+    }
+    return;
+}
+
+sub battery_state {
+    my $base = '/sys/class/power_supply';
+    opendir my $dir, $base or return;
+    my ($battery) = grep { /^BAT/ && -d "$base/$_" } readdir $dir;
+    closedir $dir;
+    return unless defined $battery;
+
+    my $battery_dir = "$base/$battery";
+    my $status      = read_value("$battery_dir/status");
+    my $capacity    = read_value("$battery_dir/capacity");
+    $capacity = undef unless defined $capacity && $capacity =~ /^\d+$/;
+
+    return ($status, $capacity);
+}
+
+sub read_value {
+    my ($path) = @_;
+    open my $file, '<', $path or return;
+    my $value = <$file> // '';
+    close $file;
+    chomp $value;
+    return $value;
+}

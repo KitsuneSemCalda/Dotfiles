@@ -1,0 +1,23 @@
+{
+  "feeds": [
+    {
+      "name": "AkitaOnRails",
+      "url": "https://akitaonrails.com/index.xml"
+    },
+    {
+      "name": "Diolinux",
+      "url": "https://diolinux.com.br/feed"
+    },
+    {
+      "name": "Terminal Root",
+      "url": "https://terminalroot.com.br/feed.xml"
+    },
+    {
+      "name": "KevinmarqueSP",
+      "url": "https://kevinmarquesp.github.io/index.xml"
+    }
+  ],
+  "maxItems": 200,
+  "refreshMinutes": 1,
+  "scrollStep": 90
+}

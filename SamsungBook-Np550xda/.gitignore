@@ -1,0 +1,17 @@
+# Editor and operating-system noise
+*~
+*.swp
+*.swo
+.DS_Store
+
+# Local reports and secrets
+*.log
+*.secret
+.env
+.env.*
+!.env.example
+hardware/*.local.txt
+# Perl tooling
+.prove/
+cover_db/
+nytprof.out

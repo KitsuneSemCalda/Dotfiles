@@ -1,0 +1,51 @@
+System:
+  Kernel: 7.1.8-arch1-3 arch: x86_64 bits: 64
+  Desktop: Hyprland v: N/A Distro: Omarchy
+Machine:
+  Type: Laptop System: SAMSUNG product: 550XDA v: P23CFB serial: <superuser required>
+  Mobo: SAMSUNG model: NP550XDA-KF2BR v: SGLA915A03-C01-G001-S0001+10.0.19042
+    serial: <superuser required> Firmware: UEFI vendor: American Megatrends LLC.
+    v: P23CFB.053.241029.HQ date: 10/29/2024
+Battery:
+  ID-1: BAT1 charge: 12.7 Wh (96.4%) condition: 13.2/43.1 Wh (30.7%)
+CPU:
+  Info: quad core model: 11th Gen Intel Core i5-1135G7 bits: 64 type: MT MCP cache: L2: 5 MiB
+  Speed (MHz): avg: 400 min/max: 400/4200 cores: 1: 400 2: 400 3: 400 4: 400 5: 400 6: 400 7: 400
+    8: 400
+Graphics:
+  Device-1: Intel TigerLake-LP GT2 [Iris Xe Graphics] driver: i915 v: kernel
+  Display: wayland server: X.org v: 1.21.1.24 with: Xwayland v: 24.1.13 driver: gpu: i915
+    resolution: 1920x1080
+  API: EGL Message: No EGL data available.
+  API: OpenGL Message: No GL data available.
+  Info: Tools: api: eglinfo,glxinfo gpu: nvidia-smi x11: xprop,xrandr
+Audio:
+  Device-1: Intel 500 Series Family On-Package High Definition Audio driver: snd_hda_intel
+  API: ALSA v: k7.1.8-arch1-3 status: kernel-api
+Network:
+  Device-1: Intel Wi-Fi 6 AX201 driver: iwlwifi
+  IF: wlo1 state: up mac: <filter>
+  Device-2: Realtek RTL8111/8168/8211/8411 PCI Express Gigabit Ethernet driver: r8169
+  IF: enp2s0 state: down mac: <filter>
+  IF-ID-1: br-c90148087e46 state: up speed: 10000 Mbps duplex: unknown mac: <filter>
+  IF-ID-2: docker0 state: up speed: 10000 Mbps duplex: unknown mac: <filter>
+  IF-ID-3: veth2ce6d20 state: up speed: 10000 Mbps duplex: full mac: <filter>
+  IF-ID-4: vethedc715a state: up speed: 10000 Mbps duplex: full mac: <filter>
+  IF-ID-5: vethf9e4097 state: up speed: 10000 Mbps duplex: full mac: <filter>
+Drives:
+  Local Storage: total: 238.47 GiB used: 132.17 GiB (55.4%)
+  ID-1: /dev/nvme0n1 vendor: Samsung model: MZVLQ256HAJD-000 size: 238.47 GiB
+Partition:
+  ID-1: / size: 236.46 GiB used: 132 GiB (55.8%) fs: btrfs dev: /dev/root
+  ID-2: /boot size: 2 GiB used: 166.6 MiB (8.2%) fs: vfat dev: /dev/nvme0n1p1
+  ID-3: /home size: 236.46 GiB used: 132 GiB (55.8%) fs: btrfs dev: /dev/root
+  ID-4: /var/log size: 236.46 GiB used: 132 GiB (55.8%) fs: btrfs dev: /dev/root
+Swap:
+  ID-1: swap-1 type: file size: 7.48 GiB used: 15.4 MiB (0.2%) file: /swap/swapfile
+  ID-2: swap-2 type: zram size: 15.34 GiB used: 5.47 GiB (35.7%) dev: /dev/zram0
+Sensors:
+  System Temperatures: cpu: 53.0 C mobo: N/A
+  Fan Speeds (rpm): N/A
+Info:
+  Memory: total: 16 GiB available: 15.34 GiB used: 7.53 GiB (49.1%)
+  Processes: 3 Uptime: 6d 20h 0m Client: Unknown Client: codex inxi: 3.3.41
