@@ -14,7 +14,8 @@ Hyprland. O snapshot completo usado para tomar as decisões está em
 - Bateria com capacidade observada em 30,7% da capacidade de projeto
 - Sistema de arquivos Btrfs com swapfile e zram
 
-As escolhas iniciais seguem esse perfil: escala 1 e modo de monitor
+As escolhas iniciais seguem esse perfil: escala 1 e fontes de interface e
+terminal em tamanho 20, além do modo de monitor
 `preferred`, efeitos visuais moderados para a Iris Xe e perfil de energia
 `balanced` por padrão. Em carga baixa, o utilitário Perl incluído pode usar
 `power-saver` automaticamente.
@@ -26,11 +27,12 @@ home/
 ├── .config/
 │   ├── alacritty/alacritty.toml
 │   ├── btop/btop.conf
-│   ├── fontconfig/fonts.conf   # Source Sans 3 como sans-serif
+│   ├── fontconfig/fonts.conf   # Lexend como sans-serif
 │   ├── gtk-3.0/settings.ini
 │   ├── gtk-4.0/settings.ini
 │   ├── hypr/                   # configuração Lua nativa do Omarchy
 │   ├── omarchy/rss-reader.json # feeds do Feader-RSS
+│   ├── omarchy/shell.toml      # tamanho-base da interface do Omarchy
 │   └── starship.toml
 └── .local/bin/
     └── omarchy-power-profile  # ajuste de energia escrito em Perl
@@ -44,10 +46,10 @@ Perl é usado para a automação e as ferramentas do repositório. Os arquivos
 de configuração continuam em Lua/TOML porque são os formatos nativos do
 Omarchy e do Hyprland.
 
-Source Sans 3 é aplicada à interface por fontconfig e pelas configurações GTK;
-o terminal continua usando JetBrainsMono Nerd Font, que é monoespaçada. A
-fonte é instalada pelo pacote Arch `adobe-source-sans-fonts` e não é copiada
-para dentro do repositório.
+Lexend é aplicada à interface por fontconfig e pelas configurações GTK; o
+terminal continua usando JetBrainsMono Nerd Font, que é monoespaçada. Os
+arquivos de Lexend são baixados pelo instalador e não são copiados para dentro
+do repositório.
 
 O perfil de aplicativos inclui Bitwarden, AppFlowy, PrismLauncher, CurseForge,
 Amazon Shopping, Mercado Livre, Pinterest, Z Ai, WebMotors e Panini Brasil.
@@ -70,6 +72,18 @@ Para instalar preservando arquivos existentes em
 ```bash
 perl ./omarchy.pl --backup
 ```
+
+Para desfazer a instalação, restaurando o backup mais recente sem apagar sua
+cópia:
+
+```bash
+perl ./omarchy.pl --restore
+```
+
+O restore só substitui symlinks que ainda apontam para este repositório (ou
+cria arquivos que estejam ausentes). Se encontrar alterações manuais no
+destino, aborta a operação inteira para evitar sobrescrevê-las. Use
+`--restore --dry-run` para conferir o backup escolhido antes de restaurar.
 
 As etapas também podem ser executadas separadamente com `--fonts`, `--apps`,
 `--plugin` ou `--theme`. `--apps` usa os repositórios oficiais para

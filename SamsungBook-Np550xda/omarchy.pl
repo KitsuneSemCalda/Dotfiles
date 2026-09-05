@@ -5,7 +5,7 @@ use warnings;
 
 use Cwd qw(abs_path);
 use File::Basename qw(dirname);
-use File::Copy qw(move);
+use File::Copy qw(copy move);
 use File::Find qw(find);
 use File::Path qw(make_path);
 use File::Spec;
@@ -14,6 +14,7 @@ use POSIX qw(strftime);
 
 my $dry_run = 0;
 my $backup  = 0;
+my $restore = 0;
 my $apps    = 0;
 my $fonts   = 0;
 my $plugin  = 0;
@@ -25,6 +26,7 @@ my $target  = $ENV{HOME};
 GetOptions(
     'dry-run'  => \$dry_run,
     'backup'   => \$backup,
+    'restore'  => \$restore,
     'apps'     => \$apps,
     'fonts'    => \$fonts,
     'plugin'   => \$plugin,
@@ -37,6 +39,10 @@ GetOptions(
 usage(0) if $help;
 
 $apps = $fonts = $plugin = $theme = 1 if $all;
+
+if ($restore && ($backup || $apps || $fonts || $plugin || $theme)) {
+    die "--restore não pode ser combinado com --backup, --apps, --fonts, --plugin, --theme ou --all\n";
+}
 
 die "HOME não está definido; use --target CAMINHO\n"
     unless defined $target && length $target;
@@ -53,8 +59,15 @@ if (($apps || $fonts || $plugin || $theme) && $target ne $home_root) {
     die "Ações do Omarchy só podem usar o HOME real; use --target apenas para testar symlinks\n";
 }
 
+my $backup_base = File::Spec->catdir($target, '.local', 'state', 'dotfiles', 'backups');
+
+if ($restore) {
+    restore_backups($backup_base);
+    exit 0;
+}
+
 my $stamp       = strftime('%Y%m%d-%H%M%S', localtime);
-my $backup_root = File::Spec->catdir($target, '.local', 'state', 'dotfiles', 'backups', $stamp);
+my $backup_root = File::Spec->catdir($backup_base, $stamp);
 my @sources;
 
 find(
@@ -120,6 +133,112 @@ ensure_theme()  if $theme;
 
 say $dry_run ? 'Dry-run concluído.' : 'Dotfiles instalados.';
 exit 0;
+
+sub restore_backups {
+    my ($backup_base) = @_;
+
+    opendir my $backup_dir, $backup_base
+        or die "Diretório de backups ausente: $backup_base\n";
+
+    my @snapshots = sort grep {
+        /^\d{8}-\d{6}$/ && -d File::Spec->catdir($backup_base, $_)
+    } readdir $backup_dir;
+    closedir $backup_dir;
+
+    my $snapshot_name = $snapshots[-1]
+        or die "Nenhum backup encontrado em $backup_base\n";
+    my $snapshot = File::Spec->catdir($backup_base, $snapshot_name);
+    my @entries;
+
+    find(
+        {
+            no_chdir => 1,
+            wanted   => sub {
+                push @entries, $File::Find::name
+                    if -f $File::Find::name || -l $File::Find::name;
+            },
+        },
+        $snapshot,
+    );
+
+    die "Backup $snapshot_name não contém arquivos restauráveis\n"
+        unless @entries;
+
+    my (@actions, @conflicts);
+    for my $backup_path (sort @entries) {
+        my $relative    = File::Spec->abs2rel($backup_path, $snapshot);
+        my $destination = File::Spec->catfile($target, $relative);
+        my $occupied    = -e $destination || -l $destination;
+
+        if ($occupied && !points_to_source($destination, $relative)) {
+            push @conflicts, $relative;
+            next;
+        }
+
+        push @actions, {
+            backup_path => $backup_path,
+            destination => $destination,
+            relative    => $relative,
+        };
+    }
+
+    if (@conflicts) {
+        warn "CONFLITO $_ (o destino não é um symlink deste dotfiles)\n"
+            for @conflicts;
+        die scalar(@conflicts) . " conflito(s); restauração abortada sem alterar arquivos\n";
+    }
+
+    say "BACKUP   $snapshot_name";
+    for my $action (@actions) {
+        my $relative_backup = File::Spec->abs2rel($action->{backup_path}, $target);
+        say(($dry_run ? 'RESTORE? ' : 'RESTORE  ')
+            . "$action->{relative} <- $relative_backup");
+        next if $dry_run;
+
+        unlink $action->{destination}
+            if -e $action->{destination} || -l $action->{destination};
+        restore_entry($action->{backup_path}, $action->{destination});
+    }
+
+    say $dry_run
+        ? 'Dry-run de restauração concluído.'
+        : "Backup restaurado; cópia preservada em $snapshot";
+}
+
+sub points_to_source {
+    my ($destination, $relative) = @_;
+    return 0 unless -l $destination;
+
+    my $link = readlink($destination);
+    return 0 unless defined $link;
+
+    my $link_abs = File::Spec->canonpath(
+        File::Spec->rel2abs($link, dirname($destination))
+    );
+    my $source_abs = File::Spec->canonpath(
+        File::Spec->rel2abs(File::Spec->catfile($source_root, $relative))
+    );
+
+    return $link_abs eq $source_abs;
+}
+
+sub restore_entry {
+    my ($backup_path, $destination) = @_;
+    my $parent = dirname($destination);
+    make_path($parent) unless -d $parent;
+
+    if (-l $backup_path) {
+        my $link = readlink($backup_path);
+        die "Não foi possível ler o symlink de backup $backup_path\n"
+            unless defined $link;
+        symlink($link, $destination)
+            or die "Falha ao restaurar symlink $destination: $!\n";
+        return;
+    }
+
+    copy($backup_path, $destination)
+        or die "Falha ao copiar $backup_path para $destination: $!\n";
+}
 
 sub ensure_fonts {
     ensure_lexend_font();
@@ -341,6 +460,7 @@ Uso: perl omarchy.pl [opções]
 
   --dry-run          mostra as ações sem criar links ou executar comandos
   --backup           move conflitos para ~/.local/state/dotfiles/backups/
+  --restore          restaura o backup mais recente sem apagar a cópia
   --apps             remove itens antigos e instala apps/web apps pedidos
   --fonts            instala Lexend e ativa o perfil de fontes
   --plugin           instala/habilita o Feader-RSS

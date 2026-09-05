@@ -12,8 +12,8 @@ fonte de terminal — misturar as duas mantém o texto de código/tabelas
 alinhado.
 
 O `fonts.conf` também define um piso de acessibilidade: nenhuma fonte
-renderiza abaixo de 18pt, mesmo que o app peça um tamanho menor (o
-`gtk-font-name` já usa 18 diretamente, então essa regra cobre outros apps
+renderiza abaixo de 20pt, mesmo que o app peça um tamanho menor (o
+`gtk-font-name` já usa 20 diretamente, então essa regra cobre outros apps
 GTK/Qt/Pango que pedem tamanhos menores). Terminais ficam de fora, já que
 definem o tamanho fora do fontconfig.
 
