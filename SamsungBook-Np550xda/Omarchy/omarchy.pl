@@ -47,7 +47,10 @@ if ($restore && ($backup || $apps || $fonts || $plugin || $theme)) {
 die "HOME não está definido; use --target CAMINHO\n"
     unless defined $target && length $target;
 
-my $repo_root   = abs_path(dirname(__FILE__)) or die "Não foi possível localizar o repositório\n";
+my $script_dir  = dirname(__FILE__);
+$script_dir     = File::Spec->rel2abs($script_dir) unless File::Spec->file_name_is_absolute($script_dir);
+my $repo_root   = $script_dir;
+die "Não foi possível localizar o repositório\n" unless -d $repo_root;
 my $source_root = File::Spec->catdir($repo_root, 'home');
 $target         = abs_path($target) // File::Spec->rel2abs($target);
 
