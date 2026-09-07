@@ -2,22 +2,32 @@
   "feeds": [
     {
       "name": "AkitaOnRails",
-      "url": "https://akitaonrails.com/index.xml"
+      "url": "https://akitaonrails.com/index.xml",
+      "folder": "Programming"
     },
     {
       "name": "Diolinux",
-      "url": "https://diolinux.com.br/feed"
+      "url": "https://diolinux.com.br/feed",
+      "folder": "Programming"
     },
     {
       "name": "Terminal Root",
-      "url": "https://terminalroot.com.br/feed.xml"
+      "url": "https://terminalroot.com.br/feed.xml",
+      "folder": "Programming"
     },
     {
       "name": "KevinmarqueSP",
-      "url": "https://kevinmarquesp.github.io/index.xml"
+      "url": "https://kevinmarquesp.github.io/index.xml",
+      "folder": "Programming"
+    },
+    {
+      "name": "ViniCGobbi",
+      "url": "https://blog.vinicgobbi.dev.br/feed.xml",
+      "folder": "Programming"
     }
   ],
   "maxItems": 200,
   "refreshMinutes": 1,
-  "scrollStep": 90
+  "scrollStep": 90,
+  "retentionItems": 1000
 }
