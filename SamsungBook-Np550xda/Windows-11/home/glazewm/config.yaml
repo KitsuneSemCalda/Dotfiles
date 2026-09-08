@@ -1,0 +1,254 @@
+# GlazeWM (https://github.com/glzr-io/glazewm) - tiling window manager para
+# Windows que mais se aproxima do Hyprland/Omarchy: bind SUPER, foco/troca de
+# janela em direcao, workspaces numerados, bordas coloridas via API do Win11.
+#
+# Paleta: mesma do tema Sword Art Omarchy
+# (https://github.com/KitsuneSemCalda/Sword-Art-Omarchy/blob/master/colors.toml)
+# accent = #3ee8ff | muted = #4a5058 | background = #08090a
+#
+# Onde os atalhos do Omarchy nao tem equivalente direto no Windows (ex.:
+# Ctrl+Alt+Del e reservado pelo SO; Super+Space e usado pelo Windows para
+# trocar idioma de teclado) isso fica documentado no README.md em vez de
+# forcado aqui.
+
+general:
+  startup_commands: []
+  shutdown_commands: []
+  config_reload_commands: []
+  focus_follows_cursor: false
+  toggle_workspace_on_refocus: true
+  cursor_jump:
+    enabled: true
+    trigger: 'monitor_focus'
+  hide_method: 'cloak'
+  show_all_in_taskbar: false
+
+gaps:
+  scale_with_dpi: true
+  # Mesma proporcao de home/.config/hypr/looknfeel.lua (gaps_in=5, gaps_out=10)
+  inner_gap: '6px'
+  outer_gap:
+    top: '10px'
+    right: '10px'
+    bottom: '10px'
+    left: '10px'
+
+window_effects:
+  focused_window:
+    border:
+      enabled: true
+      color: '#3ee8ff' # accent
+    hide_title_bar:
+      enabled: false
+    corner_style:
+      enabled: true
+      style: 'rounded'
+    transparency:
+      enabled: false
+      opacity: '100%'
+  other_windows:
+    border:
+      enabled: true
+      color: '#4a5058' # muted
+    hide_title_bar:
+      enabled: false
+    corner_style:
+      enabled: true
+      style: 'rounded'
+    transparency:
+      enabled: false
+      opacity: '100%'
+
+window_behavior:
+  initial_state: 'tiling'
+  state_defaults:
+    floating:
+      centered: true
+      shown_on_top: false
+    fullscreen:
+      maximized: false
+      shown_on_top: false
+
+workspaces:
+  - name: '1'
+  - name: '2'
+  - name: '3'
+  - name: '4'
+  - name: '5'
+  - name: '6'
+  - name: '7'
+  - name: '8'
+  - name: '9'
+
+window_rules:
+  - commands: ['ignore']
+    match:
+      # PowerToys Run / Peek / Command Palette nao devem virar janelas tiled.
+      - window_process: { equals: 'PowerToys' }
+        window_class: { regex: 'HwndWrapper\[PowerToys\..*?\]' }
+      - window_title: { equals: 'Command Palette' }
+        window_class: { equals: 'WinUIDesktopWin32WindowClass' }
+      # Picture-in-picture de navegadores, igual ao sample oficial do GlazeWM.
+      - window_title: { regex: '[Pp]icture.in.[Pp]icture' }
+        window_class: { regex: 'Chrome_WidgetWin_1|MozillaDialogClass' }
+
+binding_modes:
+  # Bonus (nao existe no Omarchy): Super+R entra em modo de redimensionar
+  # por HJKL/setas, igual ao sample oficial do GlazeWM.
+  - name: 'resize'
+    keybindings:
+      - commands: ['resize --width -2%']
+        bindings: ['h', 'left']
+      - commands: ['resize --width +2%']
+        bindings: ['l', 'right']
+      - commands: ['resize --height +2%']
+        bindings: ['k', 'up']
+      - commands: ['resize --height -2%']
+        bindings: ['j', 'down']
+      - commands: ['wm-disable-binding-mode --name resize']
+        bindings: ['escape', 'enter', 'super+r']
+
+keybindings:
+  # --- Mapeados 1:1 do manual do Omarchy (omarchy.org/manual/hotkeys) ---
+
+  # Super+Return: terminal
+  - commands: ['shell-exec wt']
+    bindings: ['super+enter']
+
+  # Super+W / Super+Q: fechar janela
+  - commands: ['close']
+    bindings: ['super+w', 'super+q']
+
+  # Super+T: alternar tiling/floating da janela focada
+  - commands: ['toggle-floating --centered']
+    bindings: ['super+t']
+
+  # Super+F: tela cheia
+  - commands: ['toggle-fullscreen']
+    bindings: ['super+f']
+
+  # Super+Seta: mover o foco entre janelas (HJKL como bonus vim-style)
+  - commands: ['focus --direction left']
+    bindings: ['super+left', 'super+h']
+  - commands: ['focus --direction right']
+    bindings: ['super+right', 'super+l']
+  - commands: ['focus --direction up']
+    bindings: ['super+up', 'super+k']
+  - commands: ['focus --direction down']
+    bindings: ['super+down', 'super+j']
+
+  # Super+Shift+Seta: trocar (swap) janelas de posicao
+  - commands: ['move --direction left']
+    bindings: ['super+shift+left', 'super+shift+h']
+  - commands: ['move --direction right']
+    bindings: ['super+shift+right', 'super+shift+l']
+  - commands: ['move --direction up']
+    bindings: ['super+shift+up', 'super+shift+k']
+  - commands: ['move --direction down']
+    bindings: ['super+shift+down', 'super+shift+j']
+
+  # Super+Tab / Super+Shift+Tab: proximo / anterior workspace
+  - commands: ['focus --next-active-workspace']
+    bindings: ['super+tab']
+  - commands: ['focus --prev-active-workspace']
+    bindings: ['super+shift+tab']
+
+  # Super+Ctrl+Tab: voltar ao workspace anterior (o que teve foco por ultimo)
+  - commands: ['focus --recent-workspace']
+    bindings: ['super+ctrl+tab']
+
+  # Super+1..9: ir para o workspace (Omarchy documenta 1-4, GlazeWM/Hyprland
+  # permitem ate 9; mantido o padrao mais amplo do Hyprland)
+  - commands: ['focus --workspace 1']
+    bindings: ['super+1']
+  - commands: ['focus --workspace 2']
+    bindings: ['super+2']
+  - commands: ['focus --workspace 3']
+    bindings: ['super+3']
+  - commands: ['focus --workspace 4']
+    bindings: ['super+4']
+  - commands: ['focus --workspace 5']
+    bindings: ['super+5']
+  - commands: ['focus --workspace 6']
+    bindings: ['super+6']
+  - commands: ['focus --workspace 7']
+    bindings: ['super+7']
+  - commands: ['focus --workspace 8']
+    bindings: ['super+8']
+  - commands: ['focus --workspace 9']
+    bindings: ['super+9']
+
+  # Super+Shift+1..9: mover a janela focada para o workspace
+  - commands: ['move --workspace 1', 'focus --workspace 1']
+    bindings: ['super+shift+1']
+  - commands: ['move --workspace 2', 'focus --workspace 2']
+    bindings: ['super+shift+2']
+  - commands: ['move --workspace 3', 'focus --workspace 3']
+    bindings: ['super+shift+3']
+  - commands: ['move --workspace 4', 'focus --workspace 4']
+    bindings: ['super+shift+4']
+  - commands: ['move --workspace 5', 'focus --workspace 5']
+    bindings: ['super+shift+5']
+  - commands: ['move --workspace 6', 'focus --workspace 6']
+    bindings: ['super+shift+6']
+  - commands: ['move --workspace 7', 'focus --workspace 7']
+    bindings: ['super+shift+7']
+  - commands: ['move --workspace 8', 'focus --workspace 8']
+    bindings: ['super+shift+8']
+  - commands: ['move --workspace 9', 'focus --workspace 9']
+    bindings: ['super+shift+9']
+
+  # Super+Ctrl+L: bloquear a tela (o Windows ja usa Win+L nativamente; este
+  # bind extra so garante paridade exata com o atalho do Omarchy)
+  - commands: ['shell-exec rundll32.exe user32.dll,LockWorkStation']
+    bindings: ['super+ctrl+l']
+
+  # Super+Ctrl+T: monitor de atividade (Task Manager)
+  - commands: ['shell-exec taskmgr']
+    bindings: ['super+ctrl+t']
+
+  # Super+Ctrl+D: painel de tela/display
+  - commands: ['shell-exec cmd /c start ms-settings:display']
+    bindings: ['super+ctrl+d']
+
+  # Super+Ctrl+A: painel de audio
+  - commands: ['shell-exec cmd /c start ms-settings:sound']
+    bindings: ['super+ctrl+a']
+
+  # Super+Ctrl+P: painel de energia
+  - commands: ['shell-exec cmd /c start ms-settings:powersleep']
+    bindings: ['super+ctrl+p']
+
+  # Super+Shift+Return: navegador padrao (explorer.exe delega pro default)
+  - commands: ['shell-exec explorer https://']
+    bindings: ['super+shift+enter']
+
+  # Super+Shift+F: gerenciador de arquivos
+  - commands: ['shell-exec explorer']
+    bindings: ['super+shift+f']
+
+  # Super+Shift+N: editor (troque para o seu editor preferido)
+  - commands: ['shell-exec code']
+    bindings: ['super+shift+n']
+
+  # Super+Shift+R: recarregar a configuracao (equivalente ao reload do Hyprland)
+  - commands: ['wm-reload-config']
+    bindings: ['super+shift+r']
+
+  # --- Sem equivalente direto no Windows (documentado no README) ---
+  # Super+Space   -> menu do Omarchy. Aqui, o launcher e o PowerToys Run,
+  #                  configurado para abrir com Win+Space (ver README).
+  # Super+Escape  -> menu do sistema. Sem paralelo nativo no Windows.
+  # Ctrl+Alt+Del  -> fechar todas as janelas. Reservado pelo Windows (SAS),
+  #                  nenhum app pode interceptar essa combinacao.
+  # Super+C/V     -> copiar/colar. O Windows ja usa Ctrl+C/Ctrl+V globalmente.
+
+  # --- Extras do GlazeWM (nao existem no Omarchy, mas ajudam no dia a dia) ---
+  - commands: ['toggle-minimized']
+    bindings: ['super+m']
+  - commands: ['toggle-tiling-direction']
+    bindings: ['super+v']
+  - commands: ['wm-enable-binding-mode --name resize']
+    bindings: ['super+r']
+  - commands: ['wm-exit']
+    bindings: ['super+shift+x']

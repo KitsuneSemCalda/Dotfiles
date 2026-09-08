@@ -1,0 +1,8 @@
+﻿Fabricante/modelo : SAMSUNG ELECTRONICS CO., LTD. 550XDA
+BIOS              : P23CFB.053.241029.HQ (10/28/2024 21:00:00)
+CPU               : 11th Gen Intel(R) Core(TM) i5-1135G7 @ 2.40GHz (4 nucleos / 8 threads)
+RAM               : 15.7 GiB
+GPU               : Intel(R) Iris(R) Xe Graphics - 1920x1080
+Sistema           : Microsoft Windows 11 Home Single Language build 26200
+Bateria           : Indisponivel (sem bateria ou WMI de bateria nao exposto)
+Disco             : SAMSUNG MZVLQ256HAJD-000 (238.5 GiB)

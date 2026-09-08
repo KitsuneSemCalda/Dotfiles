@@ -1,0 +1,23 @@
+{
+  "name": "Sword Art Online",
+  "background": "#08090A",
+  "foreground": "#E9F2F5",
+  "cursorColor": "#3EE8FF",
+  "selectionBackground": "#123241",
+  "black": "#08090A",
+  "red": "#FF3B5C",
+  "green": "#4DFFA6",
+  "yellow": "#FFD447",
+  "blue": "#4F8DFF",
+  "purple": "#C77DFF",
+  "cyan": "#3EE8FF",
+  "white": "#C3D6DD",
+  "brightBlack": "#5C6670",
+  "brightRed": "#FF5C7A",
+  "brightGreen": "#6DFFC0",
+  "brightYellow": "#FFE066",
+  "brightBlue": "#7AAEFF",
+  "brightPurple": "#DCA3FF",
+  "brightCyan": "#7DFAFF",
+  "brightWhite": "#FFFFFF"
+}
