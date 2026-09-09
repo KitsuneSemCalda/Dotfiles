@@ -12,19 +12,23 @@ em [`hardware/hardware-profile.txt`](hardware/hardware-profile.txt).
 
 1. **Tema principal: Sword Art Online.** Paleta idêntica ao tema Omarchy
    (fundo `#08090a`, painel `#16181b`, accent ciano `#3ee8ff`, HP vermelho
-   `#ff3b5c`, MP azul `#4f8dff`) aplicada de ponta a ponta — nada gerado por
-   IA neste repositório, tudo reaproveitado do que já existe:
+   `#ff3b5c`, MP azul `#4f8dff`) aplicada de ponta a ponta:
    - Wallpapers e paleta: [Sword-Art-Omarchy](https://github.com/KitsuneSemCalda/Sword-Art-Omarchy)
      (os mesmos 3 papéis de parede 4K de textura de carbono do tema
      original — `dotfiles.ps1 -Theme` baixa e aplica automaticamente).
-   - Widgets de desktop no estilo SAO (RAM/CPU/relógio/RSS): o Rainmeter
-     [SAO-Skin-Pack](https://github.com/rensatsu/SAO-Skin-Pack) é a opção
-     mais próxima do plugin Feader-RSS do Omarchy. `dotfiles.ps1 -Theme`
-     baixa o pacote na hora da instalação e **recolore** as barras de HP/MP
-     para a paleta exata acima (troca de matiz/saturação preservando luz e
-     sombra de cada pixel — recolor mecânico, não geração de imagem) antes
-     de instalar em `Documents\Rainmeter\Skins`. Ver "Widgets de desktop
-     (Rainmeter)" abaixo para o detalhe de como isso funciona.
+   - Widgets de desktop (CPU/RAM/disco/relógio/rede): **AincradHUD**, um
+     único skin de Rainmeter próprio (`home/rainmeter/AincradHUD`), no lugar
+     do antigo plano de baixar e recolorir o
+     [SAO-Skin-Pack](https://github.com/rensatsu/SAO-Skin-Pack) de terceiros.
+     Motivo da troca: o SAO-Skin-Pack espalhava a mesma informação em 8
+     janelas separadas (com CPU/RAM/relógio duplicados) e sua skin de RSS
+     dependia de um feed externo que ficou fora do ar, travando a
+     atualização do widget. O AincradHUD consolida tudo em um painel único,
+     sem dependência de rede. Ver "Widgets de desktop (Rainmeter)" abaixo.
+   - Prompt: [Starship](https://starship.rs) (`starship.toml` já com
+     `git_branch`/`git_status` na paleta acima) em vez de uma função
+     `prompt` do PowerShell escrita à mão — binário nativo, sem precisar
+     rodar `git.exe` a cada linha renderizada.
 2. **Manter os keybinds do Omarchy onde possível.** O Windows não tem um
    compositor tiling nativo, então o `GlazeWM` (https://github.com/glzr-io/glazewm,
    FOSS, Rust, o tiling WM para Windows mais parecido com Hyprland/i3) recebe
@@ -57,6 +61,7 @@ home/
 ├── glazewm/config.yaml                  # tiling WM + keybinds do Omarchy
 ├── starship.toml                        # idêntico ao usado no Omarchy
 ├── powershell/Microsoft.PowerShell_profile.ps1
+├── rainmeter/AincradHUD/HUD.ini         # HUD proprio (CPU/RAM/disco/rede/relogio)
 └── windows-terminal/
     └── sword-art-online.scheme.json     # paleta do Sword Art Omarchy
 hardware/
@@ -81,7 +86,7 @@ Todas de projetos existentes e mantidos — nenhuma escrita do zero:
 | Starship (prompt)       | Starship (mesmo `starship.toml`)                                 |
 | btop                    | [btop4win](https://github.com/aristocratos/btop4win)             |
 | Menu/launcher do Omarchy| PowerToys Run                                                    |
-| Feader-RSS / widgets    | SAO-Skin-Pack (Rainmeter, recolorido automaticamente — ver abaixo) |
+| Feader-RSS / widgets    | AincradHUD (skin de Rainmeter próprio — ver abaixo)              |
 
 ## Perfil de apps
 
@@ -103,6 +108,16 @@ via `winget`, o perfil pessoal de aplicativos além das ferramentas do tema.
 | Node.js       | `OpenJS.NodeJS`                  |
 | Python        | `Python.Python.3.13`             |
 | Lua           | `DEVCOM.Lua`                     |
+
+`-Apps`/`-All` também roda `Install-PowerShellModules`, que instala (via
+`Install-Module -Scope CurrentUser`, sem admin) os módulos usados pelo
+profile: `Terminal-Icons` (ícones no `Get-ChildItem`), `PSFzf` (Ctrl+T
+busca arquivos, Ctrl+R busca histórico — depende do binário `fzf`, instalado
+via `junegunn.fzf` acima) e `z` (salto rápido de diretório por frequência de
+uso). O profile carrega os três de forma lazy (`PowerShell.OnIdle`, disparado
+só depois do primeiro prompt aparecer) para não atrasar a abertura do
+terminal — sem isso os três `Import-Module` somados adicionam ~1s de espera
+síncrona a cada shell novo.
 
 ## Debloat e otimização
 
@@ -224,31 +239,23 @@ Start-Process powershell -Verb RunAs -ArgumentList '-File .\dotfiles.ps1 -All -B
 
 ## Widgets de desktop (Rainmeter)
 
-Para a estética completa "HUD do SAO" na área de trabalho (equivalente
-visual ao Feader-RSS do Omarchy), `dotfiles.ps1 -Theme` automatiza o
-[SAO-Skin-Pack](https://github.com/rensatsu/SAO-Skin-Pack) — barras de
-HP/CPU/RAM/disco/bateria e relógio no estilo SAO. Como o repositório está
-arquivado desde 2019 sem licença explícita de redistribuição, o instalador
-**não vendoriza** os arquivos dele neste repo: a cada instalação ele baixa
-o pacote direto do GitHub para uma pasta temporária, aí sim recolore
-localmente e copia o resultado para
-`Documents\Rainmeter\Skins\Sword Art Online\` — o mesmo princípio do
-`omarchy theme install <url>`, só que baixando na hora em vez de vendorizar.
+Para a estética "HUD do SAO" na área de trabalho (equivalente visual ao
+Feader-RSS do Omarchy), `home/rainmeter/AincradHUD/HUD.ini` é um único
+painel vendorizado neste repo (sem download em tempo de instalação, sem
+dependência de licença de terceiro): relógio, HP (carga de CPU), MP
+(memória livre), inventário (espaço livre no disco C) e uplink/downlink de
+rede, com bordas em estilo HUD e alerta em vermelho quando CPU/RAM passam
+de ~80% ou o disco fica com menos de 15% livre.
 
-O recolor é mecânico (matiz/saturação trocados pela cor-alvo, luz e sombra
-originais preservadas — o mesmo efeito do modo "Colorize" do Photoshop),
-não geração de imagem por IA:
-
-- Barra de preenchimento "normal" (era verde) → accent ciano `#3ee8ff`
-- Barra de preenchimento "crítico" (já era vermelho) → HP red `#ff3b5c`
-- Moldura/trilha dos medidores → painel escuro `#16181b`, com a borda
-  branca preservada
-- Texto cinza dos widgets de RSS/notas → `#5c6670` (o mesmo `dark_foreground`
-  do tema)
-
-Depois de instalado, ative os skins pelo ícone do Rainmeter na bandeja em
-*Skins → Sword Art Online → (CPU / RAM / Drive C / Drive D / Battery /
-Clock / RSS)*.
+`dotfiles.ps1 -Backup` symlinka a pasta inteira para
+`Documents\Rainmeter\Skins\AincradHUD` (mesmo mecanismo dos outros arquivos
+de config simples, só que numa pasta em vez de um arquivo). `-Theme` ativa
+o skin (`Active=1` + `AlwaysOnTop=1` em `Rainmeter.ini`) e desativa
+qualquer resquício de um pacote de terceiros antigo em
+`Sword Art Online\SAO *`, caso exista — esse pacote (skins separadas de
+CPU/RAM/relógio/disco/bateria/RSS, sem recolor, com uma skin de RSS
+apontando pra um feed que saiu do ar) foi descontinuado neste repo em favor
+do painel único.
 
 ## Atualizar o hardware
 

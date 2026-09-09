@@ -88,6 +88,7 @@ function Get-LinkMap {
         @{ Source = 'glazewm\config.yaml'; Destination = (Join-Path $Target '.glzr\glazewm\config.yaml') }
         @{ Source = 'starship.toml'; Destination = (Join-Path $Target '.config\starship.toml') }
         @{ Source = 'powershell\Microsoft.PowerShell_profile.ps1'; Destination = (Get-ProfileDestination) }
+        @{ Source = 'rainmeter\AincradHUD'; Destination = (Join-Path $Target 'Documents\Rainmeter\Skins\AincradHUD') }
     )
 }
 
@@ -255,75 +256,6 @@ public static extern int SystemParametersInfo(int uAction, int uParam, string lp
     [SAO.Wallpaper]::SystemParametersInfo(20, 0, $chosen, 3) | Out-Null
 }
 
-function ConvertTo-RgbFromHsl {
-    param([double]$Hue, [double]$Sat, [double]$Light)
-    if ($Sat -eq 0) {
-        $r = $g = $b = $Light
-    } else {
-        $q = if ($Light -lt 0.5) { $Light * (1 + $Sat) } else { $Light + $Sat - $Light * $Sat }
-        $p = 2 * $Light - $q
-        $hk = $Hue / 360
-        function Hue2Rgb($p1, $q1, $t) {
-            if ($t -lt 0) { $t += 1 }
-            if ($t -gt 1) { $t -= 1 }
-            if ($t -lt (1 / 6)) { return $p1 + ($q1 - $p1) * 6 * $t }
-            if ($t -lt (1 / 2)) { return $q1 }
-            if ($t -lt (2 / 3)) { return $p1 + ($q1 - $p1) * ((2 / 3) - $t) * 6 }
-            return $p1
-        }
-        $r = Hue2Rgb $p $q ($hk + (1 / 3))
-        $g = Hue2Rgb $p $q $hk
-        $b = Hue2Rgb $p $q ($hk - (1 / 3))
-    }
-    return @([math]::Round($r * 255), [math]::Round($g * 255), [math]::Round($b * 255))
-}
-
-# "Colorize" preservando a luminosidade original de cada pixel (igual ao
-# modo Colorize do Hue/Saturation do Photoshop): troca o tom/saturacao pelo
-# da cor-alvo da paleta Sword Art Omarchy, mantendo sombras/luzes e alpha.
-# E' recolor mecanico de pixel, nao geracao de imagem por IA.
-function Set-PaletteRecolor {
-    param(
-        [string]$SourcePath,
-        [string]$DestPath,
-        [string]$TargetHex,
-        [double]$DarkenFactor = 1.0,
-        [switch]$PreserveHighlights
-    )
-    Add-Type -AssemblyName System.Drawing
-    $target = [System.Drawing.ColorTranslator]::FromHtml($TargetHex)
-    $targetHue = $target.GetHue()
-    $targetSat = $target.GetSaturation()
-    # Le os bytes para memoria em vez de usar Bitmap.FromFile: FromFile
-    # mantem o arquivo de origem travado ate o Dispose, o que quebra o Save
-    # com "Erro generico de GDI+" quando origem e destino sao o mesmo path.
-    $bytes = [System.IO.File]::ReadAllBytes($SourcePath)
-    $stream = New-Object System.IO.MemoryStream(, $bytes)
-    $src = [System.Drawing.Bitmap]::FromStream($stream)
-    $dst = New-Object System.Drawing.Bitmap $src.Width, $src.Height
-    for ($y = 0; $y -lt $src.Height; $y++) {
-        for ($x = 0; $x -lt $src.Width; $x++) {
-            $p = $src.GetPixel($x, $y)
-            if ($p.A -eq 0) { $dst.SetPixel($x, $y, $p); continue }
-
-            # Bordas/realces quase brancos e pouco saturados ficam intactos
-            # (moldura branca do bar, nao o "corpo" que recebe a cor-alvo).
-            if ($PreserveHighlights -and $p.GetSaturation() -lt 0.12 -and $p.GetBrightness() -gt 0.75) {
-                $dst.SetPixel($x, $y, $p)
-                continue
-            }
-
-            $l = [math]::Min($p.GetBrightness() * $DarkenFactor, 1.0)
-            $rgb = ConvertTo-RgbFromHsl -Hue $targetHue -Sat $targetSat -Light $l
-            $dst.SetPixel($x, $y, [System.Drawing.Color]::FromArgb($p.A, $rgb[0], $rgb[1], $rgb[2]))
-        }
-    }
-    $dst.Save($DestPath, [System.Drawing.Imaging.ImageFormat]::Png)
-    $src.Dispose()
-    $dst.Dispose()
-    $stream.Dispose()
-}
-
 function Get-RainmeterExe {
     $candidates = @(
         (Join-Path ${env:ProgramFiles} 'Rainmeter\Rainmeter.exe')
@@ -335,64 +267,54 @@ function Get-RainmeterExe {
     return $null
 }
 
-# Baixa o SAO-Skin-Pack (https://github.com/rensatsu/SAO-Skin-Pack) na hora
-# da instalacao e recolore localmente para a paleta do Sword Art Omarchy, em
-# vez de vendorizar os binarios de terceiros dentro deste repositorio (o
-# pacote e' um projeto arquivado, sem LICENSE explicita para redistribuicao
-# de derivados). Mesma logica do "omarchy theme install <url>".
-function Install-RainmeterSkin {
-    $skinPackUrl = 'https://github.com/rensatsu/SAO-Skin-Pack/archive/refs/heads/master.zip'
-    $skinsRoot = Join-Path $Target 'Documents\Rainmeter\Skins\Sword Art Online'
-
-    Write-Action (Get-Tag 'SKIN?' 'SKIN') "SAO-Skin-Pack recolorido -> $skinsRoot"
-    if ($DryRun) { return }
-
-    $workDir = Join-Path $env:TEMP 'sao-skin-pack-build'
-    Remove-Item -LiteralPath $workDir -Recurse -Force -ErrorAction SilentlyContinue
-    New-Item -ItemType Directory -Force -Path $workDir | Out-Null
-
-    $zipPath = Join-Path $workDir 'pack.zip'
-    Invoke-WebRequest -Uri $skinPackUrl -OutFile $zipPath
-    Expand-Archive -LiteralPath $zipPath -DestinationPath $workDir -Force
-    $extractedRoot = Get-ChildItem -LiteralPath $workDir -Directory | Where-Object { $_.Name -like 'SAO-Skin-Pack-*' } | Select-Object -First 1
-    if (-not $extractedRoot) {
-        Write-Warning 'Nao encontrei a pasta extraida do SAO-Skin-Pack; pulei o Rainmeter.'
+# AincradHUD (home/rainmeter/AincradHUD) e' symlinkado para
+# Documents\Rainmeter\Skins\AincradHUD pelo Install-Symlinks normal (ver
+# Get-LinkMap). Esta funcao so ativa esse skin e desativa o pacote de
+# terceiros SAO-Skin-Pack/RedDragon caso tenha sido instalado manualmente
+# antes (duplicava CPU/RAM/relogio e dependia de um feed RSS externo).
+# Rainmeter.ini e' UTF-16 com BOM (Set-Content -Encoding Unicode preserva).
+function Set-RainmeterHud {
+    $rainmeterIni = Join-Path $env:APPDATA 'Rainmeter\Rainmeter.ini'
+    if (-not (Test-Path -LiteralPath $rainmeterIni)) {
+        Write-Warning 'Rainmeter.ini nao encontrado; abra o Rainmeter uma vez antes de rodar -Theme.'
         return
     }
 
-    # Preenchimento "normal" (era verde) -> accent ciano da paleta.
-    Get-ChildItem -LiteralPath $extractedRoot.FullName -Recurse -Filter 'sao-hp-bar-fill.png' | ForEach-Object {
-        Set-PaletteRecolor -SourcePath $_.FullName -DestPath $_.FullName -TargetHex '#3ee8ff'
-    }
-    # Preenchimento "critico" (ja era vermelho) -> HP red exato da paleta.
-    Get-ChildItem -LiteralPath $extractedRoot.FullName -Recurse -Filter 'sao-hp-bar-fill-red.png' | ForEach-Object {
-        Set-PaletteRecolor -SourcePath $_.FullName -DestPath $_.FullName -TargetHex '#ff3b5c'
-    }
-    # Moldura/trilha (azul medio) -> painel escuro, preservando a borda branca.
-    foreach ($frameName in @('sao-hp-bar.png', 'sao-clock-bar.png')) {
-        Get-ChildItem -LiteralPath $extractedRoot.FullName -Recurse -Filter $frameName | ForEach-Object {
-            Set-PaletteRecolor -SourcePath $_.FullName -DestPath $_.FullName -TargetHex '#16181b' -DarkenFactor 0.3 -PreserveHighlights
+    Write-Action (Get-Tag 'HUD?' 'HUD') "AincradHUD -> Active=1 em $rainmeterIni"
+    if ($DryRun) { return }
+
+    $backupPath = Join-Path $BackupRoot 'rainmeter\Rainmeter.ini'
+    New-Item -ItemType Directory -Force -Path (Split-Path $backupPath) | Out-Null
+    Copy-Item -LiteralPath $rainmeterIni -Destination $backupPath -Force
+
+    $lines = Get-Content -LiteralPath $rainmeterIni -Encoding Unicode
+    $currentSection = ''
+    $sawAincradSection = $false
+    $out = foreach ($line in $lines) {
+        if ($line -match '^\s*\[(.+)\]\s*$') { $currentSection = $matches[1] }
+        if ($currentSection -eq 'AincradHUD') {
+            $sawAincradSection = $true
+            if ($line -match '^\s*AlwaysOnTop\s*=\s*$') { 'AlwaysOnTop=1'; continue }
         }
+        if ($currentSection -like 'Sword Art Online\*' -and $line -match '^\s*Active\s*=\s*1\s*$') {
+            'Active=0'
+            continue
+        }
+        $line
     }
-
-    # Texto cinza (6d6b6c) -> dark_foreground exato da paleta (5c6670).
-    Get-ChildItem -LiteralPath $extractedRoot.FullName -Recurse -Filter '*.ini' | ForEach-Object {
-        (Get-Content -LiteralPath $_.FullName -Raw) -replace '6d6b6c', '5c6670' |
-            Set-Content -LiteralPath $_.FullName -Encoding utf8
+    if (-not $sawAincradSection) {
+        $out += @('', '[AincradHUD]', 'Active=1', 'AlwaysOnTop=1')
     }
-
-    New-Item -ItemType Directory -Force -Path $skinsRoot | Out-Null
-    Get-ChildItem -LiteralPath $extractedRoot.FullName -Directory | Where-Object { $_.Name -like 'SAO *' } | ForEach-Object {
-        Copy-Item -LiteralPath $_.FullName -Destination $skinsRoot -Recurse -Force
-    }
-    Remove-Item -LiteralPath $workDir -Recurse -Force -ErrorAction SilentlyContinue
+    Set-Content -LiteralPath $rainmeterIni -Value $out -Encoding Unicode
 
     $rainmeterExe = Get-RainmeterExe
-    if ($rainmeterExe) {
-        Start-Process -FilePath $rainmeterExe -ArgumentList '!RefreshApp'
-    } else {
-        Write-Warning 'Rainmeter nao encontrado; os skins ficaram prontos em Documents\Rainmeter\Skins e serao carregados quando o Rainmeter for instalado.'
+    if (-not $rainmeterExe) {
+        Write-Warning 'Rainmeter nao encontrado; a config foi ajustada, mas o app nao foi (re)iniciado.'
+        return
     }
+    Get-Process -Name Rainmeter -ErrorAction SilentlyContinue | Stop-Process -Force
+    Start-Sleep -Milliseconds 500
+    Start-Process -FilePath $rainmeterExe
 }
 
 function Install-LexendFont {
@@ -469,7 +391,8 @@ function Install-Apps {
         'Microsoft.WindowsTerminal',
         'Microsoft.PowerToys',
         'Starship.Starship',
-        'Rainmeter.Rainmeter'
+        'Rainmeter.Rainmeter',
+        'junegunn.fzf'
     )
 
     # Perfil pessoal de apps, equivalente ao ensure_apps() do omarchy.pl.
@@ -497,6 +420,24 @@ function Install-Apps {
     }
 }
 
+# Modulos PowerShell Gallery usados pelo profile (Terminal-Icons, PSFzf, z):
+# carregados sob demanda via PowerShell.OnIdle no profile, mas precisam estar
+# instalados de antemao. -CurrentUser porque -Fonts/-Theme tambem so tocam o
+# HOME real, sem exigir admin.
+function Install-PowerShellModules {
+    $modules = @('Terminal-Icons', 'PSFzf', 'z')
+    foreach ($name in $modules) {
+        if (Get-Module -ListAvailable -Name $name) {
+            Write-Action 'OK' "modulo $name ja instalado"
+            continue
+        }
+        Write-Action (Get-Tag 'RUN?' 'RUN') "Install-Module $name -Scope CurrentUser"
+        if (-not $DryRun) {
+            Install-Module -Name $name -Scope CurrentUser -Force -AllowClobber
+        }
+    }
+}
+
 if ($Restore) {
     Restore-Backups
     exit 0
@@ -510,10 +451,11 @@ if ($Fonts) {
 if ($Theme) {
     Set-WindowsTerminalTheme
     Set-Wallpaper
-    Install-RainmeterSkin
+    Set-RainmeterHud
 }
 if ($Apps) {
     Install-Apps
+    Install-PowerShellModules
 }
 
 Write-Output $(if ($DryRun) { 'Dry-run concluido.' } else { 'Dotfiles instalados.' })
