@@ -15,7 +15,7 @@ em [`hardware/hardware-profile.txt`](hardware/hardware-profile.txt).
    `#ff3b5c`, MP azul `#4f8dff`) aplicada de ponta a ponta:
    - Wallpapers e paleta: [Sword-Art-Omarchy](https://github.com/KitsuneSemCalda/Sword-Art-Omarchy)
      (os mesmos 3 papéis de parede 4K de textura de carbono do tema
-     original — `dotfiles.ps1 -Theme` baixa e aplica automaticamente).
+     original — `win11.ps1 -Theme` baixa e aplica automaticamente).
    - Widgets de desktop (CPU/RAM/disco/relógio/rede): **AincradHUD**, um
      único skin de Rainmeter próprio (`home/rainmeter/AincradHUD`), no lugar
      do antigo plano de baixar e recolorir o
@@ -66,7 +66,7 @@ home/
     └── sword-art-online.scheme.json     # paleta do Sword Art Omarchy
 hardware/
 └── hardware-profile.txt
-dotfiles.ps1                             # instalador e orquestrador
+win11.ps1                              # instalador e orquestrador
 scripts/hardware-profile.ps1             # atualiza o snapshot (sem PII)
 scripts/debloat.ps1                      # debloat + otimizacao conservadores
 ```
@@ -199,20 +199,20 @@ por padrão quando há um arquivo conflitante.
 Ver o que seria feito, sem tocar em nada:
 
 ```powershell
-pwsh ./dotfiles.ps1 -DryRun -All
+pwsh ./win11.ps1 -DryRun -All
 ```
 
 Instalar preservando arquivos existentes em
 `$env:USERPROFILE\.local\state\dotfiles\backups\`:
 
 ```powershell
-pwsh ./dotfiles.ps1 -Backup
+pwsh ./win11.ps1 -Backup
 ```
 
 Desfazer, restaurando o backup mais recente sem apagar a cópia:
 
 ```powershell
-pwsh ./dotfiles.ps1 -Restore
+pwsh ./win11.ps1 -Restore
 ```
 
 As etapas também rodam separadas com `-Fonts` (Lexend + JetBrainsMono Nerd
@@ -222,7 +222,7 @@ GlazeWM, Windows Terminal, PowerToys, Starship e Rainmeter). Para tudo de
 uma vez:
 
 ```powershell
-pwsh ./dotfiles.ps1 -All -Backup
+pwsh ./win11.ps1 -All -Backup
 ```
 
 `-Fonts`, `-Theme` e `-Apps` só rodam contra o `$HOME` real; `-Target` serve
@@ -234,7 +234,7 @@ vale pra sessões interativas normais — sessões automatizadas/não
 interativas podem não herdá-lo. Nesse caso, rode elevado:
 
 ```powershell
-Start-Process powershell -Verb RunAs -ArgumentList '-File .\dotfiles.ps1 -All -Backup'
+Start-Process powershell -Verb RunAs -ArgumentList '-File .\win11.ps1 -All -Backup'
 ```
 
 ## Widgets de desktop (Rainmeter)
@@ -247,7 +247,7 @@ dependência de licença de terceiro): relógio, HP (carga de CPU), MP
 rede, com bordas em estilo HUD e alerta em vermelho quando CPU/RAM passam
 de ~80% ou o disco fica com menos de 15% livre.
 
-`dotfiles.ps1 -Backup` symlinka a pasta inteira para
+`win11.ps1 -Backup` symlinka a pasta inteira para
 `Documents\Rainmeter\Skins\AincradHUD` (mesmo mecanismo dos outros arquivos
 de config simples, só que numa pasta em vez de um arquivo). `-Theme` ativa
 o skin (`Active=1` + `AlwaysOnTop=1` em `Rainmeter.ini`) e desativa

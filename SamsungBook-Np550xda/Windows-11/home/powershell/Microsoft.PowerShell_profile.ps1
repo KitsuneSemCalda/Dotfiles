@@ -2,7 +2,7 @@
 # Sem acentos de proposito: PowerShell 5.1 le perfis sem BOM como ANSI, o que
 # corrompe literais acentuados neste ambiente.
 #
-# Instalado via dotfiles.ps1 em $PROFILE (normalmente
+# Instalado via win11.ps1 em $PROFILE (normalmente
 # Documents\PowerShell\Microsoft.PowerShell_profile.ps1 no PowerShell 7, ou
 # Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1 no 5.1).
 

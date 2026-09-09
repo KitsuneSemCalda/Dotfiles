@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 <#
-dotfiles.ps1 - instalador/orquestrador dos dotfiles Windows-11.
+win11.ps1 - instalador/orquestrador dos dotfiles Windows-11.
 Equivalente em espirito ao omarchy.pl do perfil Omarchy: por padrao nao
 altera nada quando ha conflito, cria symlinks para os arquivos de
 configuracao simples e usa flags separadas para as acoes que mexem em
@@ -10,13 +10,13 @@ Sem acentos de proposito nas strings/comentarios: Windows PowerShell 5.1 le
 .ps1 sem BOM como ANSI, o que corrompe literais acentuados neste ambiente.
 
 Uso:
-  pwsh ./dotfiles.ps1 -DryRun              # mostra o que seria feito
-  pwsh ./dotfiles.ps1 -Backup              # symlinks, preservando conflitos
-  pwsh ./dotfiles.ps1 -Restore             # restaura o backup mais recente
-  pwsh ./dotfiles.ps1 -Fonts               # instala Lexend + JetBrainsMono Nerd Font
-  pwsh ./dotfiles.ps1 -Theme               # aplica color scheme + wallpaper SAO
-  pwsh ./dotfiles.ps1 -Apps                # winget install das ferramentas usadas
-  pwsh ./dotfiles.ps1 -All -Backup         # tudo de uma vez
+  pwsh ./win11.ps1 -DryRun              # mostra o que seria feito
+  pwsh ./win11.ps1 -Backup              # symlinks, preservando conflitos
+  pwsh ./win11.ps1 -Restore             # restaura o backup mais recente
+  pwsh ./win11.ps1 -Fonts               # instala Lexend + JetBrainsMono Nerd Font
+  pwsh ./win11.ps1 -Theme               # aplica color scheme + wallpaper SAO
+  pwsh ./win11.ps1 -Apps                # winget install das ferramentas usadas
+  pwsh ./win11.ps1 -All -Backup         # tudo de uma vez
 
 Criar symlinks no Windows sem ser administrador exige o "Modo de
 desenvolvedor" ativado (Config. > Privacidade e seguranca > Para
