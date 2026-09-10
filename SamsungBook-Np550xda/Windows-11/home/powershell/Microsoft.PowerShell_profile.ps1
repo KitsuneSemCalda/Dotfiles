@@ -21,13 +21,25 @@ $reset = "$esc[0m"
 # Starship e' um binario nativo (Rust): o prompt com git branch/status sai
 # dele em vez de um "prompt" PowerShell feito a mao chamando git.exe.
 #
-# `starship init powershell` sempre gera o mesmo script para a mesma versao
-# + config, mas spawnar o processo starship.exe a cada abertura de shell
-# custa ~500ms so no exec (medido: primeiro spawn no processo pwsh recem
-# aberto). Cacheamos a saida em disco e so regeneramos quando o binario ou
-# o starship.toml mudarem (por data de modificacao).
-$starshipCmd = Get-Command starship -ErrorAction SilentlyContinue
-if ($starshipCmd) {
+# O custo pesado de verdade (~300-400ms, medido) NAO e' o spawn do
+# starship.exe (isso sozinho custa so' ~25-50ms) - e' o `New-Module` com
+# dezenas de funcoes que `starship init powershell` gera, que o PowerShell
+# tem que parsear/compilar do zero a cada processo novo (nao existe cache
+# de bytecode entre processos, cachear o texto do script no disco nao
+# ataca essa parte). Por isso isso e' adiado pro mesmo gatilho de `prompt`
+# usado pros modulos mais abaixo, em vez de rodar aqui e atrasar a
+# abertura do shell.
+#
+# `--print-full-init` evita que a cache em disco guarde so' o wrapper
+# preguicoso de 1 linha que `starship init powershell` (sem essa flag)
+# gera - esse wrapper respawna o starship.exe de novo em todo dot-source
+# do cache, entao a cache antiga nunca pegava a parte cara mesmo. Ainda
+# assim cacheamos em disco pra so' regenerar quando o binario ou o
+# starship.toml mudarem (por data de modificacao).
+function global:__Initialize-StarshipPrompt {
+    $starshipCmd = Get-Command starship -ErrorAction SilentlyContinue
+    if (-not $starshipCmd) { return }
+
     $env:STARSHIP_CONFIG = Join-Path $env:USERPROFILE '.config\starship.toml'
 
     $cacheDir  = Join-Path $env:LOCALAPPDATA 'powershell-starship-cache'
@@ -45,9 +57,13 @@ if ($starshipCmd) {
 
     if ($needsRegen) {
         New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
-        &starship init powershell | Out-File -FilePath $cacheFile -Encoding utf8 -Force
+        &starship init powershell --print-full-init | Out-File -FilePath $cacheFile -Encoding utf8 -Force
     }
 
+    # O script cacheado define `function global:prompt` sozinho e
+    # substitui o wrapper deferido de baixo assim que roda - so' precisa
+    # disso uma vez por sessao, os proximos renders ja' chamam o prompt
+    # do starship direto, sem passar por esse arquivo de novo.
     . $cacheFile
 }
 
@@ -69,27 +85,61 @@ Write-Host "$cyan[ LINK START ]$reset"
 Set-Alias ll Get-ChildItem
 Set-Alias lint Invoke-ScriptAnalyzer
 
-# --- Ergonomics modules ---
-# Import-Module e' sincrono e cada um destes custa dezenas a centenas de ms.
-# Defer todos pro primeiro idle logo apos o prompt renderizar, pra shell ficar
-# interativa na hora e os modulos anexarem silenciosamente uma fracao de
-# segundo depois.
-Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -MaxTriggerCount 1 -Action {
-    Import-Module Terminal-Icons -ErrorAction SilentlyContinue
-    Import-Module z -ErrorAction SilentlyContinue
-    Import-Module PSFzf -ErrorAction SilentlyContinue
-    Import-Module CompletionPredictor -ErrorAction SilentlyContinue
-    Import-Module F7History -ErrorAction SilentlyContinue
+# --- Ergonomics modules + prompt do starship ---
+# Import-Module e' sincrono e cada um destes custa dezenas a centenas de ms;
+# o init do starship custa mais uns ~300-400ms sozinho (ver comentario la'
+# em cima). Tudo isso e' adiado pro mesmo gatilho.
+#
+# Terminal-Icons/z/PSFzf tem que estar instalados em
+# Documents\PowerShell\Modules (o PSModulePath do pwsh 7), NAO so' em
+# Documents\WindowsPowerShell\Modules (Windows PowerShell 5.1). Os dois
+# ficam lado a lado no disco, mas o pwsh 7 real (nao "-NoProfile") so'
+# enxerga o primeiro - foi por isso que esses 3 modulos nunca carregavam
+# aqui mesmo com o Import-Module "funcionando" em testes -NoProfile.
+#
+# Tentativa original: `Register-EngineEvent -SourceIdentifier PowerShell.OnIdle`.
+# Nao funciona: esse evento so' dispara via o processamento de idle classico
+# do ConsoleHost, e o PSReadLine assume o loop de leitura do prompt sem
+# repassar pra ele - confirmado na pratica (Get-Module Terminal-Icons ficava
+# vazio pra sempre numa sessao interativa real, mesmo parado no prompt).
+#
+# Em vez disso, penduramos tudo na propria funcao `prompt`: todo host
+# chama `prompt` de verdade, entao e' um gatilho confiavel. A 1a renderizacao
+# sai instantanea (prompt padrao do PowerShell, sem starship nem modulos); o
+# carregamento pesado roda uma unica vez logo antes da 2a renderizacao (ou
+# seja, o usuario sente a pausa depois do primeiro Enter, nao na abertura
+# do shell - e o prompt do starship "aparece" a partir dai').
+$global:__DeferredModulesPending = $true
+$global:__PromptCallCount = 0
+$global:__OriginalPrompt = $function:prompt
 
-    if (Get-Module PSFzf) {
-        try {
-            Set-PsFzfOption -PSReadlineChordProvider 'Ctrl+t' -PSReadlineChordReverseHistory 'Ctrl+r'
-        } catch {}
+function global:prompt {
+    $global:__PromptCallCount++
+    if ($global:__DeferredModulesPending -and $global:__PromptCallCount -gt 1) {
+        $global:__DeferredModulesPending = $false
+
+        Import-Module Terminal-Icons -ErrorAction SilentlyContinue
+        Import-Module z -ErrorAction SilentlyContinue
+        Import-Module PSFzf -ErrorAction SilentlyContinue
+        Import-Module CompletionPredictor -ErrorAction SilentlyContinue
+        Import-Module F7History -ErrorAction SilentlyContinue
+
+        if (Get-Module PSFzf) {
+            try {
+                Set-PsFzfOption -PSReadlineChordProvider 'Ctrl+t' -PSReadlineChordReverseHistory 'Ctrl+r'
+            } catch {}
+        }
+
+        # CompletionPredictor precisa estar importado antes de virar fonte de
+        # predicao; troca de History pra HistoryAndPlugin so' depois do import.
+        if (Get-Module CompletionPredictor) {
+            try { Set-PSReadLineOption -PredictionSource HistoryAndPlugin } catch {}
+        }
+
+        # Por ultimo: isso substitui `global:prompt` (ver comentario na
+        # funcao). A partir do proximo render, este wrapper nem roda mais.
+        __Initialize-StarshipPrompt
     }
 
-    # CompletionPredictor precisa estar importado antes de virar fonte de
-    # predicao; troca de History pra HistoryAndPlugin so' depois do import.
-    if (Get-Module CompletionPredictor) {
-        try { Set-PSReadLineOption -PredictionSource HistoryAndPlugin } catch {}
-    }
-} | Out-Null
+    & $global:__OriginalPrompt
+}
