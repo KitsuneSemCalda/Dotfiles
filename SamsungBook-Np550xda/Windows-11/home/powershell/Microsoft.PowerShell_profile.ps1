@@ -20,9 +20,35 @@ $reset = "$esc[0m"
 # %USERPROFILE%\.config\starship.toml resolvem para o mesmo lugar logico).
 # Starship e' um binario nativo (Rust): o prompt com git branch/status sai
 # dele em vez de um "prompt" PowerShell feito a mao chamando git.exe.
-if (Get-Command starship -ErrorAction SilentlyContinue) {
+#
+# `starship init powershell` sempre gera o mesmo script para a mesma versao
+# + config, mas spawnar o processo starship.exe a cada abertura de shell
+# custa ~500ms so no exec (medido: primeiro spawn no processo pwsh recem
+# aberto). Cacheamos a saida em disco e so regeneramos quando o binario ou
+# o starship.toml mudarem (por data de modificacao).
+$starshipCmd = Get-Command starship -ErrorAction SilentlyContinue
+if ($starshipCmd) {
     $env:STARSHIP_CONFIG = Join-Path $env:USERPROFILE '.config\starship.toml'
-    Invoke-Expression (&starship init powershell)
+
+    $cacheDir  = Join-Path $env:LOCALAPPDATA 'powershell-starship-cache'
+    $cacheFile = Join-Path $cacheDir 'init.ps1'
+
+    $needsRegen = $true
+    if (Test-Path $cacheFile) {
+        $cacheTime = (Get-Item $cacheFile).LastWriteTimeUtc
+        $srcTimes  = @((Get-Item $starshipCmd.Source).LastWriteTimeUtc)
+        if (Test-Path $env:STARSHIP_CONFIG) {
+            $srcTimes += (Get-Item $env:STARSHIP_CONFIG).LastWriteTimeUtc
+        }
+        $needsRegen = ($srcTimes | Measure-Object -Maximum).Maximum -gt $cacheTime
+    }
+
+    if ($needsRegen) {
+        New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+        &starship init powershell | Out-File -FilePath $cacheFile -Encoding utf8 -Force
+    }
+
+    . $cacheFile
 }
 
 if (Get-Command Set-PSReadLineOption -ErrorAction SilentlyContinue) {
@@ -41,20 +67,29 @@ if (Get-Command Set-PSReadLineOption -ErrorAction SilentlyContinue) {
 Write-Host "$cyan[ LINK START ]$reset"
 
 Set-Alias ll Get-ChildItem
+Set-Alias lint Invoke-ScriptAnalyzer
 
 # --- Ergonomics modules ---
-# Terminal-Icons/z/PSFzf together add roughly 1s of synchronous Import-Module
-# time to every shell startup. Defer them to the first idle moment right
-# after the prompt renders, so the terminal is interactive immediately and
-# these attach silently a fraction of a second later.
+# Import-Module e' sincrono e cada um destes custa dezenas a centenas de ms.
+# Defer todos pro primeiro idle logo apos o prompt renderizar, pra shell ficar
+# interativa na hora e os modulos anexarem silenciosamente uma fracao de
+# segundo depois.
 Register-EngineEvent -SourceIdentifier PowerShell.OnIdle -MaxTriggerCount 1 -Action {
     Import-Module Terminal-Icons -ErrorAction SilentlyContinue
     Import-Module z -ErrorAction SilentlyContinue
     Import-Module PSFzf -ErrorAction SilentlyContinue
+    Import-Module CompletionPredictor -ErrorAction SilentlyContinue
+    Import-Module F7History -ErrorAction SilentlyContinue
 
     if (Get-Module PSFzf) {
         try {
             Set-PsFzfOption -PSReadlineChordProvider 'Ctrl+t' -PSReadlineChordReverseHistory 'Ctrl+r'
         } catch {}
+    }
+
+    # CompletionPredictor precisa estar importado antes de virar fonte de
+    # predicao; troca de History pra HistoryAndPlugin so' depois do import.
+    if (Get-Module CompletionPredictor) {
+        try { Set-PSReadLineOption -PredictionSource HistoryAndPlugin } catch {}
     }
 } | Out-Null
