@@ -1,5 +1,8 @@
 # Dotfiles para Windows 11 — Samsung Book NP550XDA
 
+Veja também a [análise de arquitetura e diagramas](../docs/arquitetura.md),
+com as modificações sobre a base e os limites dos instaladores.
+
 Base inicial de dotfiles para o mesmo Samsung NP550XDA-KF2BR do
 [perfil Omarchy](../Omarchy/README.md), agora no boot com Windows 11. Tema
 visual inspirado em Sword Art Online, reaproveitando a paleta e o material
@@ -114,10 +117,9 @@ via `winget`, o perfil pessoal de aplicativos além das ferramentas do tema.
 profile: `Terminal-Icons` (ícones no `Get-ChildItem`), `PSFzf` (Ctrl+T
 busca arquivos, Ctrl+R busca histórico — depende do binário `fzf`, instalado
 via `junegunn.fzf` acima) e `z` (salto rápido de diretório por frequência de
-uso). O profile carrega os três de forma lazy (`PowerShell.OnIdle`, disparado
-só depois do primeiro prompt aparecer) para não atrasar a abertura do
-terminal — sem isso os três `Import-Module` somados adicionam ~1s de espera
-síncrona a cada shell novo.
+uso). O profile tenta carregar os módulos uma vez, na segunda chamada da função
+`prompt`, e inicializa o Starship nesse mesmo momento. As chamadas seguintes
+usam o prompt instalado pelo Starship. Não utiliza `PowerShell.OnIdle`.
 
 ## Debloat e otimização
 
@@ -209,7 +211,10 @@ Instalar preservando arquivos existentes em
 pwsh ./win11.ps1 -Backup
 ```
 
-Desfazer, restaurando o backup mais recente sem apagar a cópia:
+**Limitação conhecida:** `-Restore` seleciona o backup mais recente, mas não
+reutiliza o mapa de destinos da instalação e pode restaurar arquivos no lugar
+errado. Consulte a [análise da restauração](../docs/arquitetura.md#instalação-conflitos-e-alcance-da-restauração)
+antes de usar esta opção; ela não constitui uma reversão confiável:
 
 ```powershell
 pwsh ./win11.ps1 -Restore
