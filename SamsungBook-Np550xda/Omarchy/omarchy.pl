@@ -320,6 +320,9 @@ sub ensure_apps {
         { name => 'Z Ai',             url => 'https://chat.z.ai/' },
         { name => 'WebMotors',        url => 'https://www.webmotors.com.br/' },
         { name => 'Panini Brasil',    url => 'https://panini.com.br/' },
+        { name => 'GitHub',           url => 'https://github.com/' },
+        { name => 'GitLab',           url => 'https://gitlab.com/' },
+        { name => 'Codeberg',         url => 'https://codeberg.org/' },
     );
 
     for my $app (@webapps) {

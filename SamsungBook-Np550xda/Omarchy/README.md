@@ -60,7 +60,8 @@ arquivos de Lexend são baixados pelo instalador e não são copiados para dentr
 do repositório.
 
 O perfil de aplicativos inclui Bitwarden, AppFlowy, PrismLauncher, CurseForge,
-Amazon Shopping, Mercado Livre, Pinterest, Z Ai, WebMotors e Panini Brasil.
+Amazon Shopping, Mercado Livre, Pinterest, Z Ai, WebMotors, Panini Brasil,
+GitHub, GitLab e Codeberg.
 Também registra o tema [Sword Art Omarchy](https://github.com/KitsuneSemCalda/Sword-Art-Omarchy)
 e o plugin [Feader-RSS](https://github.com/KitsuneSemCalda/Feader-RSS), com a
 configuração de feeds em `~/.config/omarchy/rss-reader.json`.
