@@ -38,8 +38,12 @@ home/
     └── omarchy-power-profile  # ajuste de energia escrito em Perl
 hardware/
 └── inxi-Fz.txt
+docker/
+├── docker-compose.yml           # postgres, redis, frankmd, ai-memory, pihole
+└── .env.example                 # variáveis documentadas (.env real fica fora do git)
 omarchy.pl                       # instalador e orquestrador, escrito em Perl
 scripts/hardware-profile.pl     # atualiza o snapshot via inxi
+scripts/docker-stack.pl         # sobe a stack Docker e liga os agentes de IA
 ```
 
 Perl é usado para a automação e as ferramentas do repositório. Os arquivos
@@ -99,6 +103,65 @@ perl ./omarchy.pl --all --backup
 O instalador cria symlinks para os arquivos dentro de `home/`. Nenhuma
 configuração do sistema foi alterada ao criar este repositório; `--all` é a
 opção que aplica as mudanças externas.
+
+## Stack Docker
+
+`docker/docker-compose.yml` sobe cinco serviços, todos publicados só em
+`127.0.0.1` (nenhum fica acessível pela rede local):
+
+- **postgres** (17-alpine) e **redis** (7-alpine) — banco e cache de uso
+  geral para projetos locais, portas `5432` e `6379`.
+- **[FrankMD](https://github.com/akitaonrails/FrankMD)** — editor de notas
+  Markdown self-hosted, porta `7591`, guarda os arquivos em
+  `~/Documents/notes` (sem banco de dados).
+- **[ai-memory](https://github.com/akitaonrails/ai-memory)** — memória
+  persistente entre agentes de IA, porta `49374`.
+- **pihole** — DNS local, porta `53` e UI de administração em `8080`.
+
+Primeira execução (cria `docker/.env` com segredos aleatórios, a pasta de
+notas e sobe os containers):
+
+```bash
+perl scripts/docker-stack.pl --up
+```
+
+Ligar o ai-memory a todos os agentes de IA já instalados (hoje detecta
+`claude`, `codex`, `gemini`, `cursor-agent`, `opencode` e `grok` no `PATH`,
+via `install-mcp`/`install-hooks`):
+
+```bash
+perl scripts/docker-stack.pl --agents
+```
+
+Tornar o Pi-hole o DNS padrão desta máquina (espera o container ficar
+saudável antes de aplicar; delega para `omarchy dns Custom` com
+`127.0.0.1` e fallback `1.1.1.1`, que é o mecanismo nativo do Omarchy — evita
+reimplementar via `nmcli` direto, que nesta máquina também gerencia as
+bridges do Docker e pode derrubar o encaminhamento de pacotes dos
+containers se mexido diretamente):
+
+```bash
+perl scripts/docker-stack.pl --dns
+```
+
+`omarchy dns` (sem argumento) pode mostrar "Cloudflare" mesmo com o Pi-hole
+ativo — a detecção dele olha só se `1.1.1.1` aparece na lista, que é
+justamente o fallback. Confirme o servidor real com `resolvectl status`
+(`Current DNS Server: 127.0.0.1`).
+
+Reverter o DNS para automático (`omarchy dns DHCP`), parar a stack ou só
+conferir o estado dos containers:
+
+```bash
+perl scripts/docker-stack.pl --dns-revert
+perl scripts/docker-stack.pl --down
+perl scripts/docker-stack.pl --status
+```
+
+Qualquer ação aceita `--dry-run`. As chaves de API opcionais do ai-memory
+(resumo por LLM e busca semântica) ficam em branco em `docker/.env` até
+serem preenchidas manualmente; sem elas, a memória funciona só com busca
+por texto.
 
 ## Atualizar o hardware
 
