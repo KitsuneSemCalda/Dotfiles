@@ -323,6 +323,11 @@ sub ensure_apps {
         { name => 'GitHub',           url => 'https://github.com/' },
         { name => 'GitLab',           url => 'https://gitlab.com/' },
         { name => 'Codeberg',         url => 'https://codeberg.org/' },
+        { name => 'Copilot',          url => 'https://github.com/copilot' },
+        { name => 'Claude',           url => 'https://claude.ai/' },
+        { name => 'ChatGPT',          url => 'https://chatgpt.com/' },
+        { name => 'Grok',             url => 'https://grok.com/' },
+        { name => 'Gemini',           url => 'https://gemini.google.com/' },
     );
 
     for my $app (@webapps) {
