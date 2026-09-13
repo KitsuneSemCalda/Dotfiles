@@ -1,5 +1,8 @@
 # Dotfiles para Omarchy — Samsung Book NP550XDA
 
+Veja também a [análise de arquitetura e diagramas](../docs/arquitetura.md),
+com as modificações sobre a base e os limites dos instaladores.
+
 Base inicial de dotfiles para o Samsung NP550XDA-KF2BR, rodando Omarchy com
 Hyprland. O snapshot completo usado para tomar as decisões está em
 [`hardware/inxi-Fz.txt`](hardware/inxi-Fz.txt).
@@ -17,8 +20,9 @@ Hyprland. O snapshot completo usado para tomar as decisões está em
 As escolhas iniciais seguem esse perfil: escala 1 e fontes de interface e
 terminal em tamanho 20, além do modo de monitor
 `preferred`, efeitos visuais moderados para a Iris Xe e perfil de energia
-`balanced` por padrão. Em carga baixa, o utilitário Perl incluído pode usar
-`power-saver` automaticamente.
+`balanced` por padrão. Ao iniciar a sessão, o utilitário Perl incluído seleciona
+`power-saver` se a bateria estiver descarregando com carga de até 25%;
+nos demais casos, seleciona `balanced`. Não há monitoramento contínuo.
 
 ## Estrutura
 
