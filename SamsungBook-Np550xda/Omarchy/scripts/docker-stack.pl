@@ -35,15 +35,15 @@ GetOptions(
 usage(0) if $help;
 
 if ($dns && $dns_revert) {
-    die "--dns não pode ser combinado com --dns-revert\n";
+    die "--dns cannot be combined with --dns-revert\n";
 }
 
 unless ($up || $down || $status || $dns || $dns_revert || $agents) {
     usage(1);
 }
 
-# Cada CLI de agente suportada localmente mapeada para o nome de --client /
-# --agent que o ai-memory espera (nem sempre é igual ao nome do binário).
+# Each locally supported agent CLI mapped to the --client / --agent name
+# expected by ai-memory (not always the same as the binary name).
 my %client_of_binary = (
     claude         => 'claude-code',
     codex          => 'codex',
@@ -53,13 +53,13 @@ my %client_of_binary = (
     grok           => 'grok',
 );
 
-my $script_dir = abs_path(dirname(__FILE__)) or die "Não foi possível localizar o script\n";
+my $script_dir = abs_path(dirname(__FILE__)) or die "Could not locate the script\n";
 my $repo_root  = abs_path(File::Spec->catdir($script_dir, File::Spec->updir))
-    or die "Não foi possível localizar o repositório\n";
+    or die "Could not locate the repository\n";
 my $docker_dir = File::Spec->catdir($repo_root, 'docker');
 my $env_file   = File::Spec->catfile($docker_dir, '.env');
 
-die "Diretório docker/ ausente em $docker_dir\n" unless -d $docker_dir;
+die "Missing docker/ directory at $docker_dir\n" unless -d $docker_dir;
 
 if ($up) {
     my $notes_abs = File::Spec->rel2abs($notes_dir);
@@ -79,7 +79,7 @@ exit 0;
 sub ensure_notes_dir {
     my ($dir) = @_;
     if (-d $dir) {
-        say "OK      $dir já existe";
+        say "OK      $dir already exists";
         return;
     }
     say(($dry_run ? 'DIR?    ' : 'DIR     ') . $dir);
@@ -89,11 +89,11 @@ sub ensure_notes_dir {
 sub ensure_env {
     my ($notes_abs) = @_;
     if (-e $env_file) {
-        say "OK      $env_file já existe (segredos não são regerados)";
+        say "OK      $env_file already exists (secrets are not regenerated)";
         return;
     }
     if ($dry_run) {
-        say "ENV?    $env_file seria criado com segredos gerados";
+        say "ENV?    $env_file would be created with generated secrets";
         return;
     }
 
@@ -113,18 +113,18 @@ sub ensure_env {
         [OPENAI_API_KEY              => ''],
     );
 
-    open my $file, '>', $env_file or die "Não foi possível escrever $env_file: $!\n";
+    open my $file, '>', $env_file or die "Could not write $env_file: $!\n";
     say {$file} "$_->[0]=$_->[1]" for @pairs;
-    close $file or die "Não foi possível fechar $env_file: $!\n";
+    close $file or die "Could not close $env_file: $!\n";
     chmod 0600, $env_file;
-    say "ENV     $env_file criado com segredos gerados (permissão 600)";
+    say "ENV     $env_file created with generated secrets (permission 600)";
 }
 
 sub random_hex {
     my ($bytes) = @_;
     my $value = qx{openssl rand -hex $bytes};
     chomp $value;
-    die "Não foi possível gerar segredo aleatório (openssl ausente?)\n" unless length $value;
+    die "Could not generate a random secret (openssl missing?)\n" unless length $value;
     return $value;
 }
 
@@ -138,13 +138,13 @@ sub cmd_agents {
     my @detected = grep { binary_present($_) } sort keys %client_of_binary;
 
     unless (@detected) {
-        say 'SKIP    nenhum agente de IA suportado foi encontrado no PATH';
+        say 'SKIP    no supported AI agent was found on PATH';
         return;
     }
 
     for my $binary (@detected) {
         my $client = $client_of_binary{$binary};
-        say "AGENTE  $binary -> $client";
+        say "AGENT   $binary -> $client";
         run_command($wrapper, 'install-mcp',   '--client', $client, '--apply');
         run_command($wrapper, 'install-hooks', '--agent',  $client, '--apply');
     }
@@ -155,7 +155,7 @@ sub ensure_wrapper {
     return $wrapper if -x $wrapper;
 
     if ($dry_run) {
-        say "WRAPPER? $wrapper seria baixado e instalado";
+        say "WRAPPER? $wrapper would be downloaded and installed";
         return $wrapper;
     }
 
@@ -170,11 +170,11 @@ sub ensure_wrapper {
     chomp $expected;
     my $actual = qx{sha256sum "$tmp/ai-memory-wrapper" | awk '{print \$1}'};
     chomp $actual;
-    die "Checksum do wrapper ai-memory não confere (esperado $expected, obtido $actual)\n"
+    die "ai-memory wrapper checksum mismatch (expected $expected, got $actual)\n"
         unless length $expected && $expected eq $actual;
 
     run_command('install', '-m', '0755', "$tmp/ai-memory-wrapper", $wrapper);
-    say "WRAPPER $wrapper instalado";
+    say "WRAPPER $wrapper installed";
     return $wrapper;
 }
 
@@ -186,10 +186,10 @@ sub binary_present {
 sub cmd_dns {
     wait_pihole_healthy() unless $dry_run;
 
-    # omarchy-dns já filtra pra conexões Wi-Fi/Ethernet reais, atualiza
-    # NetworkManager e systemd-resolved juntos e recarrega a stack inteira —
-    # reimplementar isso via nmcli direto já deixou as bridges do Docker sem
-    # encaminhar pacotes uma vez (o NM aqui também as gerencia).
+    # omarchy-dns already filters to real Wi-Fi/Ethernet connections, updates
+    # NetworkManager and systemd-resolved together, and reloads the whole
+    # stack — reimplementing this via nmcli directly already left Docker's
+    # bridges unable to forward packets once (NM here also manages them).
     my $servers = '127.0.0.1 1.1.1.1';
     if ($dry_run) {
         say "RUN?    echo '$servers' | omarchy dns Custom";
@@ -197,11 +197,11 @@ sub cmd_dns {
     }
     say "RUN     echo '$servers' | omarchy dns Custom";
     open my $pipe, '|-', 'omarchy', 'dns', 'Custom'
-        or die "Não foi possível executar omarchy dns Custom: $!\n";
+        or die "Could not run omarchy dns Custom: $!\n";
     print {$pipe} "$servers\n";
     close $pipe;
-    die "omarchy dns Custom falhou\n" if $?;
-    say 'DNS     Pi-hole (127.0.0.1, fallback 1.1.1.1) aplicado via omarchy dns Custom';
+    die "omarchy dns Custom failed\n" if $?;
+    say 'DNS     Pi-hole (127.0.0.1, fallback 1.1.1.1) applied via omarchy dns Custom';
 }
 
 sub cmd_dns_revert {
@@ -215,8 +215,8 @@ sub wait_pihole_healthy {
         return if $health eq 'healthy';
         sleep 1;
     }
-    die "Pi-hole não ficou saudável a tempo; rode --up e verifique "
-        . "'docker logs omarchy-pihole' antes de tentar --dns de novo\n";
+    die "Pi-hole did not become healthy in time; run --up and check "
+        . "'docker logs omarchy-pihole' before trying --dns again\n";
 }
 
 sub run_command {
@@ -229,7 +229,7 @@ sub run_command {
 
     say "RUN     $display";
     my $status = system(@command);
-    die "Comando falhou ($status): $display\n" if $status == -1 || $status != 0;
+    die "Command failed ($status): $display\n" if $status == -1 || $status != 0;
 }
 
 sub shell_quote {
@@ -241,22 +241,22 @@ sub shell_quote {
 sub usage {
     my ($status) = @_;
     print <<'USAGE';
-Uso: perl scripts/docker-stack.pl [opções]
+Usage: perl scripts/docker-stack.pl [options]
 
-  --up               cria docker/.env (se ausente), a pasta de notas e sobe
-                      postgres, redis, frankmd, ai-memory e pihole
-  --down             derruba os containers da stack
-  --status           mostra o estado dos containers (docker compose ps)
-  --agents           instala o wrapper do ai-memory e liga cada CLI de IA
-                      detectada no PATH (claude, codex, gemini, cursor-agent,
+  --up               creates docker/.env (if missing), the notes folder, and
+                      brings up postgres, redis, frankmd, ai-memory, and pihole
+  --down             tears down the stack's containers
+  --status           shows the containers' state (docker compose ps)
+  --agents           installs the ai-memory wrapper and wires up each AI CLI
+                      detected on PATH (claude, codex, gemini, cursor-agent,
                       opencode, grok) via install-mcp/install-hooks
-  --dns              aponta o DNS do sistema para o Pi-hole (127.0.0.1, com
-                      fallback 1.1.1.1) via `omarchy dns Custom`; espera o
-                      container ficar saudável antes de aplicar
-  --dns-revert       roda `omarchy dns DHCP` (volta pro DNS automático)
-  --notes-dir CAMINHO usa outra pasta de notas do FrankMD (padrão: ~/Documents/notes)
-  --dry-run          mostra as ações sem executar nada
-  --help             mostra esta ajuda
+  --dns              points the system DNS to Pi-hole (127.0.0.1, with
+                      fallback 1.1.1.1) via `omarchy dns Custom`; waits for
+                      the container to become healthy before applying
+  --dns-revert       runs `omarchy dns DHCP` (reverts to automatic DNS)
+  --notes-dir PATH   uses a different FrankMD notes folder (default: ~/Documents/notes)
+  --dry-run          shows the actions without running anything
+  --help             shows this help
 USAGE
     exit $status;
 }
