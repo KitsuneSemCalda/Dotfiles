@@ -15,6 +15,7 @@ my $down        = 0;
 my $status      = 0;
 my $dns         = 0;
 my $dns_revert  = 0;
+my $dns_hook    = 0;
 my $agents      = 0;
 my $dry_run     = 0;
 my $notes_dir   = File::Spec->catdir($ENV{HOME} // '', 'Documents', 'notes');
@@ -26,6 +27,7 @@ GetOptions(
     'status'      => \$status,
     'dns'         => \$dns,
     'dns-revert'  => \$dns_revert,
+    'dns-hook'    => \$dns_hook,
     'agents'      => \$agents,
     'notes-dir=s' => \$notes_dir,
     'dry-run'     => \$dry_run,
@@ -38,7 +40,7 @@ if ($dns && $dns_revert) {
     die "--dns cannot be combined with --dns-revert\n";
 }
 
-unless ($up || $down || $status || $dns || $dns_revert || $agents) {
+unless ($up || $down || $status || $dns || $dns_revert || $dns_hook || $agents) {
     usage(1);
 }
 
@@ -66,6 +68,7 @@ if ($up) {
     ensure_notes_dir($notes_abs);
     ensure_env($notes_abs);
     compose('up', '-d');
+    ensure_dns_hook();
 }
 
 compose('down')  if $down;
@@ -73,6 +76,7 @@ compose('ps')    if $status;
 cmd_agents()     if $agents;
 cmd_dns()        if $dns;
 cmd_dns_revert() if $dns_revert;
+ensure_dns_hook() if $dns_hook;
 
 exit 0;
 
@@ -208,6 +212,19 @@ sub cmd_dns_revert {
     run_command('omarchy', 'dns', 'DHCP');
 }
 
+sub ensure_dns_hook {
+    # `omarchy dns Custom` (see cmd_dns above) persists 127.0.0.1 to
+    # NetworkManager and systemd-resolved, but if Pi-hole is still starting
+    # when resolved first tries it at boot, resolved marks it bad and sticks
+    # to the 1.1.1.1 fallback for the rest of the session. This hook re-nudges
+    # resolved onto Pi-hole once the container reports healthy, so DNS
+    # recovers automatically after every reboot without a password prompt.
+    my $hook_source = File::Spec->catfile($script_dir, 'hooks', 'pihole-dns-recover.sh');
+    die "Missing DNS recovery hook script: $hook_source\n" unless -f $hook_source;
+
+    run_command('omarchy', 'hook', 'install', 'post-boot', $hook_source);
+}
+
 sub wait_pihole_healthy {
     for (1 .. 20) {
         my $health = qx{docker inspect --format '{{.State.Health.Status}}' omarchy-pihole 2>/dev/null};
@@ -243,8 +260,9 @@ sub usage {
     print <<'USAGE';
 Usage: perl scripts/docker-stack.pl [options]
 
-  --up               creates docker/.env (if missing), the notes folder, and
-                      brings up postgres, redis, frankmd, ai-memory, and pihole
+  --up               creates docker/.env (if missing), the notes folder,
+                      brings up postgres, redis, frankmd, ai-memory, and
+                      pihole, and installs the DNS recovery post-boot hook
   --down             tears down the stack's containers
   --status           shows the containers' state (docker compose ps)
   --agents           installs the ai-memory wrapper and wires up each AI CLI
@@ -254,6 +272,9 @@ Usage: perl scripts/docker-stack.pl [options]
                       fallback 1.1.1.1) via `omarchy dns Custom`; waits for
                       the container to become healthy before applying
   --dns-revert       runs `omarchy dns DHCP` (reverts to automatic DNS)
+  --dns-hook         (re)installs the post-boot hook that re-points
+                      systemd-resolved at Pi-hole once it is healthy after
+                      a reboot; --up already does this automatically
   --notes-dir PATH   uses a different FrankMD notes folder (default: ~/Documents/notes)
   --dry-run          shows the actions without running anything
   --help             shows this help
