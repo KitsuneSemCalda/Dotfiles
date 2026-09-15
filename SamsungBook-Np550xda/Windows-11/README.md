@@ -1,102 +1,102 @@
-# Dotfiles para Windows 11 — Samsung Book NP550XDA
+# Dotfiles for Windows 11 — Samsung Book NP550XDA
 
-Veja também a [análise de arquitetura e diagramas](../docs/arquitetura.md),
-com as modificações sobre a base e os limites dos instaladores.
+See also the [architecture analysis and diagrams](../docs/architecture.md),
+covering the modifications to the base system and the installers' limitations.
 
-Base inicial de dotfiles para o mesmo Samsung NP550XDA-KF2BR do
-[perfil Omarchy](../Omarchy/README.md), agora no boot com Windows 11. Tema
-visual inspirado em Sword Art Online, reaproveitando a paleta e o material
-do tema [Sword Art Omarchy](https://github.com/KitsuneSemCalda/Sword-Art-Omarchy)
-já criado para o Hyprland — assim os dois sistemas operacionais mantêm a
-mesma identidade visual. O snapshot de hardware usado para as decisões está
-em [`hardware/hardware-profile.txt`](hardware/hardware-profile.txt).
+Initial dotfiles baseline for the same Samsung NP550XDA-KF2BR from the
+[Omarchy profile](../Omarchy/README.md), now booting Windows 11. Visual theme
+inspired by Sword Art Online, reusing the palette and material from the
+[Sword Art Omarchy](https://github.com/KitsuneSemCalda/Sword-Art-Omarchy) theme
+already built for Hyprland — so both operating systems share the
+same visual identity. The hardware snapshot used for these decisions is at
+[`hardware/hardware-profile.txt`](hardware/hardware-profile.txt).
 
-## Regras seguidas
+## Rules followed
 
-1. **Tema principal: Sword Art Online.** Paleta idêntica ao tema Omarchy
-   (fundo `#08090a`, painel `#16181b`, accent ciano `#3ee8ff`, HP vermelho
-   `#ff3b5c`, MP azul `#4f8dff`) aplicada de ponta a ponta:
-   - Wallpapers e paleta: [Sword-Art-Omarchy](https://github.com/KitsuneSemCalda/Sword-Art-Omarchy)
-     (os mesmos 3 papéis de parede 4K de textura de carbono do tema
-     original — `win11.ps1 -Theme` baixa e aplica automaticamente).
-   - Widgets de desktop (CPU/RAM/disco/relógio/rede): **AincradHUD**, um
-     único skin de Rainmeter próprio (`home/rainmeter/AincradHUD`), no lugar
-     do antigo plano de baixar e recolorir o
-     [SAO-Skin-Pack](https://github.com/rensatsu/SAO-Skin-Pack) de terceiros.
-     Motivo da troca: o SAO-Skin-Pack espalhava a mesma informação em 8
-     janelas separadas (com CPU/RAM/relógio duplicados) e sua skin de RSS
-     dependia de um feed externo que ficou fora do ar, travando a
-     atualização do widget. O AincradHUD consolida tudo em um painel único,
-     sem dependência de rede. Ver "Widgets de desktop (Rainmeter)" abaixo.
-   - Prompt: [Starship](https://starship.rs) (`starship.toml` já com
-     `git_branch`/`git_status` na paleta acima) em vez de uma função
-     `prompt` do PowerShell escrita à mão — binário nativo, sem precisar
-     rodar `git.exe` a cada linha renderizada.
-2. **Manter os keybinds do Omarchy onde possível.** O Windows não tem um
-   compositor tiling nativo, então o `GlazeWM` (https://github.com/glzr-io/glazewm,
-   FOSS, Rust, o tiling WM para Windows mais parecido com Hyprland/i3) recebe
-   uma configuração com os atalhos do
-   [manual de hotkeys do Omarchy](https://omarchy.org/manual/hotkeys/)
-   remapeados para `SUPER`, com bordas na mesma paleta (foco = accent ciano,
-   inativa = cinza `#4a5058` do tema). Onde não há equivalente no Windows
-   (`Ctrl+Alt+Del` é reservado pelo SO, por exemplo), fica documentado em vez
-   de forçado — ver a tabela completa mais abaixo.
+1. **Main theme: Sword Art Online.** A palette identical to the Omarchy
+   theme (background `#08090a`, panel `#16181b`, cyan accent `#3ee8ff`, HP red
+   `#ff3b5c`, MP blue `#4f8dff`) applied end to end:
+   - Wallpapers and palette: [Sword-Art-Omarchy](https://github.com/KitsuneSemCalda/Sword-Art-Omarchy)
+     (the same 3 carbon-texture 4K wallpapers from the original
+     theme — `win11.ps1 -Theme` downloads and applies them automatically).
+   - Desktop widgets (CPU/RAM/disk/clock/network): **AincradHUD**, a
+     single custom Rainmeter skin (`home/rainmeter/AincradHUD`), replacing
+     the earlier plan to download and recolor the
+     [SAO-Skin-Pack](https://github.com/rensatsu/SAO-Skin-Pack) from a third party.
+     Reason for the switch: SAO-Skin-Pack spread the same information across 8
+     separate windows (with duplicated CPU/RAM/clock) and its RSS skin
+     depended on an external feed that went offline, stalling the
+     widget's update. AincradHUD consolidates everything into a single panel,
+     with no network dependency. See "Desktop widgets (Rainmeter)" below.
+   - Prompt: [Starship](https://starship.rs) (`starship.toml`, already with
+     `git_branch`/`git_status` in the palette above) instead of a hand-written
+     PowerShell `prompt` function — a native binary, with no need
+     to run `git.exe` on every rendered line.
+2. **Keep Omarchy's keybinds where possible.** Windows has no native
+   tiling compositor, so `GlazeWM` (https://github.com/glzr-io/glazewm,
+   FOSS, Rust, the tiling WM for Windows closest to Hyprland/i3) gets a
+   configuration with the shortcuts from the
+   [Omarchy hotkeys manual](https://omarchy.org/manual/hotkeys/)
+   remapped to `SUPER`, with borders in the same palette (focus = cyan accent,
+   inactive = theme gray `#4a5058`). Where there is no Windows equivalent
+   (`Ctrl+Alt+Del` is reserved by the OS, for example), it is documented rather
+   than forced — see the full table further below.
 
-GlazeWM e o Rainmeter são as duas peças visuais do setup (janelas e HUD de
-desktop, respectivamente) e devem continuar sendo as ferramentas usadas para
-isso — qualquer evolução futura do tema deve mexer na paleta compartilhada
-(`#08090a`/`#16181b`/`#3ee8ff`/`#ff3b5c`/`#4f8dff`) em vez de trocar de
-ferramenta.
+GlazeWM and Rainmeter are the two visual pieces of the setup (windows and desktop
+HUD, respectively) and should remain the tools used for
+that — any future theme evolution should touch the shared palette
+(`#08090a`/`#16181b`/`#3ee8ff`/`#ff3b5c`/`#4f8dff`) rather than swap the
+tooling.
 
-## Perfil da máquina
+## Machine profile
 
-- Intel Core i5-1135G7, 4 núcleos / 8 threads
-- 16 GiB de RAM
+- Intel Core i5-1135G7, 4 cores / 8 threads
+- 16 GiB of RAM
 - Intel Iris Xe
-- Tela interna 1920×1080
-- NVMe Samsung de aproximadamente 256 GiB
+- 1920×1080 internal display
+- Samsung NVMe, approximately 256 GiB
 - Windows 11 Home Single Language
 
-## Estrutura
+## Structure
 
 ```text
 home/
-├── glazewm/config.yaml                  # tiling WM + keybinds do Omarchy
-├── starship.toml                        # idêntico ao usado no Omarchy
+├── glazewm/config.yaml                  # tiling WM + Omarchy keybinds
+├── starship.toml                        # identical to the one used on Omarchy
 ├── powershell/Microsoft.PowerShell_profile.ps1
-├── rainmeter/AincradHUD/HUD.ini         # HUD proprio (CPU/RAM/disco/rede/relogio)
+├── rainmeter/AincradHUD/HUD.ini         # custom HUD (CPU/RAM/disk/network/clock)
 └── windows-terminal/
-    └── sword-art-online.scheme.json     # paleta do Sword Art Omarchy
+    └── sword-art-online.scheme.json     # Sword Art Omarchy palette
 hardware/
 └── hardware-profile.txt
-win11.ps1                              # instalador e orquestrador
-scripts/hardware-profile.ps1             # atualiza o snapshot (sem PII)
-scripts/debloat.ps1                      # debloat + otimizacao conservadores
+win11.ps1                              # installer and orchestrator
+scripts/hardware-profile.ps1             # updates the snapshot (no PII)
+scripts/debloat.ps1                      # conservative debloat + optimization
 ```
 
-Assim como no Omarchy, os arquivos de configuração ficam nos formatos
-nativos de cada ferramenta (YAML no GlazeWM, JSON no Windows Terminal, TOML
-no Starship) e o PowerShell cuida só da automação/instalação.
+Just like on Omarchy, the configuration files stay in each tool's
+native format (YAML for GlazeWM, JSON for Windows Terminal, TOML
+for Starship) and PowerShell only handles automation/installation.
 
-## Ferramentas usadas
+## Tools used
 
-Todas de projetos existentes e mantidos — nenhuma escrita do zero:
+All from existing, maintained projects — nothing written from scratch:
 
-| Papel no Omarchy       | Ferramenta no Windows                                          |
+| Role on Omarchy         | Tool on Windows                                                  |
 |-------------------------|-----------------------------------------------------------------|
 | Hyprland (tiling WM)    | [GlazeWM](https://github.com/glzr-io/glazewm)                   |
 | Alacritty (terminal)    | Windows Terminal                                                 |
-| Starship (prompt)       | Starship (mesmo `starship.toml`)                                 |
+| Starship (prompt)       | Starship (same `starship.toml`)                                  |
 | btop                    | [btop4win](https://github.com/aristocratos/btop4win)             |
-| Menu/launcher do Omarchy| PowerToys Run                                                    |
-| Feader-RSS / widgets    | AincradHUD (skin de Rainmeter próprio — ver abaixo)              |
+| Omarchy's menu/launcher | PowerToys Run                                                    |
+| Feader-RSS / widgets    | AincradHUD (custom Rainmeter skin — see below)                   |
 
-## Perfil de apps
+## App profile
 
-Equivalente ao `ensure_apps()` do `omarchy.pl`: `-Apps`/`-All` também instala,
-via `winget`, o perfil pessoal de aplicativos além das ferramentas do tema.
+Equivalent to `omarchy.pl`'s `ensure_apps()`: `-Apps`/`-All` also installs,
+via `winget`, the personal app profile alongside the theme's tools.
 
-| App           | Pacote winget                   |
+| App           | winget package                   |
 |---------------|----------------------------------|
 | Steam         | `Valve.Steam`                    |
 | Prism Launcher| `PrismLauncher.PrismLauncher`    |
@@ -112,164 +112,164 @@ via `winget`, o perfil pessoal de aplicativos além das ferramentas do tema.
 | Python        | `Python.Python.3.13`             |
 | Lua           | `DEVCOM.Lua`                     |
 
-`-Apps`/`-All` também roda `Install-PowerShellModules`, que instala (via
-`Install-Module -Scope CurrentUser`, sem admin) os módulos usados pelo
-profile: `Terminal-Icons` (ícones no `Get-ChildItem`), `PSFzf` (Ctrl+T
-busca arquivos, Ctrl+R busca histórico — depende do binário `fzf`, instalado
-via `junegunn.fzf` acima) e `z` (salto rápido de diretório por frequência de
-uso). O profile tenta carregar os módulos uma vez, na segunda chamada da função
-`prompt`, e inicializa o Starship nesse mesmo momento. As chamadas seguintes
-usam o prompt instalado pelo Starship. Não utiliza `PowerShell.OnIdle`.
+`-Apps`/`-All` also runs `Install-PowerShellModules`, which installs (via
+`Install-Module -Scope CurrentUser`, no admin needed) the modules used by
+the profile: `Terminal-Icons` (icons in `Get-ChildItem`), `PSFzf` (Ctrl+T
+fuzzy-finds files, Ctrl+R searches history — depends on the `fzf` binary, installed
+via `junegunn.fzf` above), and `z` (fast directory jumping by frequency of
+use). The profile attempts to load the modules once, on the second call to the
+`prompt` function, and initializes Starship at that same moment. Subsequent calls
+use the prompt installed by Starship. It does not use `PowerShell.OnIdle`.
 
-## Debloat e otimização
+## Debloat and optimization
 
-`scripts/debloat.ps1` é conservador de propósito e construído a partir do
-`Get-AppxPackage` **real** desta máquina (não uma lista genérica baixada da
-internet) — por isso não mexe em Defender, Windows Update, OneDrive, Edge,
-WSL, Dev Home, nada da Samsung (pode controlar hardware de verdade) nem em
-apps claramente instalados de propósito (Claude, ChatGPT Desktop, Dropbox,
-Spotify). O que ele faz:
+`scripts/debloat.ps1` is intentionally conservative and built from
+the **actual** `Get-AppxPackage` output on this machine (not a generic list downloaded from
+the internet) — that's why it doesn't touch Defender, Windows Update, OneDrive, Edge,
+WSL, Dev Home, anything from Samsung (it can control real hardware), or
+apps clearly installed on purpose (Claude, ChatGPT Desktop, Dropbox,
+Spotify). What it does:
 
-- Remove bloatware sem uso pra este perfil: Clipchamp, Bing News/Weather,
-  Get Help, Solitaire Collection, Feedback Hub, novo Outlook, Teams
-  (consumidor), Copilot e Family Safety.
-- Desativa (não apaga — reversível com `Enable-ScheduledTask`) tarefas
-  agendadas de telemetria/diagnóstico conhecidas (Compatibility Appraiser,
+- Removes bloatware not used in this profile: Clipchamp, Bing News/Weather,
+  Get Help, Solitaire Collection, Feedback Hub, the new Outlook, Teams
+  (consumer), Copilot, and Family Safety.
+- Disables (does not delete — reversible with `Enable-ScheduledTask`) known
+  telemetry/diagnostics scheduled tasks (Compatibility Appraiser,
   CEIP, Disk Diagnostic, Feedback, Error Reporting).
-- Ativa o Storage Sense (limpeza automática de temporários do Windows).
-- Limpa `%TEMP%`, `C:\Windows\Temp` e a Lixeira.
+- Enables Storage Sense (automatic cleanup of Windows temp files).
+- Cleans `%TEMP%`, `C:\Windows\Temp`, and the Recycle Bin.
 
-Desativar as tarefas do sistema exige administrador; se rodado sem
-elevação, o próprio script se relança elevado (`-Verb RunAs`) e pede
-confirmação por UAC.
+Disabling the system tasks requires administrator rights; if run without
+elevation, the script relaunches itself elevated (`-Verb RunAs`) and prompts
+for UAC confirmation.
 
 ```powershell
-pwsh ./scripts/debloat.ps1              # so mostra o que seria feito
-pwsh ./scripts/debloat.ps1 -Apply       # aplica de verdade (pede UAC)
+pwsh ./scripts/debloat.ps1              # just shows what would be done
+pwsh ./scripts/debloat.ps1 -Apply       # actually applies it (prompts UAC)
 ```
 
 ## Keybinds: Omarchy → Windows (GlazeWM)
 
-| Atalho Omarchy         | Ação                        | No Windows                              |
+| Omarchy shortcut        | Action                        | On Windows                                |
 |-------------------------|-----------------------------|------------------------------------------|
 | `Super+Return`          | Terminal                    | `Super+Return` → Windows Terminal        |
-| `Super+W` / `Super+Q`   | Fechar janela                | igual                                     |
-| `Super+T`               | Alternar tiling/floating     | igual                                     |
-| `Super+F`               | Tela cheia                  | igual                                     |
-| `Super+Seta`            | Mover foco                  | igual (+ `Super+HJKL` como bônus)         |
-| `Super+Shift+Seta`      | Trocar janelas de posição    | igual                                     |
-| `Super+1..4`            | Ir para workspace            | `Super+1..9` (GlazeWM permite mais)       |
-| `Super+Shift+1..4`      | Mover janela para workspace  | `Super+Shift+1..9`                        |
-| `Super+Tab` / `+Shift`  | Próximo/anterior workspace   | igual                                     |
-| `Super+Ctrl+Tab`        | Workspace anterior           | igual                                     |
-| `Super+Ctrl+L`          | Bloquear tela                | igual (Windows já usa `Win+L` nativo também) |
-| `Super+Ctrl+T`          | Monitor de atividade         | `Super+Ctrl+T` → Gerenciador de Tarefas   |
-| `Super+Ctrl+D`          | Painel de tela               | `Super+Ctrl+D` → Config. de vídeo         |
-| `Super+Ctrl+A`          | Painel de áudio              | `Super+Ctrl+A` → Config. de som           |
-| `Super+Ctrl+P`          | Painel de energia            | `Super+Ctrl+P` → Config. de energia       |
-| `Super+Shift+Return`    | Navegador                   | igual (abre o navegador padrão)           |
-| `Super+Shift+F`         | Gerenciador de arquivos      | `Super+Shift+F` → Explorer                |
-| `Super+Shift+N`         | Editor                      | `Super+Shift+N` → VS Code (troque à vontade) |
-| `Super+Shift+R`         | Recarregar config            | igual                                     |
+| `Super+W` / `Super+Q`   | Close window                | same                                      |
+| `Super+T`               | Toggle tiling/floating       | same                                      |
+| `Super+F`               | Fullscreen                  | same                                      |
+| `Super+Arrow`           | Move focus                  | same (+ `Super+HJKL` as a bonus)          |
+| `Super+Shift+Arrow`     | Swap window positions        | same                                      |
+| `Super+1..4`            | Go to workspace              | `Super+1..9` (GlazeWM allows more)        |
+| `Super+Shift+1..4`      | Move window to workspace     | `Super+Shift+1..9`                        |
+| `Super+Tab` / `+Shift`  | Next/previous workspace      | same                                      |
+| `Super+Ctrl+Tab`        | Previous workspace           | same                                      |
+| `Super+Ctrl+L`          | Lock screen                  | same (Windows also has native `Win+L`)    |
+| `Super+Ctrl+T`          | Activity monitor             | `Super+Ctrl+T` → Task Manager             |
+| `Super+Ctrl+D`          | Display panel                | `Super+Ctrl+D` → Display settings         |
+| `Super+Ctrl+A`          | Audio panel                  | `Super+Ctrl+A` → Sound settings           |
+| `Super+Ctrl+P`          | Power panel                  | `Super+Ctrl+P` → Power settings           |
+| `Super+Shift+Return`    | Browser                     | same (opens the default browser)          |
+| `Super+Shift+F`         | File manager                 | `Super+Shift+F` → Explorer                |
+| `Super+Shift+N`         | Editor                       | `Super+Shift+N` → VS Code (swap freely)   |
+| `Super+Shift+R`         | Reload config                | same                                      |
 
-Sem equivalente direto no Windows (documentado, não forçado):
+No direct Windows equivalent (documented, not forced):
 
-- `Super+Space` (menu do Omarchy) → o launcher aqui é o **PowerToys Run**.
-  Configure o atalho dele para `Win+Space` em PowerToys → PowerToys Run →
-  "Activation shortcut" (o padrão de fábrica é `Alt+Space`). Como o Windows
-  usa `Win+Space` para trocar idioma de teclado por padrão, desative essa
-  combinação em Configurações → Hora e idioma → Entrada → Atalhos de
-  teclado avançados, ou o PowerToys Run não vai abrir.
-- `Super+Escape` (menu do sistema) — sem painel equivalente nativo.
-- `Ctrl+Alt+Del` (fechar todas as janelas) — combinação reservada pelo
-  Windows (Secure Attention Sequence); nenhum app pode interceptá-la.
-- `Super+C` / `Super+V` (copiar/colar) — o Windows já usa `Ctrl+C`/`Ctrl+V`
-  globalmente; remapear quebraria o resto do sistema.
+- `Super+Space` (Omarchy menu) → the launcher here is **PowerToys Run**.
+  Set its shortcut to `Win+Space` in PowerToys → PowerToys Run →
+  "Activation shortcut" (the factory default is `Alt+Space`). Since Windows
+  uses `Win+Space` to switch keyboard language by default, disable that
+  combination under Settings → Time & language → Input → Advanced
+  keyboard shortcuts, or PowerToys Run will not open.
+- `Super+Escape` (system menu) — no equivalent native panel.
+- `Ctrl+Alt+Del` (close all windows) — reserved by Windows
+  (Secure Attention Sequence); no app can intercept it.
+- `Super+C` / `Super+V` (copy/paste) — Windows already uses `Ctrl+C`/`Ctrl+V`
+  globally; remapping this would break the rest of the system.
 
-GlazeWM também ganha alguns atalhos extras que não existem no Omarchy
-(`Super+M` minimizar, `Super+V` alternar direção de tiling, `Super+R` modo
-de redimensionar, `Super+Shift+X` sair do GlazeWM) — todos comentados no
-próprio `home/glazewm/config.yaml`.
+GlazeWM also gains a few extra shortcuts that don't exist on Omarchy
+(`Super+M` minimize, `Super+V` toggle tiling direction, `Super+R` resize
+mode, `Super+Shift+X` exit GlazeWM) — all documented as comments in
+`home/glazewm/config.yaml` itself.
 
-## Instalação
+## Installation
 
-Requer o **Modo de desenvolvedor** ativado (Configurações → Privacidade e
-segurança → Para desenvolvedores) para criar os symlinks sem ser
-administrador — mesma ideia do `omarchy.pl`, que também nunca altera nada
-por padrão quando há um arquivo conflitante.
+Requires **Developer Mode** enabled (Settings → Privacy &
+security → For developers) to create symlinks without being
+an administrator — the same idea as `omarchy.pl`, which also never changes anything
+by default when a conflicting file exists.
 
-Ver o que seria feito, sem tocar em nada:
+See what would be done, without touching anything:
 
 ```powershell
 pwsh ./win11.ps1 -DryRun -All
 ```
 
-Instalar preservando arquivos existentes em
+Install while preserving existing files in
 `$env:USERPROFILE\.local\state\dotfiles\backups\`:
 
 ```powershell
 pwsh ./win11.ps1 -Backup
 ```
 
-**Limitação conhecida:** `-Restore` seleciona o backup mais recente, mas não
-reutiliza o mapa de destinos da instalação e pode restaurar arquivos no lugar
-errado. Consulte a [análise da restauração](../docs/arquitetura.md#instalação-conflitos-e-alcance-da-restauração)
-antes de usar esta opção; ela não constitui uma reversão confiável:
+**Known limitation:** `-Restore` selects the most recent backup, but does not
+reuse the installation's destination map and can restore files to the
+wrong location. See the [restore analysis](../docs/architecture.md#installation-conflicts-and-restore-scope)
+before using this option; it is not a reliable reversal:
 
 ```powershell
 pwsh ./win11.ps1 -Restore
 ```
 
-As etapas também rodam separadas com `-Fonts` (Lexend + JetBrainsMono Nerd
-Font, per-user, sem admin), `-Theme` (color scheme do Windows Terminal,
-wallpaper e o skin do Rainmeter recolorido) ou `-Apps` (`winget install` do
-GlazeWM, Windows Terminal, PowerToys, Starship e Rainmeter). Para tudo de
-uma vez:
+The steps can also run separately with `-Fonts` (Lexend + JetBrainsMono Nerd
+Font, per-user, no admin), `-Theme` (Windows Terminal color scheme,
+wallpaper, and the recolored Rainmeter skin), or `-Apps` (`winget install` for
+GlazeWM, Windows Terminal, PowerToys, Starship, and Rainmeter). For everything at
+once:
 
 ```powershell
 pwsh ./win11.ps1 -All -Backup
 ```
 
-`-Fonts`, `-Theme` e `-Apps` só rodam contra o `$HOME` real; `-Target` serve
-apenas para testar a criação dos symlinks em outro diretório.
+`-Fonts`, `-Theme`, and `-Apps` only run against the real `$HOME`; `-Target` is
+only for testing symlink creation in another directory.
 
-Se a criação de symlink falhar mesmo com o Modo de Desenvolvedor ativado no
-registro (`AllowDevelopmentWithoutDevLicense`), o privilégio às vezes só
-vale pra sessões interativas normais — sessões automatizadas/não
-interativas podem não herdá-lo. Nesse caso, rode elevado:
+If symlink creation fails even with Developer Mode enabled in the
+registry (`AllowDevelopmentWithoutDevLicense`), the privilege sometimes only
+applies to normal interactive sessions — automated/non-interactive
+sessions may not inherit it. In that case, run elevated:
 
 ```powershell
 Start-Process powershell -Verb RunAs -ArgumentList '-File .\win11.ps1 -All -Backup'
 ```
 
-## Widgets de desktop (Rainmeter)
+## Desktop widgets (Rainmeter)
 
-Para a estética "HUD do SAO" na área de trabalho (equivalente visual ao
-Feader-RSS do Omarchy), `home/rainmeter/AincradHUD/HUD.ini` é um único
-painel vendorizado neste repo (sem download em tempo de instalação, sem
-dependência de licença de terceiro): relógio, HP (carga de CPU), MP
-(memória livre), inventário (espaço livre no disco C) e uplink/downlink de
-rede, com bordas em estilo HUD e alerta em vermelho quando CPU/RAM passam
-de ~80% ou o disco fica com menos de 15% livre.
+For the "SAO HUD" desktop aesthetic (the visual equivalent of
+Omarchy's Feader-RSS), `home/rainmeter/AincradHUD/HUD.ini` is a single
+panel vendored in this repo (no download at install time, no
+third-party license dependency): clock, HP (CPU load), MP
+(free memory), inventory (free space on the C: drive), and network
+uplink/downlink, with HUD-style borders and a red alert when CPU/RAM go
+above ~80% or the disk drops below 15% free.
 
-`win11.ps1 -Backup` symlinka a pasta inteira para
-`Documents\Rainmeter\Skins\AincradHUD` (mesmo mecanismo dos outros arquivos
-de config simples, só que numa pasta em vez de um arquivo). `-Theme` ativa
-o skin (`Active=1` + `AlwaysOnTop=1` em `Rainmeter.ini`) e desativa
-qualquer resquício de um pacote de terceiros antigo em
-`Sword Art Online\SAO *`, caso exista — esse pacote (skins separadas de
-CPU/RAM/relógio/disco/bateria/RSS, sem recolor, com uma skin de RSS
-apontando pra um feed que saiu do ar) foi descontinuado neste repo em favor
-do painel único.
+`win11.ps1 -Backup` symlinks the whole folder to
+`Documents\Rainmeter\Skins\AincradHUD` (the same mechanism as the other
+config files, just on a folder instead of a single file). `-Theme` activates
+the skin (`Active=1` + `AlwaysOnTop=1` in `Rainmeter.ini`) and deactivates
+any leftover from an old third-party package at
+`Sword Art Online\SAO *`, if present — that package (separate skins for
+CPU/RAM/clock/disk/battery/RSS, no recolor, with an RSS skin
+pointing to a feed that went offline) was discontinued in this repo in favor
+of the single panel.
 
-## Atualizar o hardware
+## Updating the hardware snapshot
 
 ```powershell
-pwsh ./scripts/hardware-profile.ps1            # mostra na tela
-pwsh ./scripts/hardware-profile.ps1 -Save      # grava hardware/hardware-profile.txt
+pwsh ./scripts/hardware-profile.ps1            # prints to screen
+pwsh ./scripts/hardware-profile.ps1 -Save      # writes hardware/hardware-profile.txt
 ```
 
-Diferente do `inxi -Fz` usado no Omarchy, esse script usa CIM/WMI
-diretamente e nunca inclui e-mail de proprietário, chave de produto ou dados
-de rede — só o necessário para decisões de configuração (CPU, RAM, GPU,
-disco, bateria).
+Unlike the `inxi -Fz` used on Omarchy, this script uses CIM/WMI
+directly and never includes owner email, product key, or network
+data — only what's needed for configuration decisions (CPU, RAM, GPU,
+disk, battery).
