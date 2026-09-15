@@ -74,8 +74,8 @@ services:
       FTLCONF_webserver_api_password: ${PIHOLE_PASSWORD}
     volumes:
       - pihole-etc:/etc/pihole
-    # Ligado só em 127.0.0.1: este notebook usa o Pi-hole como DNS, mas ele
-    # não fica exposto para o resto da rede local (decisão do usuário).
+    # Bound only to 127.0.0.1: this laptop uses Pi-hole as its DNS, but it
+    # is not exposed to the rest of the local network (user's choice).
     ports:
       - "127.0.0.1:53:53/tcp"
       - "127.0.0.1:53:53/udp"
