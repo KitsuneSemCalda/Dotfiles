@@ -14,7 +14,7 @@ if (defined $status && $status eq 'Discharging'
     $profile = 'power-saver';
 }
 if (system($powerprofilesctl, 'set', $profile) != 0) {
-    warn "Não foi possível selecionar o perfil de energia '$profile'\n";
+    warn "Could not select the power profile '$profile'\n";
     exit 1;
 }
 
