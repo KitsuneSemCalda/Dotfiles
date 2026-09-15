@@ -48,6 +48,7 @@ docker/
 omarchy.pl                       # installer and orchestrator, written in Perl
 scripts/hardware-profile.pl     # updates the snapshot via inxi
 scripts/docker-stack.pl         # brings up the Docker stack and wires the AI agents
+scripts/hooks/pihole-dns-recover.sh  # post-boot hook: re-points resolved at Pi-hole
 ```
 
 Perl is used for the repository's automation and tooling. The
@@ -153,6 +154,26 @@ perl scripts/docker-stack.pl --dns
 active — its detection only checks whether `1.1.1.1` appears in the list, which is
 exactly the fallback. Confirm the real server with `resolvectl status`
 (`Current DNS Server: 127.0.0.1`).
+
+`--up` also installs a `post-boot` hook
+(`scripts/hooks/pihole-dns-recover.sh`, via `omarchy hook install`) that
+fixes DNS "reverting" to the `1.1.1.1` fallback on every reboot: Pi-hole's
+container can still be starting when `systemd-resolved` first tries
+`127.0.0.1`, so `resolved` marks it bad and keeps using the fallback for the
+rest of the session even once Pi-hole is healthy — resetting the interface's
+DNS list back to `127.0.0.1 1.1.1.1` does not reliably win Cloudflare's spot
+back either, since `resolved` only re-picks a "current" server once the one
+it is already using drops out of the list. The hook waits for the
+container's health check, then narrows the active interface's DNS list down
+to just Pi-hole (`resolvectl dns <iface> 127.0.0.1`), forcing `resolved` to
+pick it unambiguously; the system-wide `FallbackDNS` in
+`/etc/systemd/resolved.conf` (set by `omarchy dns Custom`) still covers
+Pi-hole going down mid-session. This is an unprivileged `resolve1` D-Bus
+call, so no password prompt. Install/reinstall it on its own with:
+
+```bash
+perl scripts/docker-stack.pl --dns-hook
+```
 
 Revert DNS to automatic (`omarchy dns DHCP`), stop the stack, or just
 check the containers' state:
