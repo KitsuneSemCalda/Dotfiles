@@ -1,6 +1,6 @@
--- A bateria observada está com cerca de 30,7% da capacidade original.
--- Se o utilitário Perl estiver instalado, ele escolhe balanced ou power-saver
--- de acordo com a carga atual; caso contrário, mantemos o fallback simples.
+-- The observed battery is at roughly 30.7% of its original capacity.
+-- If the Perl utility is installed, it picks balanced or power-saver
+-- based on the current charge; otherwise we keep the simple fallback.
 
 local home = os.getenv('HOME')
 local profile_script = home and (home .. '/.local/bin/omarchy-power-profile') or nil

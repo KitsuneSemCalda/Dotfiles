@@ -1,5 +1,5 @@
--- O teclado externo Dareu EK75 é US/ANSI; manter intl global evita perder
--- acentos quando ele estiver conectado.
+-- The external Dareu EK75 keyboard is US/ANSI; keeping intl global avoids
+-- losing accented characters while it's connected.
 
 hl.config({
     input = {
@@ -19,17 +19,17 @@ hl.config({
     },
 })
 
--- Gesto de três dedos para trocar de workspace no touchpad.
+-- Three-finger gesture to switch workspace on the touchpad.
 hl.gesture({ fingers = 3, direction = 'horizontal', action = 'workspace' })
 
--- Teclado embutido do Samsung Book NP550XDA-KF2BR (ABNT2).
+-- Built-in keyboard of the Samsung Book NP550XDA-KF2BR (ABNT2).
 hl.device({
     name = 'at-translated-set-2-keyboard',
     kb_layout = 'br',
     kb_variant = 'abnt2',
 })
 
--- Os nomes abaixo correspondem às duas interfaces observadas para o EK75.
+-- The names below correspond to the two interfaces observed for the EK75.
 hl.device({
     name = 'ek75_keyboard-1',
     kb_layout = 'us',

@@ -1,12 +1,12 @@
--- Samsung NP550XDA-KF2BR: painel interno Full HD.
--- `preferred` mantém compatibilidade com monitores externos conectados depois.
--- Escala 1 mantém a área nativa do painel Full HD; a legibilidade é ajustada
--- pelos tamanhos de fonte definidos no restante do dotfiles.
+-- Samsung NP550XDA-KF2BR: internal Full HD panel.
+-- `preferred` keeps compatibility with external monitors connected later.
+-- Scale 1 keeps the Full HD panel's native resolution; legibility is adjusted
+-- via the font sizes defined elsewhere in the dotfiles.
 
 local monitor_scale = 1
 
--- 1 é um valor inteiro compatível com GTK e mantém a escala do sistema
--- consistente com o Hyprland.
+-- 1 is an integer value compatible with GTK and keeps the system scale
+-- consistent with Hyprland.
 hl.env('GDK_SCALE', tostring(monitor_scale))
 hl.monitor({
     output = '',

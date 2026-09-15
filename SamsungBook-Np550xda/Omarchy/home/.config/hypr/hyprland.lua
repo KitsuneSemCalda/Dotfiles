@@ -1,6 +1,6 @@
--- Configuração principal do Hyprland para Omarchy.
--- Os defaults do Omarchy são carregados primeiro; os arquivos abaixo são
--- sobreposições pessoais e podem ser atualizados independentemente.
+-- Main Hyprland configuration for Omarchy.
+-- Omarchy's defaults are loaded first; the files below are personal
+-- overrides and can be updated independently.
 
 dofile((os.getenv('OMARCHY_PATH') or '/usr/share/omarchy') .. '/default/hypr/bootstrap.lua')
 
