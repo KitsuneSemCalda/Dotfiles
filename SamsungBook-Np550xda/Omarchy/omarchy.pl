@@ -41,25 +41,25 @@ usage(0) if $help;
 $apps = $fonts = $plugin = $theme = 1 if $all;
 
 if ($restore && ($backup || $apps || $fonts || $plugin || $theme)) {
-    die "--restore não pode ser combinado com --backup, --apps, --fonts, --plugin, --theme ou --all\n";
+    die "--restore cannot be combined with --backup, --apps, --fonts, --plugin, --theme, or --all\n";
 }
 
-die "HOME não está definido; use --target CAMINHO\n"
+die "HOME is not set; use --target PATH\n"
     unless defined $target && length $target;
 
 my $script_dir  = dirname(__FILE__);
 $script_dir     = File::Spec->rel2abs($script_dir) unless File::Spec->file_name_is_absolute($script_dir);
 my $repo_root   = $script_dir;
-die "Não foi possível localizar o repositório\n" unless -d $repo_root;
+die "Could not locate the repository\n" unless -d $repo_root;
 my $source_root = File::Spec->catdir($repo_root, 'home');
 $target         = abs_path($target) // File::Spec->rel2abs($target);
 
-die "Diretório de origem ausente: $source_root\n" unless -d $source_root;
-die "Destino ausente: $target\n" unless -d $target;
+die "Missing source directory: $source_root\n" unless -d $source_root;
+die "Missing destination: $target\n" unless -d $target;
 
 my $home_root = abs_path($ENV{HOME} // '') // '';
 if (($apps || $fonts || $plugin || $theme) && $target ne $home_root) {
-    die "Ações do Omarchy só podem usar o HOME real; use --target apenas para testar symlinks\n";
+    die "Omarchy actions can only use the real HOME; use --target only to test symlinks\n";
 }
 
 my $backup_base = File::Spec->catdir($target, '.local', 'state', 'dotfiles', 'backups');
@@ -101,12 +101,12 @@ for my $source (sort @sources) {
 
     if (-e $destination || -l $destination) {
         if (-d $destination && !-l $destination) {
-            warn "CONFLITO $relative (é um diretório; não será movido automaticamente)\n";
+            warn "CONFLICT $relative (it's a directory; will not be moved automatically)\n";
             $failures++;
             next;
         }
         unless ($backup) {
-            warn "CONFLITO $relative (use --backup para preservar o original)\n";
+            warn "CONFLICT $relative (use --backup to preserve the original)\n";
             $failures++;
             next;
         }
@@ -115,7 +115,7 @@ for my $source (sort @sources) {
         say "BACKUP  $relative -> " . File::Spec->abs2rel($backup_path, $target);
         make_path(dirname($backup_path)) unless $dry_run || -d dirname($backup_path);
         move($destination, $backup_path) unless $dry_run;
-        die "Falha ao mover $destination para $backup_path: $!\n"
+        die "Failed to move $destination to $backup_path: $!\n"
             unless $dry_run || -e $backup_path || -l $backup_path;
     }
 
@@ -124,24 +124,24 @@ for my $source (sort @sources) {
 
     make_path($parent) unless -d $parent;
     symlink($source, $destination)
-        or die "Falha ao criar symlink $destination: $!\n";
+        or die "Failed to create symlink $destination: $!\n";
 }
 
-die "$failures conflito(s) encontrado(s); nada conflitante foi sobrescrito\n" if $failures;
+die "$failures conflict(s) found; nothing conflicting was overwritten\n" if $failures;
 
 ensure_fonts()  if $fonts;
 ensure_apps()   if $apps;
 ensure_plugin() if $plugin;
 ensure_theme()  if $theme;
 
-say $dry_run ? 'Dry-run concluído.' : 'Dotfiles instalados.';
+say $dry_run ? 'Dry-run finished.' : 'Dotfiles installed.';
 exit 0;
 
 sub restore_backups {
     my ($backup_base) = @_;
 
     opendir my $backup_dir, $backup_base
-        or die "Diretório de backups ausente: $backup_base\n";
+        or die "Missing backups directory: $backup_base\n";
 
     my @snapshots = sort grep {
         /^\d{8}-\d{6}$/ && -d File::Spec->catdir($backup_base, $_)
@@ -149,7 +149,7 @@ sub restore_backups {
     closedir $backup_dir;
 
     my $snapshot_name = $snapshots[-1]
-        or die "Nenhum backup encontrado em $backup_base\n";
+        or die "No backup found in $backup_base\n";
     my $snapshot = File::Spec->catdir($backup_base, $snapshot_name);
     my @entries;
 
@@ -164,7 +164,7 @@ sub restore_backups {
         $snapshot,
     );
 
-    die "Backup $snapshot_name não contém arquivos restauráveis\n"
+    die "Backup $snapshot_name contains no restorable files\n"
         unless @entries;
 
     my (@actions, @conflicts);
@@ -186,9 +186,9 @@ sub restore_backups {
     }
 
     if (@conflicts) {
-        warn "CONFLITO $_ (o destino não é um symlink deste dotfiles)\n"
+        warn "CONFLICT $_ (the destination is not a symlink from these dotfiles)\n"
             for @conflicts;
-        die scalar(@conflicts) . " conflito(s); restauração abortada sem alterar arquivos\n";
+        die scalar(@conflicts) . " conflict(s); restore aborted without changing files\n";
     }
 
     say "BACKUP   $snapshot_name";
@@ -204,8 +204,8 @@ sub restore_backups {
     }
 
     say $dry_run
-        ? 'Dry-run de restauração concluído.'
-        : "Backup restaurado; cópia preservada em $snapshot";
+        ? 'Restore dry-run finished.'
+        : "Backup restored; copy preserved at $snapshot";
 }
 
 sub points_to_source {
@@ -232,26 +232,26 @@ sub restore_entry {
 
     if (-l $backup_path) {
         my $link = readlink($backup_path);
-        die "Não foi possível ler o symlink de backup $backup_path\n"
+        die "Could not read the backup symlink $backup_path\n"
             unless defined $link;
         symlink($link, $destination)
-            or die "Falha ao restaurar symlink $destination: $!\n";
+            or die "Failed to restore symlink $destination: $!\n";
         return;
     }
 
     copy($backup_path, $destination)
-        or die "Falha ao copiar $backup_path para $destination: $!\n";
+        or die "Failed to copy $backup_path to $destination: $!\n";
 }
 
 sub ensure_fonts {
     ensure_lexend_font();
 
     if (font_present('Lexend')) {
-        say 'FONT    Lexend disponível';
+        say 'FONT    Lexend available';
     } elsif ($dry_run) {
-        say 'FONT?   Lexend será usada após o download dos arquivos';
+        say 'FONT?   Lexend will be used after the files are downloaded';
     } else {
-        die "Lexend não foi encontrada após o download dos arquivos\n";
+        die "Lexend was not found after downloading the files\n";
     }
 }
 
@@ -263,21 +263,21 @@ sub ensure_lexend_font {
     );
 
     if (!grep { !-f File::Spec->catfile($font_dir, $_) } keys %weight_of_file) {
-        say 'OK      arquivos da fonte Lexend já baixados';
+        say 'OK      Lexend font files already downloaded';
         return;
     }
 
     if ($dry_run) {
-        say 'FONT?   Lexend seria baixada do Google Fonts em ' . $font_dir;
+        say 'FONT?   Lexend would be downloaded from Google Fonts to ' . $font_dir;
         return;
     }
 
     make_path($font_dir) unless -d $font_dir;
 
-    # Um user-agent genérico faz a API do Google Fonts responder com TrueType
-    # (em vez de woff2), que é o formato que o fontconfig/Linux espera.
+    # A generic user-agent makes the Google Fonts API respond with TrueType
+    # (instead of woff2), which is the format fontconfig/Linux expects.
     my $css = qx{curl -sL -A 'Mozilla/5.0' 'https://fonts.googleapis.com/css2?family=Lexend:wght\@400;700'};
-    die "Não foi possível obter o CSS do Google Fonts para Lexend\n" unless $css;
+    die "Could not fetch the Google Fonts CSS for Lexend\n" unless $css;
 
     my %url_of_weight;
     while ($css =~ /font-weight:\s*(\d+);\s*\n\s*src:\s*url\(([^)]+)\)/g) {
@@ -287,7 +287,7 @@ sub ensure_lexend_font {
     for my $file (sort keys %weight_of_file) {
         my $weight = $weight_of_file{$file};
         my $url    = $url_of_weight{$weight}
-            or die "URL da fonte Lexend (peso $weight) não encontrada no CSS do Google Fonts\n";
+            or die "Lexend font URL (weight $weight) not found in the Google Fonts CSS\n";
         run_command('curl', '-sL', $url, '-o', File::Spec->catfile($font_dir, $file));
     }
 
@@ -299,7 +299,7 @@ sub ensure_apps {
         if (webapp_present($name)) {
             run_command('omarchy', 'webapp', 'remove', $name);
         } else {
-            say "SKIP    web app $name não está instalado";
+            say "SKIP    web app $name is not installed";
         }
     }
 
@@ -307,7 +307,7 @@ sub ensure_apps {
     if (package_present('1password') || package_present('1password-cli') || -e $onepassword_extension) {
         run_command('omarchy', 'remove', 'service', '1password');
     } else {
-        say 'SKIP    1Password não está instalado';
+        say 'SKIP    1Password is not installed';
     }
 
     ensure_repo_packages('prismlauncher');
@@ -336,7 +336,7 @@ sub ensure_apps {
             next;
         }
 
-        # O argumento vazio faz o instalador oficial buscar o ícone do site.
+        # The empty argument makes the official installer fetch the site's icon.
         run_command('omarchy', 'webapp', 'install', $app->{name}, $app->{url}, '');
     }
 }
@@ -347,11 +347,11 @@ sub ensure_plugin {
     my $dir = File::Spec->catdir($target, '.config', 'omarchy', 'plugins', $id);
 
     if (-d $dir) {
-        say "OK      plugin $id já está instalado";
+        say "OK      plugin $id is already installed";
         run_command('omarchy', 'plugin', 'enable', $id, 'right');
     } else {
-        # Sem --yes: o Omarchy mostra a confirmação de segurança para código
-        # que será executado dentro do processo persistente do shell.
+        # No --yes: Omarchy shows the security confirmation for code that
+        # will run inside the shell's persistent process.
         run_command('omarchy', 'plugin', 'add', $url, '--enable');
     }
 }
@@ -374,12 +374,12 @@ sub ensure_theme {
         unless ($dry_run) {
             make_path(dirname($link_backup));
             move($dir, $link_backup)
-                or die "Falha ao preservar symlink de tema: $!\n";
+                or die "Failed to preserve the theme symlink: $!\n";
         }
     }
 
     if (-d $dir) {
-        say 'OK      tema Sword Art Omarchy já está instalado';
+        say 'OK      Sword Art Omarchy theme already installed';
     } else {
         run_command('omarchy', 'theme', 'install', $url);
     }
@@ -393,7 +393,7 @@ sub ensure_repo_packages {
     if (@missing) {
         run_command('omarchy', 'pkg', 'add', @missing);
     } else {
-        say 'OK      pacotes oficiais já instalados: ' . join(', ', @packages);
+        say 'OK      official packages already installed: ' . join(', ', @packages);
     }
 }
 
@@ -403,7 +403,7 @@ sub ensure_aur_packages {
     if (@missing) {
         run_command('omarchy', 'pkg', 'aur', 'add', @missing);
     } else {
-        say 'OK      pacotes AUR já instalados: ' . join(', ', @packages);
+        say 'OK      AUR packages already installed: ' . join(', ', @packages);
     }
 }
 
@@ -421,7 +421,7 @@ sub package_present {
     }
     <$query>;
     my $present = close $query;
-    open STDERR, '>&', $saved_stderr or die "Não foi possível restaurar stderr\n";
+    open STDERR, '>&', $saved_stderr or die "Could not restore stderr\n";
     return $present;
 }
 
@@ -455,7 +455,7 @@ sub run_command {
 
     say "RUN     $display";
     my $status = system(@command);
-    die "Comando falhou ($status): $display\n" if $status == -1 || $status != 0;
+    die "Command failed ($status): $display\n" if $status == -1 || $status != 0;
 }
 
 sub shell_quote {
@@ -467,18 +467,18 @@ sub shell_quote {
 sub usage {
     my ($status) = @_;
     print <<'USAGE';
-Uso: perl omarchy.pl [opções]
+Usage: perl omarchy.pl [options]
 
-  --dry-run          mostra as ações sem criar links ou executar comandos
-  --backup           move conflitos para ~/.local/state/dotfiles/backups/
-  --restore          restaura o backup mais recente sem apagar a cópia
-  --apps             remove itens antigos e instala apps/web apps pedidos
-  --fonts            instala Lexend e ativa o perfil de fontes
-  --plugin           instala/habilita o Feader-RSS
-  --theme            instala/aplica o tema Sword Art Omarchy
-  --all              executa --apps --fonts --plugin --theme
-  --target CAMINHO   usa outro diretório-raiz apenas para testar symlinks
-  --help             mostra esta ajuda
+  --dry-run          shows the actions without creating links or running commands
+  --backup           moves conflicts to ~/.local/state/dotfiles/backups/
+  --restore          restores the most recent backup without deleting the copy
+  --apps             removes old items and installs the requested apps/web apps
+  --fonts            installs Lexend and enables the font profile
+  --plugin           installs/enables Feader-RSS
+  --theme            installs/applies the Sword Art Omarchy theme
+  --all              runs --apps --fonts --plugin --theme
+  --target PATH      uses a different root directory only to test symlinks
+  --help             shows this help
 USAGE
     exit $status;
 }
