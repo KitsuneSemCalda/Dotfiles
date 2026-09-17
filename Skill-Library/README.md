@@ -53,8 +53,8 @@ references) that live outside its own directory, those files are embedded into
 the skill's own `references/` directory and the paths in `SKILL.md` rewritten
 to match, so every skill in this library is self-contained.
 
-Sources currently imported:
-
-- [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills) (MIT)
-- [rlespinasse/agent-skills](https://github.com/rlespinasse/agent-skills) (MIT)
-- [anthropics/skills](https://github.com/anthropics/skills) (Apache-2.0)
+This library previously had a batch of skills imported wholesale from
+upstream collections without curation; most were never relevant to this
+machine's actual work and just added noise to every agent's skill listing.
+They were removed. Prefer adding skills one at a time, for something you
+actually hit repeatedly, over importing a whole collection again.
