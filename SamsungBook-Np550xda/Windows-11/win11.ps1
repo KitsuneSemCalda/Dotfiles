@@ -397,7 +397,8 @@ function Install-NerdFont {
 
     New-Item -ItemType Directory -Force -Path $fontDir | Out-Null
     $zipPath = Join-Path $env:TEMP 'JetBrainsMono-NerdFont.zip'
-    Invoke-WebRequest -Uri 'https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip' -OutFile $zipPath
+    $nerdFontsVersion = 'v3.5.1'
+    Invoke-WebRequest -Uri "https://github.com/ryanoasis/nerd-fonts/releases/download/$nerdFontsVersion/JetBrainsMono.zip" -OutFile $zipPath
     Expand-Archive -LiteralPath $zipPath -DestinationPath $fontDir -Force
     Remove-Item -LiteralPath $zipPath -Force
     Register-UserFonts -Directory $fontDir

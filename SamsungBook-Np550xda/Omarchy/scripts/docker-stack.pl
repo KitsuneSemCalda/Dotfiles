@@ -164,18 +164,21 @@ sub ensure_wrapper {
     }
 
     make_path(dirname($wrapper));
-    my $tmp  = tempdir(CLEANUP => 1);
-    my $base = 'https://github.com/akitaonrails/ai-memory/releases/latest/download/ai-memory-wrapper';
+    my $tmp     = tempdir(CLEANUP => 1);
+    my $version = 'v2.3.0';
+    my $base    = "https://github.com/akitaonrails/ai-memory/releases/download/$version/ai-memory-wrapper";
+
+    # Checksum pinned here (not fetched at runtime) so a compromised or
+    # rolled-back release asset cannot also carry its own matching checksum.
+    # Update both together when bumping $version.
+    my $expected = '2906cdae7e405d7b64c3023cb0812311590b63223bd60b7f216cd898c89c9509';
 
     run_command('curl', '-fsSL', $base, '-o', "$tmp/ai-memory-wrapper");
-    run_command('curl', '-fsSL', "$base.sha256", '-o', "$tmp/ai-memory-wrapper.sha256");
 
-    my $expected = qx{awk 'NR==1{print \$1}' "$tmp/ai-memory-wrapper.sha256"};
-    chomp $expected;
     my $actual = qx{sha256sum "$tmp/ai-memory-wrapper" | awk '{print \$1}'};
     chomp $actual;
     die "ai-memory wrapper checksum mismatch (expected $expected, got $actual)\n"
-        unless length $expected && $expected eq $actual;
+        unless $expected eq $actual;
 
     run_command('install', '-m', '0755', "$tmp/ai-memory-wrapper", $wrapper);
     say "WRAPPER $wrapper installed";
