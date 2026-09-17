@@ -151,6 +151,8 @@ function Install-Symlinks {
             if (-not $DryRun) {
                 New-Item -ItemType Directory -Force -Path (Split-Path $backupPath) | Out-Null
                 Move-Item -LiteralPath $destination -Destination $backupPath -Force
+                $sourceHash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash
+                Add-BackupManifestEntry -RelativePath $relative -Destination $destination -Hash $sourceHash
             }
         }
 
@@ -323,7 +325,8 @@ function Set-RainmeterHud {
     Write-Action (Get-Tag 'HUD?' 'HUD') "AincradHUD -> Active=1 em $rainmeterIni"
     if ($DryRun) { return }
 
-    $backupPath = Join-Path $BackupRoot 'rainmeter\Rainmeter.ini'
+    $backupRelative = 'rainmeter\Rainmeter.ini'
+    $backupPath = Join-Path $BackupRoot $backupRelative
     New-Item -ItemType Directory -Force -Path (Split-Path $backupPath) | Out-Null
     Copy-Item -LiteralPath $rainmeterIni -Destination $backupPath -Force
 
@@ -346,6 +349,8 @@ function Set-RainmeterHud {
         $out += @('', '[AincradHUD]', 'Active=1', 'AlwaysOnTop=1')
     }
     Set-Content -LiteralPath $rainmeterIni -Value $out -Encoding Unicode
+    $hash = (Get-FileHash -LiteralPath $rainmeterIni -Algorithm SHA256).Hash
+    Add-BackupManifestEntry -RelativePath $backupRelative -Destination $rainmeterIni -Hash $hash
 
     $rainmeterExe = Get-RainmeterExe
     if (-not $rainmeterExe) {
