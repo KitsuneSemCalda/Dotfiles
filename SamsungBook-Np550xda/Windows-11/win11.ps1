@@ -364,21 +364,55 @@ function Set-RainmeterHud {
 
     $lines = Get-Content -LiteralPath $rainmeterIni -Encoding Unicode
     $currentSection = ''
+    $inAincrad = $false
     $sawAincradSection = $false
-    $out = foreach ($line in $lines) {
-        if ($line -match '^\s*\[(.+)\]\s*$') { $currentSection = $matches[1] }
-        if ($currentSection -eq 'AincradHUD') {
-            $sawAincradSection = $true
-            if ($line -match '^\s*AlwaysOnTop\s*=\s*$') { 'AlwaysOnTop=1'; continue }
-        }
-        if ($currentSection -like 'Sword Art Online\*' -and $line -match '^\s*Active\s*=\s*1\s*$') {
-            'Active=0'
+    $sawActive = $false
+    $sawAlwaysOnTop = $false
+    $out = [System.Collections.Generic.List[string]]::new()
+
+    foreach ($line in $lines) {
+        if ($line -match '^\s*\[(.+)\]\s*$') {
+            if ($inAincrad) {
+                if (-not $sawActive) { $out.Add('Active=1') }
+                if (-not $sawAlwaysOnTop) { $out.Add('AlwaysOnTop=1') }
+            }
+            $currentSection = $matches[1]
+            $inAincrad = ($currentSection -eq 'AincradHUD')
+            if ($inAincrad) {
+                $sawAincradSection = $true
+                $sawActive = $false
+                $sawAlwaysOnTop = $false
+            }
+            $out.Add($line)
             continue
         }
-        $line
+
+        if ($inAincrad -and $line -match '^\s*Active\s*=') {
+            $out.Add('Active=1')
+            $sawActive = $true
+            continue
+        }
+        if ($inAincrad -and $line -match '^\s*AlwaysOnTop\s*=') {
+            $out.Add('AlwaysOnTop=1')
+            $sawAlwaysOnTop = $true
+            continue
+        }
+
+        if ($currentSection -like 'Sword Art Online\*' -and $line -match '^\s*Active\s*=\s*1\s*$') {
+            $out.Add('Active=0')
+            continue
+        }
+        $out.Add($line)
+    }
+    if ($inAincrad) {
+        if (-not $sawActive) { $out.Add('Active=1') }
+        if (-not $sawAlwaysOnTop) { $out.Add('AlwaysOnTop=1') }
     }
     if (-not $sawAincradSection) {
-        $out += @('', '[AincradHUD]', 'Active=1', 'AlwaysOnTop=1')
+        $out.Add('')
+        $out.Add('[AincradHUD]')
+        $out.Add('Active=1')
+        $out.Add('AlwaysOnTop=1')
     }
     Set-Content -LiteralPath $rainmeterIni -Value $out -Encoding Unicode
     $hash = (Get-FileHash -LiteralPath $rainmeterIni -Algorithm SHA256).Hash
