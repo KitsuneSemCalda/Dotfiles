@@ -60,9 +60,12 @@ terminal keeps using JetBrainsMono Nerd Font, which is monospaced. The
 Lexend files are downloaded by the installer and are not copied into
 the repository.
 
-The app profile includes Bitwarden, AppFlowy, PrismLauncher, CurseForge,
-Amazon Shopping, Mercado Livre, Pinterest, Z Ai, WebMotors, Panini Brasil,
-GitHub, GitLab, and Codeberg.
+The app profile includes Bitwarden, AppFlowy, PrismLauncher, CurseForge, and
+the web apps Amazon Shopping, Mercado Livre, Pinterest, Z Ai, WebMotors,
+Panini Brasil, GitHub, GitLab, Codeberg, Copilot, Claude, ChatGPT, Grok, and
+Gemini. It also removes any previously installed HEY or Basecamp web app and
+any 1Password installation (package, AUR package, or browser extension) via
+`omarchy remove service`, since neither is part of this profile.
 It also registers the [Sword Art Omarchy](https://github.com/KitsuneSemCalda/Sword-Art-Omarchy)
 theme and the [Feader-RSS](https://github.com/KitsuneSemCalda/Feader-RSS) plugin, with
 feed configuration at `~/.config/omarchy/rss-reader.json`.
@@ -97,7 +100,9 @@ destination, it aborts the whole operation to avoid overwriting them. Use
 
 The steps can also be run separately with `--fonts`, `--apps`,
 `--plugin`, or `--theme`. `--apps` uses the official repositories for
-PrismLauncher and the AUR packages for Bitwarden, AppFlowy, and CurseForge.
+PrismLauncher and the AUR packages for Bitwarden, AppFlowy, and CurseForge,
+installs the web apps listed above (skipping any already present), and
+removes HEY/Basecamp and 1Password if it finds them installed.
 
 To also apply fonts, apps, plugin, and theme — including network
 operations and possible package-manager password prompts:
@@ -115,14 +120,26 @@ option that applies external changes.
 `docker/docker-compose.yml` brings up five services, all published only on
 `127.0.0.1` (none are reachable over the local network):
 
-- **postgres** (17-alpine) and **redis** (7-alpine) — general-purpose
+- **postgres** (`17-alpine`) and **redis** (`7-alpine`) — general-purpose
   database and cache for local projects, ports `5432` and `6379`.
-- **[FrankMD](https://github.com/akitaonrails/FrankMD)** — self-hosted
-  Markdown notes editor, port `7591`, stores files in
+- **[FrankMD](https://github.com/akitaonrails/FrankMD)** (`1.0.1`) —
+  self-hosted Markdown notes editor, port `7591`, stores files in
   `~/Documents/notes` (no database).
-- **[ai-memory](https://github.com/akitaonrails/ai-memory)** — persistent
-  memory shared across AI agents, port `49374`.
-- **pihole** — local DNS, port `53` and admin UI on `8080`.
+- **[ai-memory](https://github.com/akitaonrails/ai-memory)** (`2.3.0`) —
+  persistent memory shared across AI agents, port `49374`. The
+  `~/.local/bin/ai-memory` wrapper (`scripts/docker-stack.pl --agents`) is
+  downloaded from the matching `v2.3.0` GitHub release and verified against a
+  SHA-256 checksum pinned in `ensure_wrapper()`, not fetched at run time.
+- **pihole** (`2026.07.2`) — local DNS, port `53` and admin UI on `8080`.
+
+Every image and the wrapper download use an explicit version, never `latest`,
+so re-running the stack always reproduces the same result. To deliberately
+upgrade one: pick the new version from its releases/tags page, update the tag
+in `docker/docker-compose.yml` (or, for the wrapper, both `$version` and the
+`$expected` checksum in `ensure_wrapper()` in `scripts/docker-stack.pl`, using
+the `.sha256` asset published alongside that release), then run
+`docker compose config --quiet` and `perl scripts/docker-stack.pl --up` to
+confirm the stack still comes up healthy before committing the bump.
 
 First run (creates `docker/.env` with random secrets, the notes
 folder, and brings up the containers):

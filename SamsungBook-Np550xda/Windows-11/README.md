@@ -211,10 +211,12 @@ Install while preserving existing files in
 pwsh ./win11.ps1 -Backup
 ```
 
-**Known limitation:** `-Restore` selects the most recent backup, but does not
-reuse the installation's destination map and can restore files to the
-wrong location. See the [restore analysis](../docs/architecture.md#installation-conflicts-and-restore-scope)
-before using this option; it is not a reliable reversal:
+Restore the most recent backup. Each backed-up item's real destination and a
+post-install content hash are recorded in that backup's `manifest.json`, so
+restore writes to the same paths `-Backup` originally moved them from and
+aborts with no changes if any destination was modified after installation.
+See the [restore details](../docs/architecture.md#installation-conflicts-and-restore-scope)
+for the full mapping:
 
 ```powershell
 pwsh ./win11.ps1 -Restore
@@ -223,8 +225,10 @@ pwsh ./win11.ps1 -Restore
 The steps can also run separately with `-Fonts` (Lexend + JetBrainsMono Nerd
 Font, per-user, no admin), `-Theme` (Windows Terminal color scheme,
 wallpaper, and the recolored Rainmeter skin), or `-Apps` (`winget install` for
-GlazeWM, Windows Terminal, PowerToys, Starship, and Rainmeter). For everything at
-once:
+GlazeWM, Windows Terminal, PowerToys, Starship, Rainmeter, and `fzf`, plus the
+[personal app profile](#app-profile) and PowerShell modules above; already-installed
+packages are skipped, and any real `winget install` failure aborts before the
+final success message). For everything at once:
 
 ```powershell
 pwsh ./win11.ps1 -All -Backup
@@ -232,6 +236,12 @@ pwsh ./win11.ps1 -All -Backup
 
 `-Fonts`, `-Theme`, and `-Apps` only run against the real `$HOME`; `-Target` is
 only for testing symlink creation in another directory.
+
+JetBrainsMono Nerd Font is pinned to an explicit
+[nerd-fonts release](https://github.com/ryanoasis/nerd-fonts/releases)
+(`$nerdFontsVersion` in `Install-NerdFont`) instead of `.../releases/latest`,
+so re-running `-Fonts` always installs the same build. To deliberately
+upgrade it, bump `$nerdFontsVersion` to the new tag and re-run `-Fonts`.
 
 If symlink creation fails even with Developer Mode enabled in the
 registry (`AllowDevelopmentWithoutDevLicense`), the privilege sometimes only

@@ -2,10 +2,13 @@
 
 ## Scope and evidence
 
-Analysis from 2026-09-13 of commit `6b70aaf`, covering the 38
-versioned files that predate this documentation: installers, helper scripts,
-configuration, Compose, environment examples, reports, and documentation.
-The code is the reference for the behavior described below.
+This document is maintained alongside the installers and scripts it
+describes and was last synced with the codebase on 2026-09-17 (commit
+`6d7812d`): installers, helper scripts, configuration, Compose, environment
+examples, reports, and documentation. It is not a frozen snapshot — the code
+is the reference for the behavior described below, and any difference
+between this document and the scripts is a documentation bug to fix rather
+than evidence of drift.
 
 The Linux base compared against was the local package **Omarchy 4.0.3-1**, specifically
 `/usr/share/omarchy/config/hypr/`, `default/hypr/`, and `shell/Commons/Color.qml`.
@@ -105,7 +108,7 @@ The [installer](../Omarchy/omarchy.pl) always processes the links before the opt
 | Option | Change external to the link set |
 |---|---|
 | `--fonts` | Downloads Lexend Regular/Bold from Google Fonts into `~/.local/share/fonts/lexend` and refreshes the cache; does not install JetBrainsMono |
-| `--apps` | Removes HEY/Basecamp and the 1Password service when detected; installs PrismLauncher, Bitwarden, AppFlowy, and CurseForge; registers Amazon Shopping, Mercado Livre, Pinterest, Z Ai, WebMotors, and Panini Brasil |
+| `--apps` | Removes HEY/Basecamp and the 1Password service when detected; installs PrismLauncher, Bitwarden, AppFlowy, and CurseForge; registers Amazon Shopping, Mercado Livre, Pinterest, Z Ai, WebMotors, Panini Brasil, GitHub, GitLab, Codeberg, Copilot, Claude, ChatGPT, Grok, and Gemini |
 | `--plugin` | Adds Feader-RSS or enables an existing installation on the right side |
 | `--theme` | Installs Sword Art Omarchy if absent and applies it; preserves any broken theme link |
 | `--all` | Fonts → apps → plugin → theme, after the links |
@@ -157,11 +160,12 @@ flowchart LR
   P --> MO["PowerShell Gallery: Terminal-Icons, PSFzf, and z"]
 ```
 
-`-All` runs links → fonts → theme → apps/modules. So on a fresh
-install, the theme step can be skipped because Windows Terminal/Rainmeter have not yet been
-installed or initialized. The script prompts the user to open Rainmeter once when
-its INI does not exist; running `-Theme` again afterward resolves the pending step, subject
-to the limitations below. There is no GlazeWM autostart provisioning in the script;
+`-All` runs links → fonts → apps/modules → theme, so Windows Terminal and
+Rainmeter are already installed by the time the theme step configures them on
+a fresh machine. Rainmeter itself still needs to be launched once to create
+its INI file before `Set-RainmeterHud` can edit it; the script detects the
+missing file and warns instead of failing, and running `-Theme` again
+afterward resolves the pending step. There is no GlazeWM autostart provisioning in the script;
 its `startup_commands` is also empty. PowerToys Run is installed, but the
 shortcut suggested in the README requires manual configuration.
 
@@ -267,42 +271,48 @@ Compose. The local `.env` is ignored by Git and its values are not part of this 
 
 ```mermaid
 flowchart TD
-  A["Link installation"] --> B{"Destination already points to source?"}
-  B -->|Yes| C["Keeps the link"]
+  A["Validation pass (read-only)"] --> B{"Destination already points to source?"}
+  B -->|Yes| C["Plans: keep the link"]
   B -->|No| D{"Destination occupied?"}
-  D -->|No| E["Creates the link"]
+  D -->|No| E["Plans: create the link"]
   D -->|Yes| F{"Is it a real directory?"}
-  F -->|Yes| G["Records a conflict and continues with other files"]
+  F -->|Yes| G["Records a conflict"]
   F -->|No| H{"Backup requested?"}
   H -->|No| G
-  H -->|Yes| I["Moves the original to a dated backup"]
-  I --> E
-  C --> J["At the end: were there conflicts?"]
+  H -->|Yes| I["Plans: move original to a dated backup, then link"]
+  C --> J{"Any conflicts recorded?"}
   E --> J
   G --> J
-  J -->|Yes| K["Aborts before the optional steps; earlier links may still exist"]
-  J -->|No| L["Runs the requested optional steps"]
+  I --> J
+  J -->|Yes| K["Aborts before touching any file"]
+  J -->|No| L["Application pass: executes the plan, then runs the requested optional steps"]
 ```
 
 The flowchart describes the common path; `--dry-run`/`-DryRun` only report the
-actions. **The installation is not transactional**: a conflict on one file does not undo
-links created before or after it during the same pass.
+planned actions. **The installation is transactional in two passes**: validation is
+read-only and collects every conflict before anything is touched, so a conflict on
+one file aborts the whole run without any link or backup having been created.
+If an unexpected failure happens during the application pass itself (a race
+condition, a permission change), the error message lists which changes were
+already applied instead of implying nothing happened.
 
 | Operation | Omarchy | Windows |
 |---|---|---|
 | Source → destination | Relative path of each file under `home/` preserved in HOME | Explicit map of four entries, including one directory |
-| Backup | `.local/state/dotfiles/backups/YYYYmmdd-HHMMSS` under the destination | Same pattern, but uses relative names from the source |
+| Backup | `.local/state/dotfiles/backups/YYYYmmdd-HHMMSS` under the destination | Same pattern, plus a `manifest.json` recording each item's real destination and a post-install content hash |
 | Restore selection | Most recent snapshot | Most recent snapshot |
-| Destination protection on restore | Validates all before applying; accepts absent or a symlink from this repo | Does not verify destination ownership before removing an existing file |
-| Restored path | Relative to HOME, compatible with link backups | Concatenates `$Target` and the backup path; does not consult `Get-LinkMap` |
-| Scope | Entries present in the snapshot, preserving the copy | Copy of files from the snapshot, with mapping limitations |
+| Destination protection on restore | Validates all before applying; accepts absent or a symlink from this repo | Validates all before applying; aborts if a destination's content hash no longer matches what was recorded at install time |
+| Restored path | Relative to HOME, compatible with link backups | Read from `manifest.json`, matching the destinations used by `Install-Symlinks`, `Set-WindowsTerminalTheme`, and `Set-RainmeterHud` |
+| Scope | Entries present in the snapshot, preserving the copy | Copy of files from the snapshot, using the manifest map |
 
-Concrete example of the Windows problem: the `glazewm/config.yaml` backup is restored
-to `%USERPROFILE%\glazewm\config.yaml`, while the installed link is at
-`%USERPROFILE%\.glzr\glazewm\config.yaml`. The same mismatch affects Starship,
-the profile, Rainmeter, and theme backups. **The current `-Restore` should not be treated
-as a functional reversal of the Windows installation.** This finding is static;
-no fix was applied to the scripts as part of this documentation task.
+`win11.ps1 -Restore` now consults an explicit `manifest.json` written next to the
+snapshot instead of reconstructing destinations from `$Target` and the backup's
+relative path. Each backed-up item (GlazeWM, Starship, the PowerShell profile,
+`AincradHUD`, the Windows Terminal `settings.json`, and `Rainmeter.ini`) records
+its real destination and a SHA-256 hash of its post-install content. Restore
+validates every entry against the current file content first and aborts with no
+changes if anything was modified after installation, then only proceeds to
+overwrite files once that first pass finds no conflicts.
 
 No restore is a complete uninstall: new links without a backup are not
 removed by this mechanism; packages, fonts, theme selection, wallpapers,
@@ -314,9 +324,6 @@ external installer created a real directory at the destination.
 
 | Finding | Evidence and consequence |
 |---|---|
-| Windows restore uses incorrect destinations | `Restore-Backups` ignores the installation map; priority for a future functional fix |
-| `-All` applies the theme before installing apps | Can leave the personalization incomplete on the first provisioning |
-| Rainmeter does not guarantee reactivating an existing section | `Set-RainmeterHud` appends `Active=1` only when the section does not exist; an existing one with `Active=0` stays inactive |
 | HUD palette is not identical to the one advertised | The HUD uses cyan `90,220,255` (`#5adcff`), Consolas font, and its own sizes; it does not automatically share the terminal's Lexend/cyan `#3ee8ff` |
 | Windows README described OnIdle | The code uses a `prompt` wrapper; the description was corrected in this documentation |
 | Incomplete profile dependencies | CompletionPredictor, F7History, and PSScriptAnalyzer are not part of the module installation |
