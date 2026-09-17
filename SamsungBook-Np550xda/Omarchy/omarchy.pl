@@ -83,40 +83,78 @@ find(
     $source_root,
 );
 
-my $failures = 0;
+# Passagem de validacao (somente leitura): monta o plano de acao para cada
+# arquivo antes de tocar em qualquer coisa. Se houver conflito, aborta aqui
+# sem ter criado nenhum link ou movido nenhum backup.
+my (@plan, @conflicts);
 for my $source (sort @sources) {
     my $relative    = File::Spec->abs2rel($source, $source_root);
     my $destination = File::Spec->catfile($target, $relative);
-    my $parent      = dirname($destination);
 
     if (-l $destination) {
         my $link       = readlink($destination);
-        my $link_abs   = defined $link ? File::Spec->rel2abs($link, $parent) : '';
+        my $link_abs   = defined $link ? File::Spec->rel2abs($link, dirname($destination)) : '';
         my $source_abs = abs_path($source);
         if (defined $link && $link_abs eq $source_abs) {
-            say "OK      $relative";
+            push @plan, { relative => $relative, action => 'ok' };
             next;
         }
     }
 
     if (-e $destination || -l $destination) {
         if (-d $destination && !-l $destination) {
-            warn "CONFLICT $relative (it's a directory; will not be moved automatically)\n";
-            $failures++;
+            push @conflicts, "$relative (it's a directory; will not be moved automatically)";
             next;
         }
         unless ($backup) {
-            warn "CONFLICT $relative (use --backup to preserve the original)\n";
-            $failures++;
+            push @conflicts, "$relative (use --backup to preserve the original)";
             next;
         }
 
+        push @plan, {
+            source      => $source,
+            destination => $destination,
+            relative    => $relative,
+            action      => 'backup_link',
+        };
+        next;
+    }
+
+    push @plan, {
+        source      => $source,
+        destination => $destination,
+        relative    => $relative,
+        action      => 'link',
+    };
+}
+
+if (@conflicts) {
+    warn "CONFLICT $_\n" for @conflicts;
+    die scalar(@conflicts) . " conflict(s) found; validation failed and nothing was changed\n";
+}
+
+# Passagem de aplicacao: so comeca depois que a validacao inteira passou.
+my @applied;
+for my $item (@plan) {
+    my $relative = $item->{relative};
+
+    if ($item->{action} eq 'ok') {
+        say "OK      $relative";
+        next;
+    }
+
+    my ($source, $destination) = @{$item}{qw(source destination)};
+    my $parent = dirname($destination);
+
+    if ($item->{action} eq 'backup_link') {
         my $backup_path = File::Spec->catfile($backup_root, $relative);
         say "BACKUP  $relative -> " . File::Spec->abs2rel($backup_path, $target);
-        make_path(dirname($backup_path)) unless $dry_run || -d dirname($backup_path);
-        move($destination, $backup_path) unless $dry_run;
-        die "Failed to move $destination to $backup_path: $!\n"
-            unless $dry_run || -e $backup_path || -l $backup_path;
+        unless ($dry_run) {
+            make_path(dirname($backup_path)) unless -d dirname($backup_path);
+            move($destination, $backup_path)
+                or apply_failure(\@applied, "Failed to move $destination to $backup_path: $!");
+            push @applied, "BACKUP $relative";
+        }
     }
 
     say(($dry_run ? 'LINK?   ' : 'LINK    ') . "$relative -> $source");
@@ -124,10 +162,9 @@ for my $source (sort @sources) {
 
     make_path($parent) unless -d $parent;
     symlink($source, $destination)
-        or die "Failed to create symlink $destination: $!\n";
+        or apply_failure(\@applied, "Failed to create symlink $destination: $!");
+    push @applied, "LINK $relative";
 }
-
-die "$failures conflict(s) found; nothing conflicting was overwritten\n" if $failures;
 
 ensure_fonts()  if $fonts;
 ensure_apps()   if $apps;
@@ -136,6 +173,14 @@ ensure_theme()  if $theme;
 
 say $dry_run ? 'Dry-run finished.' : 'Dotfiles installed.';
 exit 0;
+
+sub apply_failure {
+    my ($applied, $message) = @_;
+    my $summary = @$applied
+        ? 'Changes already applied before the failure: ' . join(', ', @$applied) . '.'
+        : 'No changes were applied before the failure.';
+    die "$message\n$summary\n";
+}
 
 sub restore_backups {
     my ($backup_base) = @_;

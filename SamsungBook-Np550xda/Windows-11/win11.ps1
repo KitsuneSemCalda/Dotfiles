@@ -115,61 +115,93 @@ function Test-PointsToSource {
     return (Resolve-Path -LiteralPath $linkTarget -ErrorAction SilentlyContinue).Path -eq (Resolve-Path -LiteralPath $Source).Path
 }
 
+# Formata a lista de mudancas ja aplicadas para uma mensagem de erro, usada
+# quando a passagem de aplicacao falha depois que a validacao ja passou.
+function Get-AppliedSummary {
+    param([string[]]$Applied)
+    if ($Applied.Count -eq 0) { return 'Nenhuma mudanca foi aplicada antes da falha.' }
+    return "Mudancas ja aplicadas antes da falha: $($Applied -join ', ')."
+}
+
 function Install-Symlinks {
-    $failures = 0
+    # Passagem de validacao (somente leitura): monta o plano de acao para
+    # cada item antes de tocar em qualquer coisa. Se houver conflito, aborta
+    # aqui sem ter criado nenhum link ou movido nenhum backup.
+    $plan = @()
+    $conflicts = @()
+
     foreach ($entry in Get-LinkMap) {
         $source = Join-Path $SourceRoot $entry.Source
         $destination = $entry.Destination
         $relative = $entry.Source
 
         if (-not (Test-Path -LiteralPath $source)) {
-            Write-Warning "Origem ausente: $source"
-            $failures++
+            $conflicts += "$relative (origem ausente: $source)"
             continue
         }
 
         if ((Test-Path -LiteralPath $destination) -and (Test-PointsToSource -Destination $destination -Source $source)) {
-            Write-Action 'OK' $relative
+            $plan += [pscustomobject]@{ Relative = $relative; Action = 'Ok' }
             continue
         }
 
         if (Test-Path -LiteralPath $destination) {
             $item = Get-Item -LiteralPath $destination -Force
             if ($item.PSIsContainer -and -not $item.LinkType) {
-                Write-Warning "CONFLITO $relative (e um diretorio; nao sera movido automaticamente)"
-                $failures++
+                $conflicts += "$relative (e um diretorio; nao sera movido automaticamente)"
                 continue
             }
             if (-not $Backup) {
-                Write-Warning "CONFLITO $relative (use -Backup para preservar o original)"
-                $failures++
+                $conflicts += "$relative (use -Backup para preservar o original)"
                 continue
             }
 
-            $backupPath = Join-Path $BackupRoot $relative
-            Write-Action 'BACKUP' "$relative -> $backupPath"
+            $plan += [pscustomobject]@{ Relative = $relative; Source = $source; Destination = $destination; Action = 'BackupLink' }
+            continue
+        }
+
+        $plan += [pscustomobject]@{ Relative = $relative; Source = $source; Destination = $destination; Action = 'Link' }
+    }
+
+    if ($conflicts.Count -gt 0) {
+        foreach ($conflict in $conflicts) { Write-Warning "CONFLITO $conflict" }
+        throw "$($conflicts.Count) conflito(s) encontrado(s); validacao falhou e nada foi alterado"
+    }
+
+    # Passagem de aplicacao: so comeca depois que a validacao inteira passou.
+    $applied = @()
+    foreach ($item in $plan) {
+        if ($item.Action -eq 'Ok') {
+            Write-Action 'OK' $item.Relative
+            continue
+        }
+
+        if ($item.Action -eq 'BackupLink') {
+            $backupPath = Join-Path $BackupRoot $item.Relative
+            Write-Action 'BACKUP' "$($item.Relative) -> $backupPath"
             if (-not $DryRun) {
                 New-Item -ItemType Directory -Force -Path (Split-Path $backupPath) | Out-Null
-                Move-Item -LiteralPath $destination -Destination $backupPath -Force
-                $sourceHash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash
-                Add-BackupManifestEntry -RelativePath $relative -Destination $destination -Hash $sourceHash
+                try {
+                    Move-Item -LiteralPath $item.Destination -Destination $backupPath -Force
+                } catch {
+                    throw "Falha ao mover $($item.Destination) para $backupPath : $_`n$(Get-AppliedSummary $applied)"
+                }
+                $applied += "BACKUP $($item.Relative)"
+                $sourceHash = (Get-FileHash -LiteralPath $item.Source -Algorithm SHA256).Hash
+                Add-BackupManifestEntry -RelativePath $item.Relative -Destination $item.Destination -Hash $sourceHash
             }
         }
 
-        Write-Action (Get-Tag 'LINK?' 'LINK') "$relative -> $source"
+        Write-Action (Get-Tag 'LINK?' 'LINK') "$($item.Relative) -> $($item.Source)"
         if ($DryRun) { continue }
 
-        New-Item -ItemType Directory -Force -Path (Split-Path $destination) | Out-Null
+        New-Item -ItemType Directory -Force -Path (Split-Path $item.Destination) | Out-Null
         try {
-            New-Item -ItemType SymbolicLink -Path $destination -Target $source -Force | Out-Null
+            New-Item -ItemType SymbolicLink -Path $item.Destination -Target $item.Source -Force | Out-Null
         } catch {
-            Write-Warning "Falha ao criar symlink $destination (ative o Modo de desenvolvedor ou rode como administrador): $_"
-            $failures++
+            throw "Falha ao criar symlink $($item.Destination) (ative o Modo de desenvolvedor ou rode como administrador): $_`n$(Get-AppliedSummary $applied)"
         }
-    }
-
-    if ($failures -gt 0) {
-        throw "$failures conflito(s) encontrado(s); nada conflitante foi sobrescrito"
+        $applied += "LINK $($item.Relative)"
     }
 }
 
