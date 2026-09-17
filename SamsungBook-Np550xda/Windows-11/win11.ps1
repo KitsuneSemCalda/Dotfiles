@@ -453,11 +453,26 @@ function Install-Apps {
         'DEVCOM.Lua'
     )
 
+    $failures = 0
     foreach ($package in ($themePackages + $profilePackages)) {
-        Write-Action (Get-Tag 'RUN?' 'RUN') "winget install --id $package"
-        if (-not $DryRun) {
-            winget install --id $package --source winget --accept-source-agreements --accept-package-agreements --silent
+        winget list --id $package --exact --accept-source-agreements *> $null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Action 'OK' "$package ja instalado"
+            continue
         }
+
+        Write-Action (Get-Tag 'RUN?' 'RUN') "winget install --id $package"
+        if ($DryRun) { continue }
+
+        winget install --id $package --source winget --accept-source-agreements --accept-package-agreements --silent
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Falha ao instalar $package (winget saiu com codigo $LASTEXITCODE)"
+            $failures++
+        }
+    }
+
+    if ($failures -gt 0) {
+        throw "$failures pacote(s) falharam ao instalar via winget"
     }
 }
 
@@ -489,14 +504,19 @@ if ($Fonts) {
     Install-LexendFont
     Install-NerdFont
 }
+if ($Apps) {
+    Install-Apps
+    Install-PowerShellModules
+}
 if ($Theme) {
     Set-WindowsTerminalTheme
     Set-Wallpaper
     Set-RainmeterHud
 }
-if ($Apps) {
-    Install-Apps
-    Install-PowerShellModules
+
+if ($script:BackupManifest.Count -gt 0) {
+    $manifestPath = Join-Path $BackupRoot 'manifest.json'
+    $script:BackupManifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding utf8
 }
 
 Write-Output $(if ($DryRun) { 'Dry-run concluido.' } else { 'Dotfiles instalados.' })
