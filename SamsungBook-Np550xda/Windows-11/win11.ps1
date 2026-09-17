@@ -62,6 +62,20 @@ function Write-Action {
     Write-Output ("{0,-8}{1}" -f $Tag, $Message)
 }
 
+# Cada entrada registra onde um item de backup precisa voltar (Destination) e
+# o hash do conteudo pos-instalacao (Hash), usado pelo restore para detectar
+# se algo mudou o destino depois da instalacao antes de sobrescrever.
+$script:BackupManifest = @()
+
+function Add-BackupManifestEntry {
+    param([string]$RelativePath, [string]$Destination, [string]$Hash)
+    $script:BackupManifest += [pscustomobject]@{
+        RelativePath = $RelativePath
+        Destination  = $Destination
+        Hash         = $Hash
+    }
+}
+
 # Helper em vez do operador ternario `?:`, que so existe no PowerShell 7+
 # (este script tambem precisa rodar em Windows PowerShell 5.1).
 function Get-Tag {
@@ -168,15 +182,38 @@ function Restore-Backups {
         throw "Nenhum backup encontrado em $BackupBase"
     }
 
+    $manifestPath = Join-Path $snapshot.FullName 'manifest.json'
+    if (-not (Test-Path -LiteralPath $manifestPath)) {
+        throw "Manifesto de restauracao ausente em $manifestPath (backup incompativel ou corrompido)"
+    }
+    $manifest = @(Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json)
+
     Write-Action 'BACKUP' $snapshot.Name
-    Get-ChildItem -LiteralPath $snapshot.FullName -Recurse -File | ForEach-Object {
-        $relative = $_.FullName.Substring($snapshot.FullName.Length + 1)
-        $destination = Join-Path $Target $relative
-        Write-Action (Get-Tag 'RESTORE?' 'RESTORE') "$relative <- $($_.FullName)"
-        if ($DryRun) { return }
+
+    # Primeira passagem: so valida. Se algo mudou o destino depois da
+    # instalacao (conflito), aborta sem tocar em nenhum arquivo.
+    $conflicts = @()
+    foreach ($entry in $manifest) {
+        $destination = $entry.Destination
+        if (Test-Path -LiteralPath $destination) {
+            $currentHash = (Get-FileHash -LiteralPath $destination -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
+            if ($currentHash -and $currentHash -ne $entry.Hash) {
+                $conflicts += "$destination (conteudo mudou desde a instalacao)"
+            }
+        }
+    }
+    if ($conflicts.Count -gt 0) {
+        throw "Conflito(s) detectado(s); nada foi restaurado:`n" + ($conflicts -join "`n")
+    }
+
+    foreach ($entry in $manifest) {
+        $backupFile = Join-Path $snapshot.FullName $entry.RelativePath
+        $destination = $entry.Destination
+        Write-Action (Get-Tag 'RESTORE?' 'RESTORE') "$destination <- $backupFile"
+        if ($DryRun) { continue }
         New-Item -ItemType Directory -Force -Path (Split-Path $destination) | Out-Null
         if (Test-Path -LiteralPath $destination) { Remove-Item -LiteralPath $destination -Force }
-        Copy-Item -LiteralPath $_.FullName -Destination $destination -Force
+        Copy-Item -LiteralPath $backupFile -Destination $destination -Force
     }
     Write-Output $(if ($DryRun) { 'Dry-run de restauracao concluido.' } else { "Backup restaurado; copia preservada em $($snapshot.FullName)" })
 }
@@ -225,11 +262,14 @@ function Set-WindowsTerminalTheme {
     Write-Action (Get-Tag 'THEME?' 'THEME') "Windows Terminal -> Sword Art Online ($settingsPath)"
     if ($DryRun) { return }
 
-    $backupPath = Join-Path $BackupRoot 'windows-terminal\settings.json'
+    $backupRelative = 'windows-terminal\settings.json'
+    $backupPath = Join-Path $BackupRoot $backupRelative
     New-Item -ItemType Directory -Force -Path (Split-Path $backupPath) | Out-Null
     Copy-Item -LiteralPath $settingsPath -Destination $backupPath -Force
 
     $settings | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $settingsPath -Encoding utf8
+    $hash = (Get-FileHash -LiteralPath $settingsPath -Algorithm SHA256).Hash
+    Add-BackupManifestEntry -RelativePath $backupRelative -Destination $settingsPath -Hash $hash
 }
 
 function Set-Wallpaper {
