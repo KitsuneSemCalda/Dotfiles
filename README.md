@@ -8,5 +8,9 @@ Two independent modules, versioned in one repository:
   specific machine.
 - [`Skill-Library/`](Skill-Library/README.md) — personal library of AI
   coding-agent skills (`SKILL.md` format), installed globally into every
-  agent CLI detected on a machine via `Skill-Library/install.pl`.
-  Machine-independent.
+  agent CLI detected on a machine. Machine-independent, with a native
+  installer per platform (`install.pl` for Linux, `install.ps1` for Windows).
+
+Each machine's installer (`omarchy.pl` / `win11.ps1`) runs the matching
+Skill-Library installer as part of its own install, so skills stay in sync
+with the rest of the dotfiles without an extra manual step.

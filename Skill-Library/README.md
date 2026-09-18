@@ -25,19 +25,37 @@ the directory as-is into each agent's skills folder.
 
 ## Installing
 
+`SamsungBook-Np550xda/Omarchy/omarchy.pl` and
+`SamsungBook-Np550xda/Windows-11/win11.ps1` each run the installer below
+automatically as part of their own install (as long as they're targeting the
+real HOME, not a test `--target`/`-Target`), so on those machines skills stay
+in sync without a separate step. Run it directly for a one-off update, on any
+other machine, or with a different agent/list/dry-run option:
+
 ```sh
+# Linux/Omarchy (Perl)
 perl Skill-Library/install.pl            # install every skill into every agent detected
 perl Skill-Library/install.pl --agent codex
 perl Skill-Library/install.pl --list     # show skills in the library and agents detected
 perl Skill-Library/install.pl --dry-run  # preview without copying
+
+# Windows (PowerShell, no Perl dependency)
+pwsh Skill-Library/install.ps1
+pwsh Skill-Library/install.ps1 -Agent codex
+pwsh Skill-Library/install.ps1 -List
+pwsh Skill-Library/install.ps1 -DryRun
 ```
+
+Both installers implement the same logic natively in each platform's
+scripting language — there's no cross-platform dependency (Perl is never
+required on Windows, PowerShell is never required on Linux).
 
 An agent is only targeted if it's actually installed on the machine
 (detected by the presence of its config directory, e.g. `~/.claude` or
-`~/.codex`). Installing copies files — it does not symlink — so re-run
-`install.pl` after editing a skill here to push the update out, and edit
-skills here rather than in an agent's own skills directory, since that
-copy isn't versioned.
+`~/.codex`). Installing copies files — it does not symlink — so re-run the
+installer after editing a skill here to push the update out (or just re-run
+`omarchy.pl`/`win11.ps1`), and edit skills here rather than in an agent's own
+skills directory, since that copy isn't versioned.
 
 ## Adding a skill
 

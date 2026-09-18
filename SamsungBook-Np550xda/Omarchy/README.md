@@ -98,6 +98,13 @@ creates files that are missing). If it finds manual changes at the
 destination, it aborts the whole operation to avoid overwriting them. Use
 `--restore --dry-run` to review the chosen backup before restoring.
 
+The installer also runs [`Skill-Library/install.pl`](../../Skill-Library/README.md)
+after the symlinks, installing every skill from the library into every AI
+agent CLI detected on this machine (`~/.claude`, `~/.codex`,
+`~/.config/opencode`). This step is unconditional (not behind a flag), like
+the symlinks themselves, but only runs against the real HOME — it is skipped
+when `--target` points elsewhere for testing.
+
 The steps can also be run separately with `--fonts`, `--apps`,
 `--plugin`, or `--theme`. `--apps` uses the official repositories for
 PrismLauncher and the AUR packages for Bitwarden, AppFlowy, and CurseForge,

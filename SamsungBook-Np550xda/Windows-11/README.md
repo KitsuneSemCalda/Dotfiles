@@ -222,6 +222,14 @@ for the full mapping:
 pwsh ./win11.ps1 -Restore
 ```
 
+The installer also runs [`Skill-Library/install.ps1`](../../Skill-Library/README.md)
+after the symlinks, installing every skill from the library into every AI
+agent CLI detected on this machine (`.claude`, `.codex`, `.config/opencode`
+under `$env:USERPROFILE`). This is a native PowerShell port of the Perl
+installer used on the Omarchy side, with no Perl dependency on Windows. Like
+the symlinks, it is unconditional (not behind a flag), but only runs against
+the real `$HOME` — it is skipped when `-Target` points elsewhere for testing.
+
 The steps can also run separately with `-Fonts` (Lexend + JetBrainsMono Nerd
 Font, per-user, no admin), `-Theme` (Windows Terminal color scheme,
 wallpaper, and the recolored Rainmeter skin), or `-Apps` (`winget install` for
