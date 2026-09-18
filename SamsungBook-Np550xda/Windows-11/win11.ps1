@@ -491,6 +491,17 @@ function Register-UserFonts {
     }
 }
 
+function Install-Skills {
+    $installer = Join-Path $RepoRoot '..\..\Skill-Library\install.ps1'
+    if (-not (Test-Path -LiteralPath $installer)) {
+        Write-Warning "Skill-Library/install.ps1 nao encontrado ($installer); pulei a instalacao de skills."
+        return
+    }
+
+    Write-Action (Get-Tag 'SKILL?' 'SKILL') 'instalando skills nos agentes CLI detectados'
+    & $installer -DryRun:$DryRun
+}
+
 function Install-Apps {
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
         Write-Warning 'winget nao encontrado; instale as ferramentas manualmente (ver README.md).'
@@ -571,6 +582,11 @@ if ($Restore) {
 }
 
 Install-Symlinks
+if ($Target -eq $RealHome) {
+    Install-Skills
+} else {
+    Write-Action 'SKIP' 'instalacao de skills (usando -Target de teste, nao o HOME real)'
+}
 if ($Fonts) {
     Install-LexendFont
     Install-NerdFont
