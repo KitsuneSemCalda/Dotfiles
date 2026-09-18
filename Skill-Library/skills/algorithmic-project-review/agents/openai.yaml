@@ -1,0 +1,4 @@
+interface:
+  display_name: "Algorithmic Project Review"
+  short_description: "Analyze algorithms, complexity, and data structures"
+  default_prompt: "Use $algorithmic-project-review to inspect this project and identify evidence-backed algorithmic and implementation improvements."
