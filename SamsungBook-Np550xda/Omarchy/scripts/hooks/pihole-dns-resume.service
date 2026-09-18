@@ -1,0 +1,12 @@
+[Unit]
+Description=Re-point DNS at Pi-hole after resume from suspend
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/omarchy-pihole-dns-resume-watch
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
