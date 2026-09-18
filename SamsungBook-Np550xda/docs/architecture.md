@@ -260,6 +260,19 @@ restricted to loopback; this does not isolate the containers from each other.
   `127.0.0.1 1.1.1.1` to the native `omarchy dns Custom` command.
 - `--dns-revert`: delegates to `omarchy dns DHCP`. The fallback server does not guarantee
   that every query goes through Pi-hole; this document records the configured list.
+- `--dns-hook` (also run automatically by `--up`): installs two independent
+  triggers for the same recovery script
+  (`scripts/hooks/pihole-dns-recover.sh`) — an Omarchy `post-boot` hook, and
+  a `systemd --user` service (`pihole-dns-resume.service`, running
+  `pihole-dns-resume-watch.sh`) that watches `login1`'s `PrepareForSleep`
+  D-Bus signal and reruns the recovery on every resume from suspend. The
+  post-boot hook alone only fires once per reboot; on a laptop this machine
+  can spend many hours awake across several suspend/resume cycles without
+  ever rebooting, and `resolved` does not re-evaluate `127.0.0.1` on its own
+  after a resume, so DNS was observed to stay stuck on the `1.1.1.1`
+  fallback for the rest of the session after the first resume. Both triggers
+  are unprivileged D-Bus/user-service mechanisms; neither needs a password
+  prompt.
 - `--down`: runs Compose down without `--volumes`; does not revert DNS nor hooks.
   `--status` only queries the containers.
 
