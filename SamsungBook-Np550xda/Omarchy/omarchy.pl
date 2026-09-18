@@ -166,6 +166,12 @@ for my $item (@plan) {
     push @applied, "LINK $relative";
 }
 
+if ($target eq $home_root) {
+    ensure_skills();
+} else {
+    say 'SKIP    skill installation (using a test --target, not the real HOME)';
+}
+
 ensure_fonts()  if $fonts;
 ensure_apps()   if $apps;
 ensure_plugin() if $plugin;
@@ -384,6 +390,20 @@ sub ensure_apps {
         # The empty argument makes the official installer fetch the site's icon.
         run_command('omarchy', 'webapp', 'install', $app->{name}, $app->{url}, '');
     }
+}
+
+sub ensure_skills {
+    my $installer = File::Spec->catfile(
+        $repo_root, File::Spec->updir, File::Spec->updir, 'Skill-Library', 'install.pl',
+    );
+    $installer = abs_path($installer) // $installer;
+
+    unless (-f $installer) {
+        say "SKIP    Skill-Library/install.pl not found ($installer)";
+        return;
+    }
+
+    run_command($^X, $installer);
 }
 
 sub ensure_plugin {
