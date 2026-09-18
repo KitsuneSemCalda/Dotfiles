@@ -226,6 +226,41 @@ sub ensure_dns_hook {
     die "Missing DNS recovery hook script: $hook_source\n" unless -f $hook_source;
 
     run_command('omarchy', 'hook', 'install', 'post-boot', $hook_source);
+    ensure_dns_resume_watch();
+}
+
+sub ensure_dns_resume_watch {
+    # The post-boot hook above only fires once per boot. On a laptop that
+    # suspends far more often than it reboots, systemd-resolved never
+    # re-evaluates 127.0.0.1 on its own after a resume, so DNS stays stuck on
+    # the 1.1.1.1 fallback for the rest of the day after the first resume of
+    # a session. This installs a systemd --user service that watches for
+    # login1's PrepareForSleep(false) signal (same mechanism Omarchy's own
+    # pre-suspend lock monitor uses, just the opposite edge) and re-runs the
+    # recovery script on every resume, not just at boot.
+    my $watch_source = File::Spec->catfile($script_dir, 'hooks', 'pihole-dns-resume-watch.sh');
+    die "Missing DNS resume-watch script: $watch_source\n" unless -f $watch_source;
+    my $watch_target = File::Spec->catfile($ENV{HOME}, '.local', 'bin', 'omarchy-pihole-dns-resume-watch');
+
+    my $unit_source = File::Spec->catfile($script_dir, 'hooks', 'pihole-dns-resume.service');
+    die "Missing DNS resume-watch unit: $unit_source\n" unless -f $unit_source;
+    my $unit_dir    = File::Spec->catdir($ENV{HOME}, '.config', 'systemd', 'user');
+    my $unit_target = File::Spec->catfile($unit_dir, 'pihole-dns-resume.service');
+
+    if ($dry_run) {
+        say "RUN?    install -m 0755 $watch_source $watch_target";
+        say "RUN?    install -m 0644 $unit_source $unit_target";
+        say 'RUN?    systemctl --user daemon-reload && systemctl --user enable --now pihole-dns-resume.service';
+        return;
+    }
+
+    make_path(dirname($watch_target));
+    run_command('install', '-m', '0755', $watch_source, $watch_target);
+    make_path($unit_dir);
+    run_command('install', '-m', '0644', $unit_source, $unit_target);
+    run_command('systemctl', '--user', 'daemon-reload');
+    run_command('systemctl', '--user', 'enable', '--now', 'pihole-dns-resume.service');
+    say 'DNS-RESUME systemd --user watcher installed and enabled (re-runs the recovery hook on every resume)';
 }
 
 sub wait_pihole_healthy {
@@ -265,7 +300,8 @@ Usage: perl scripts/docker-stack.pl [options]
 
   --up               creates docker/.env (if missing), the notes folder,
                       brings up postgres, redis, frankmd, ai-memory, and
-                      pihole, and installs the DNS recovery post-boot hook
+                      pihole, and installs the DNS recovery hooks (post-boot
+                      and resume-from-suspend)
   --down             tears down the stack's containers
   --status           shows the containers' state (docker compose ps)
   --agents           installs the ai-memory wrapper and wires up each AI CLI
@@ -275,9 +311,11 @@ Usage: perl scripts/docker-stack.pl [options]
                       fallback 1.1.1.1) via `omarchy dns Custom`; waits for
                       the container to become healthy before applying
   --dns-revert       runs `omarchy dns DHCP` (reverts to automatic DNS)
-  --dns-hook         (re)installs the post-boot hook that re-points
-                      systemd-resolved at Pi-hole once it is healthy after
-                      a reboot; --up already does this automatically
+  --dns-hook         (re)installs the DNS recovery hooks that re-point
+                      systemd-resolved at Pi-hole once it is healthy: the
+                      post-boot hook (once per reboot) and a systemd --user
+                      service that reruns it on every resume from suspend;
+                      --up already does this automatically
   --notes-dir PATH   uses a different FrankMD notes folder (default: ~/Documents/notes)
   --dry-run          shows the actions without running anything
   --help             shows this help
