@@ -1,0 +1,4 @@
+interface:
+  display_name: "Preserve My English"
+  short_description: "Improve English without replacing your voice"
+  default_prompt: "Use $preserve-my-english to correct this English while preserving my wording, meaning, and voice."
