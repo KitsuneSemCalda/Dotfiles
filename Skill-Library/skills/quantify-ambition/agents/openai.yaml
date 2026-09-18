@@ -1,0 +1,4 @@
+interface:
+  display_name: "Quantify Ambition"
+  short_description: "Turn ambitious visions into measurable theses"
+  default_prompt: "Use $quantify-ambition to turn this ambitious project idea into a quantified, testable thesis."
