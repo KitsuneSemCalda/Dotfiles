@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub Project Health"
+  short_description: "Audit repository and GitHub project health"
+  default_prompt: "Use $github-project-health to analyze this project and its GitHub repository, then produce a prioritized, evidence-based health report."
