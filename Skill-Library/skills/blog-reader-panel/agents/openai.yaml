@@ -1,0 +1,4 @@
+interface:
+  display_name: "Blog Reader Panel"
+  short_description: "Review a blog through contrasting reader personas"
+  default_prompt: "Use $blog-reader-panel to analyze this blog through several plausible reader perspectives."
