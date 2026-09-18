@@ -1,0 +1,4 @@
+interface:
+  display_name: "Learn From Work"
+  short_description: "Turn current coding work into transferable learning"
+  default_prompt: "Use $learn-from-work to teach me the concepts behind what I am doing with analogous examples, progressive hints, and a short practice exercise."
