@@ -103,15 +103,15 @@ physical size across applications. The fontconfig setup does not prove that
 applications ignoring its rules adopt this floor. There is no versioned
 configuration for Kitty or Ghostty, even though they appear in the fonts documentation.
 
-The [installer](../Omarchy/omarchy.pl) always processes the links before the optional steps:
+The [installer](../Omarchy/omarchy.pl) always processes the copies before the optional steps:
 
-| Option | Change external to the link set |
+| Option | Change external to the file set |
 |---|---|
 | `--fonts` | Downloads Lexend Regular/Bold from Google Fonts into `~/.local/share/fonts/lexend` and refreshes the cache; does not install JetBrainsMono |
 | `--apps` | Removes HEY/Basecamp and the 1Password service when detected; installs PrismLauncher, Bitwarden, AppFlowy, and CurseForge; registers Amazon Shopping, Mercado Livre, Pinterest, Z Ai, WebMotors, Panini Brasil, GitHub, GitLab, Codeberg, Copilot, Claude, ChatGPT, Grok, and Gemini |
 | `--plugin` | Adds Feader-RSS or enables an existing installation on the right side |
 | `--theme` | Installs Sword Art Omarchy if absent and applies it; preserves any broken theme link |
-| `--all` | Fonts → apps → plugin → theme, after the links |
+| `--all` | Fonts → apps → plugin → theme, after the copies |
 
 ### Power: a one-time decision at session start
 
@@ -140,10 +140,10 @@ the `home/` tree, unlike the Linux installer.
 
 | Source in `Windows-11/home/` | Destination / application |
 |---|---|
-| [glazewm/config.yaml](../Windows-11/home/glazewm/config.yaml) | Linked to `%USERPROFILE%\.glzr\glazewm\config.yaml`; tiling, 9 workspaces, `6/10 px` gaps, cyan/gray borders, rounded corners, and Super shortcuts |
-| [starship.toml](../Windows-11/home/starship.toml) | Linked to `%USERPROFILE%\.config\starship.toml`; content identical to Linux in this analysis |
-| [powershell/Microsoft.PowerShell_profile.ps1](../Windows-11/home/powershell/Microsoft.PowerShell_profile.ps1) | Linked to the `$PROFILE` of the host running the installer; PSReadLine, aliases, colors, modules, and deferred Starship initialization |
-| [rainmeter/AincradHUD](../Windows-11/home/rainmeter/AincradHUD/HUD.ini) | Directory linked to `%USERPROFILE%\Documents\Rainmeter\Skins\AincradHUD`; clock, CPU, RAM, C: drive, and network traffic |
+| [glazewm/config.yaml](../Windows-11/home/glazewm/config.yaml) | Copied to `%USERPROFILE%\.glzr\glazewm\config.yaml`; tiling, 9 workspaces, `6/10 px` gaps, cyan/gray borders, rounded corners, and Super shortcuts |
+| [starship.toml](../Windows-11/home/starship.toml) | Copied to `%USERPROFILE%\.config\starship.toml`; content identical to Linux in this analysis |
+| [powershell/Microsoft.PowerShell_profile.ps1](../Windows-11/home/powershell/Microsoft.PowerShell_profile.ps1) | Copied to the `$PROFILE` of the host running the installer; PSReadLine, aliases, colors, modules, and deferred Starship initialization |
+| [rainmeter/AincradHUD](../Windows-11/home/rainmeter/AincradHUD/HUD.ini) | Directory copied to `%USERPROFILE%\Documents\Rainmeter\Skins\AincradHUD`; clock, CPU, RAM, C: drive, and network traffic |
 | [windows-terminal/sword-art-online.scheme.json](../Windows-11/home/windows-terminal/sword-art-online.scheme.json) | `-Theme` merges the palette into the first `settings.json` found and sets the default font; not a symlink |
 
 ```mermaid
@@ -160,7 +160,7 @@ flowchart LR
   P --> MO["PowerShell Gallery: Terminal-Icons, PSFzf, and z"]
 ```
 
-`-All` runs links → fonts → apps/modules → theme, so Windows Terminal and
+`-All` runs copies → fonts → apps/modules → theme, so Windows Terminal and
 Rainmeter are already installed by the time the theme step configures them on
 a fresh machine. Rainmeter itself still needs to be launched once to create
 its INI file before `Set-RainmeterHud` can edit it; the script detects the
@@ -284,15 +284,15 @@ Compose. The local `.env` is ignored by Git and its values are not part of this 
 
 ```mermaid
 flowchart TD
-  A["Validation pass (read-only)"] --> B{"Destination already points to source?"}
-  B -->|Yes| C["Plans: keep the link"]
+  A["Validation pass (read-only)"] --> B{"Legacy link or unchanged installed copy?"}
+  B -->|Yes| C["Plans: replace with an updated copy"]
   B -->|No| D{"Destination occupied?"}
-  D -->|No| E["Plans: create the link"]
+  D -->|No| E["Plans: copy the source"]
   D -->|Yes| F{"Is it a real directory?"}
   F -->|Yes| G["Records a conflict"]
   F -->|No| H{"Backup requested?"}
   H -->|No| G
-  H -->|Yes| I["Plans: move original to a dated backup, then link"]
+  H -->|Yes| I["Plans: move original to a dated backup, then copy"]
   C --> J{"Any conflicts recorded?"}
   E --> J
   G --> J
@@ -304,7 +304,7 @@ flowchart TD
 The flowchart describes the common path; `--dry-run`/`-DryRun` only report the
 planned actions. **The installation is transactional in two passes**: validation is
 read-only and collects every conflict before anything is touched, so a conflict on
-one file aborts the whole run without any link or backup having been created.
+one file aborts the whole run without any copy or backup having been created.
 If an unexpected failure happens during the application pass itself (a race
 condition, a permission change), the error message lists which changes were
 already applied instead of implying nothing happened.
@@ -314,8 +314,8 @@ already applied instead of implying nothing happened.
 | Source → destination | Relative path of each file under `home/` preserved in HOME | Explicit map of four entries, including one directory |
 | Backup | `.local/state/dotfiles/backups/YYYYmmdd-HHMMSS` under the destination | Same pattern, plus a `manifest.json` recording each item's real destination and a post-install content hash |
 | Restore selection | Most recent snapshot | Most recent snapshot |
-| Destination protection on restore | Validates all before applying; accepts absent or a symlink from this repo | Validates all before applying; aborts if a destination's content hash no longer matches what was recorded at install time |
-| Restored path | Relative to HOME, compatible with link backups | Read from `manifest.json`, matching the destinations used by `Install-Symlinks`, `Set-WindowsTerminalTheme`, and `Set-RainmeterHud` |
+| Destination protection on restore | Validates all before applying; accepts absent files, legacy links, or copies matching the installed content hash | Validates all before applying; aborts if a destination's content hash no longer matches what was recorded at install time |
+| Restored path | Relative to HOME, compatible with link backups | Read from `manifest.json`, matching the destinations used by `Install-Files`, `Set-WindowsTerminalTheme`, and `Set-RainmeterHud` |
 | Scope | Entries present in the snapshot, preserving the copy | Copy of files from the snapshot, using the manifest map |
 
 `win11.ps1 -Restore` now consults an explicit `manifest.json` written next to the
@@ -327,7 +327,7 @@ validates every entry against the current file content first and aborts with no
 changes if anything was modified after installation, then only proceeds to
 overwrite files once that first pass finds no conflicts.
 
-No restore is a complete uninstall: new links without a backup are not
+No restore is a complete uninstall: new copies without a backup are not
 removed by this mechanism; packages, fonts, theme selection, wallpapers,
 DNS, hooks, and Docker data require specific handling. On Linux, even
 special theme backups may fail restore validation if the
@@ -340,7 +340,7 @@ external installer created a real directory at the destination.
 | HUD palette is not identical to the one advertised | The HUD uses cyan `90,220,255` (`#5adcff`), Consolas font, and its own sizes; it does not automatically share the terminal's Lexend/cyan `#3ee8ff` |
 | Windows README described OnIdle | The code uses a `prompt` wrapper; the description was corrected in this documentation |
 | Incomplete profile dependencies | CompletionPredictor, F7History, and PSScriptAnalyzer are not part of the module installation |
-| Personal files are full replacements | Outside the explicit Lua inheritance/theme imports, the installer creates file links, not field merges; new defaults may fail to appear |
+| Personal files are full replacements | Outside the explicit Lua inheritance/theme imports, the installer copies whole files rather than merging fields; new defaults may fail to appear |
 | Fonts, theme, plugin, wrapper, and images are not fully pinned | Remote updates can produce a different result; this analysis did not audit the external content |
 | Windows failure handling is partial | `winget`'s `$LASTEXITCODE` is not validated by the installer; several debloat operations silence errors; the final message does not prove each step succeeded |
 

@@ -193,10 +193,11 @@ mode, `Super+Shift+X` exit GlazeWM) — all documented as comments in
 
 ## Installation
 
-Requires **Developer Mode** enabled (Settings → Privacy &
-security → For developers) to create symlinks without being
-an administrator — the same idea as `omarchy.pl`, which also never changes anything
-by default when a conflicting file exists.
+Installs independent copies of configuration files and the Rainmeter skin.
+Developer Mode is not required. Legacy links to this checkout are replaced
+when you rerun the installer. The clone can be removed afterward; rerun the
+installer from an updated clone to update installed copies. Local edits are
+protected by content checks recorded in `.local/state/dotfiles/installed-windows.json`.
 
 See what would be done, without touching anything:
 
@@ -223,11 +224,11 @@ pwsh ./win11.ps1 -Restore
 ```
 
 The installer also runs [`Skill-Library/install.ps1`](../../Skill-Library/README.md)
-after the symlinks, installing every skill from the library into every AI
+after the copies, installing every skill from the library into every AI
 agent CLI detected on this machine (`.claude`, `.codex`, `.config/opencode`
 under `$env:USERPROFILE`). This is a native PowerShell port of the Perl
 installer used on the Omarchy side, with no Perl dependency on Windows. Like
-the symlinks, it is unconditional (not behind a flag), but only runs against
+the copies, it is unconditional (not behind a flag), but only runs against
 the real `$HOME` — it is skipped when `-Target` points elsewhere for testing.
 
 The steps can also run separately with `-Fonts` (Lexend + JetBrainsMono Nerd
@@ -243,22 +244,13 @@ pwsh ./win11.ps1 -All -Backup
 ```
 
 `-Fonts`, `-Theme`, and `-Apps` only run against the real `$HOME`; `-Target` is
-only for testing symlink creation in another directory.
+only for testing file installation in another directory.
 
 JetBrainsMono Nerd Font is pinned to an explicit
 [nerd-fonts release](https://github.com/ryanoasis/nerd-fonts/releases)
 (`$nerdFontsVersion` in `Install-NerdFont`) instead of `.../releases/latest`,
 so re-running `-Fonts` always installs the same build. To deliberately
 upgrade it, bump `$nerdFontsVersion` to the new tag and re-run `-Fonts`.
-
-If symlink creation fails even with Developer Mode enabled in the
-registry (`AllowDevelopmentWithoutDevLicense`), the privilege sometimes only
-applies to normal interactive sessions — automated/non-interactive
-sessions may not inherit it. In that case, run elevated:
-
-```powershell
-Start-Process powershell -Verb RunAs -ArgumentList '-File .\win11.ps1 -All -Backup'
-```
 
 ## Desktop widgets (Rainmeter)
 
@@ -270,7 +262,7 @@ third-party license dependency): clock, HP (CPU load), MP
 uplink/downlink, with HUD-style borders and a red alert when CPU/RAM go
 above ~80% or the disk drops below 15% free.
 
-`win11.ps1 -Backup` symlinks the whole folder to
+`win11.ps1 -Backup` copies the whole folder to
 `Documents\Rainmeter\Skins\AincradHUD` (the same mechanism as the other
 config files, just on a folder instead of a single file). `-Theme` activates
 the skin (`Active=1` + `AlwaysOnTop=1` in `Rainmeter.ini`) and deactivates

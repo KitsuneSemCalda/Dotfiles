@@ -95,16 +95,17 @@ your copy:
 perl ./omarchy.pl --restore
 ```
 
-The restore only replaces symlinks that still point to this repository (or
-creates files that are missing). If it finds manual changes at the
+The restore only replaces unchanged installed copies, legacy links to this
+repository, or missing files. Installed content hashes are recorded under
+`~/.local/state/dotfiles/installed.json`. If it finds manual changes at the
 destination, it aborts the whole operation to avoid overwriting them. Use
 `--restore --dry-run` to review the chosen backup before restoring.
 
 The installer also runs [`Skill-Library/install.pl`](../../Skill-Library/README.md)
-after the symlinks, installing every skill from the library into every AI
+after the copies, installing every skill from the library into every AI
 agent CLI detected on this machine (`~/.claude`, `~/.codex`,
 `~/.config/opencode`). This step is unconditional (not behind a flag), like
-the symlinks themselves, but only runs against the real HOME — it is skipped
+the copies themselves, but only runs against the real HOME — it is skipped
 when `--target` points elsewhere for testing.
 
 The steps can also be run separately with `--fonts`, `--apps`,
@@ -120,7 +121,10 @@ operations and possible package-manager password prompts:
 perl ./omarchy.pl --all --backup
 ```
 
-The installer creates symlinks for the files under `home/`. No
+The installer copies the files under `home/`, preserving executable permissions.
+Legacy links to this checkout are replaced automatically. You can remove the
+checkout after installation; pull or clone it again and rerun the installer
+to update. Locally edited files require `--backup` before replacement. No
 system configuration was changed when this repository was created; `--all` is the
 option that applies external changes.
 
