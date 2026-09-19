@@ -73,3 +73,7 @@ pwsh ./SamsungBook-Np550xda/tests/install.ps1        # Windows installer
 ```
 
 Both run in CI ([workflow](.github/workflows/installers.yml)).
+
+## License
+
+[BSD 3-Clause](LICENSE).
