@@ -2,7 +2,7 @@
 <#
 win11.ps1 - instalador/orquestrador dos dotfiles Windows-11.
 Equivalente em espirito ao omarchy.pl do perfil Omarchy: por padrao nao
-altera nada quando ha conflito, cria symlinks para os arquivos de
+altera nada quando ha conflito, copia os arquivos de
 configuracao simples e usa flags separadas para as acoes que mexem em
 sistema (fontes, tema, apps).
 
@@ -11,16 +11,13 @@ Sem acentos de proposito nas strings/comentarios: Windows PowerShell 5.1 le
 
 Uso:
   pwsh ./win11.ps1 -DryRun              # mostra o que seria feito
-  pwsh ./win11.ps1 -Backup              # symlinks, preservando conflitos
+  pwsh ./win11.ps1 -Backup              # copias, preservando conflitos
   pwsh ./win11.ps1 -Restore             # restaura o backup mais recente
   pwsh ./win11.ps1 -Fonts               # instala Lexend + JetBrainsMono Nerd Font
   pwsh ./win11.ps1 -Theme               # aplica color scheme + wallpaper SAO
   pwsh ./win11.ps1 -Apps                # winget install das ferramentas usadas
   pwsh ./win11.ps1 -All -Backup         # tudo de uma vez
 
-Criar symlinks no Windows sem ser administrador exige o "Modo de
-desenvolvedor" ativado (Config. > Privacidade e seguranca > Para
-desenvolvedores).
 #>
 
 param(
@@ -48,7 +45,7 @@ if ($Restore -and ($Backup -or $Fonts -or $Theme -or $Apps)) {
 
 $RealHome = $env:USERPROFILE
 if (($Fonts -or $Theme -or $Apps) -and $Target -ne $RealHome) {
-    throw '-Fonts, -Theme e -Apps so podem usar o HOME real; use -Target apenas para testar symlinks'
+    throw '-Fonts, -Theme e -Apps so podem usar o HOME real; use -Target apenas para testar copias'
 }
 
 $RepoRoot = $PSScriptRoot
@@ -56,6 +53,33 @@ $SourceRoot = Join-Path $RepoRoot 'home'
 $BackupBase = Join-Path $Target '.local\state\dotfiles\backups'
 $Stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $BackupRoot = Join-Path $BackupBase $Stamp
+
+$StatePath = Join-Path $Target '.local\state\dotfiles\installed-windows.json'
+$Installed = @{}
+if (Test-Path -LiteralPath $StatePath) {
+    $state = Get-Content -LiteralPath $StatePath -Raw | ConvertFrom-Json
+    foreach ($property in $state.PSObject.Properties) { $Installed[$property.Name] = $property.Value }
+}
+
+function Save-InstalledState {
+    New-Item -ItemType Directory -Force -Path (Split-Path $StatePath) | Out-Null
+    $Installed | ConvertTo-Json | Set-Content -LiteralPath "$StatePath.tmp" -Encoding utf8
+    Move-Item -LiteralPath "$StatePath.tmp" -Destination $StatePath -Force
+}
+
+function Get-ContentHash {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+    if (-not (Get-Item -LiteralPath $Path -Force).PSIsContainer) {
+        return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+    }
+    # Include relative names so renamed or added skin files count as edits.
+    $root = (Get-Item -LiteralPath $Path -Force).FullName
+    $parts = @(Get-ChildItem -LiteralPath $Path -Recurse -File -Force | Sort-Object FullName | ForEach-Object {
+        $_.FullName.Substring($root.Length) + ':' + (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+    })
+    return 'directory:' + ($parts -join "`n")
+}
 
 function Write-Action {
     param([string]$Tag, [string]$Message)
@@ -74,6 +98,7 @@ function Add-BackupManifestEntry {
         Destination  = $Destination
         Hash         = $Hash
     }
+    $script:BackupManifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $BackupRoot 'manifest.json') -Encoding utf8
 }
 
 # Helper em vez do operador ternario `?:`, que so existe no PowerShell 7+
@@ -97,7 +122,7 @@ function Get-ProfileDestination {
 }
 
 # Mapa: caminho relativo dentro de home/ -> destino real no Windows.
-function Get-LinkMap {
+function Get-FileMap {
     @(
         @{ Source = 'glazewm\config.yaml'; Destination = (Join-Path $Target '.glzr\glazewm\config.yaml') }
         @{ Source = 'starship.toml'; Destination = (Join-Path $Target '.config\starship.toml') }
@@ -123,14 +148,14 @@ function Get-AppliedSummary {
     return "Mudancas ja aplicadas antes da falha: $($Applied -join ', ')."
 }
 
-function Install-Symlinks {
+function Install-Files {
     # Passagem de validacao (somente leitura): monta o plano de acao para
     # cada item antes de tocar em qualquer coisa. Se houver conflito, aborta
-    # aqui sem ter criado nenhum link ou movido nenhum backup.
+    # aqui sem ter criado nenhuma copia ou movido nenhum backup.
     $plan = @()
     $conflicts = @()
 
-    foreach ($entry in Get-LinkMap) {
+    foreach ($entry in Get-FileMap) {
         $source = Join-Path $SourceRoot $entry.Source
         $destination = $entry.Destination
         $relative = $entry.Source
@@ -140,14 +165,17 @@ function Install-Symlinks {
             continue
         }
 
-        if ((Test-Path -LiteralPath $destination) -and (Test-PointsToSource -Destination $destination -Source $source)) {
-            $plan += [pscustomobject]@{ Relative = $relative; Action = 'Ok' }
+        $existing = Get-Item -LiteralPath $destination -Force -ErrorAction SilentlyContinue
+        if ((Test-PointsToSource -Destination $destination -Source $source) -or
+            ($existing -and -not $existing.LinkType -and $Installed.ContainsKey($destination) -and
+                (Get-ContentHash $destination) -eq $Installed[$destination])) {
+            $plan += [pscustomobject]@{ Relative = $relative; Source = $source; Destination = $destination; Action = 'Copy' }
             continue
         }
 
-        if (Test-Path -LiteralPath $destination) {
+        if ($existing) {
             $item = Get-Item -LiteralPath $destination -Force
-            if ($item.PSIsContainer -and -not $item.LinkType) {
+            if ($item.PSIsContainer -and -not $item.LinkType -and -not $Installed.ContainsKey($destination)) {
                 $conflicts += "$relative (e um diretorio; nao sera movido automaticamente)"
                 continue
             }
@@ -156,11 +184,11 @@ function Install-Symlinks {
                 continue
             }
 
-            $plan += [pscustomobject]@{ Relative = $relative; Source = $source; Destination = $destination; Action = 'BackupLink' }
+            $plan += [pscustomobject]@{ Relative = $relative; Source = $source; Destination = $destination; Action = 'BackupCopy' }
             continue
         }
 
-        $plan += [pscustomobject]@{ Relative = $relative; Source = $source; Destination = $destination; Action = 'Link' }
+        $plan += [pscustomobject]@{ Relative = $relative; Source = $source; Destination = $destination; Action = 'Copy' }
     }
 
     if ($conflicts.Count -gt 0) {
@@ -171,12 +199,7 @@ function Install-Symlinks {
     # Passagem de aplicacao: so comeca depois que a validacao inteira passou.
     $applied = @()
     foreach ($item in $plan) {
-        if ($item.Action -eq 'Ok') {
-            Write-Action 'OK' $item.Relative
-            continue
-        }
-
-        if ($item.Action -eq 'BackupLink') {
+        if ($item.Action -eq 'BackupCopy') {
             $backupPath = Join-Path $BackupRoot $item.Relative
             Write-Action 'BACKUP' "$($item.Relative) -> $backupPath"
             if (-not $DryRun) {
@@ -187,21 +210,30 @@ function Install-Symlinks {
                     throw "Falha ao mover $($item.Destination) para $backupPath : $_`n$(Get-AppliedSummary $applied)"
                 }
                 $applied += "BACKUP $($item.Relative)"
-                $sourceHash = (Get-FileHash -LiteralPath $item.Source -Algorithm SHA256).Hash
+                $sourceHash = Get-ContentHash $item.Source
                 Add-BackupManifestEntry -RelativePath $item.Relative -Destination $item.Destination -Hash $sourceHash
             }
         }
 
-        Write-Action (Get-Tag 'LINK?' 'LINK') "$($item.Relative) -> $($item.Source)"
+        Write-Action (Get-Tag 'COPY?' 'COPY') "$($item.Relative) -> $($item.Source)"
         if ($DryRun) { continue }
 
         New-Item -ItemType Directory -Force -Path (Split-Path $item.Destination) | Out-Null
         try {
-            New-Item -ItemType SymbolicLink -Path $item.Destination -Target $item.Source -Force | Out-Null
+            $staged = "$($item.Destination).dotfiles-$([guid]::NewGuid())"
+            Copy-Item -LiteralPath $item.Source -Destination $staged -Recurse -Force
+            $old = Get-Item -LiteralPath $item.Destination -Force -ErrorAction SilentlyContinue
+            if ($old) {
+                if ($old.LinkType) { Remove-Item -LiteralPath $item.Destination -Force }
+                else { Remove-Item -LiteralPath $item.Destination -Recurse -Force }
+            }
+            Move-Item -LiteralPath $staged -Destination $item.Destination
+            $Installed[$item.Destination] = Get-ContentHash $item.Destination
+            Save-InstalledState
         } catch {
-            throw "Falha ao criar symlink $($item.Destination) (ative o Modo de desenvolvedor ou rode como administrador): $_`n$(Get-AppliedSummary $applied)"
+            throw "Falha ao copiar $($item.Destination): $_`n$(Get-AppliedSummary $applied)"
         }
-        $applied += "LINK $($item.Relative)"
+        $applied += "COPY $($item.Relative)"
     }
 }
 
@@ -230,8 +262,8 @@ function Restore-Backups {
     foreach ($entry in $manifest) {
         $destination = $entry.Destination
         if (Test-Path -LiteralPath $destination) {
-            $currentHash = (Get-FileHash -LiteralPath $destination -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
-            if ($currentHash -and $currentHash -ne $entry.Hash) {
+            $currentHash = Get-ContentHash $destination
+            if ($currentHash -ne $entry.Hash) {
                 $conflicts += "$destination (conteudo mudou desde a instalacao)"
             }
         }
@@ -246,8 +278,14 @@ function Restore-Backups {
         Write-Action (Get-Tag 'RESTORE?' 'RESTORE') "$destination <- $backupFile"
         if ($DryRun) { continue }
         New-Item -ItemType Directory -Force -Path (Split-Path $destination) | Out-Null
-        if (Test-Path -LiteralPath $destination) { Remove-Item -LiteralPath $destination -Force }
-        Copy-Item -LiteralPath $backupFile -Destination $destination -Force
+        $old = Get-Item -LiteralPath $destination -Force -ErrorAction SilentlyContinue
+        if ($old) {
+            if ($old.LinkType) { Remove-Item -LiteralPath $destination -Force }
+            else { Remove-Item -LiteralPath $destination -Recurse -Force }
+        }
+        Copy-Item -LiteralPath $backupFile -Destination $destination -Recurse -Force
+        $Installed.Remove($destination)
+        Save-InstalledState
     }
     Write-Output $(if ($DryRun) { 'Dry-run de restauracao concluido.' } else { "Backup restaurado; copia preservada em $($snapshot.FullName)" })
 }
@@ -341,9 +379,9 @@ function Get-RainmeterExe {
     return $null
 }
 
-# AincradHUD (home/rainmeter/AincradHUD) e' symlinkado para
-# Documents\Rainmeter\Skins\AincradHUD pelo Install-Symlinks normal (ver
-# Get-LinkMap). Esta funcao so ativa esse skin e desativa o pacote de
+# AincradHUD (home/rainmeter/AincradHUD) e' copiado para
+# Documents\Rainmeter\Skins\AincradHUD pelo Install-Files normal (ver
+# Get-FileMap). Esta funcao so ativa esse skin e desativa o pacote de
 # terceiros SAO-Skin-Pack/RedDragon caso tenha sido instalado manualmente
 # antes (duplicava CPU/RAM/relogio e dependia de um feed RSS externo).
 # Rainmeter.ini e' UTF-16 com BOM (Set-Content -Encoding Unicode preserva).
@@ -581,7 +619,7 @@ if ($Restore) {
     exit 0
 }
 
-Install-Symlinks
+Install-Files
 if ($Target -eq $RealHome) {
     Install-Skills
 } else {
