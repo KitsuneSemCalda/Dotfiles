@@ -75,8 +75,8 @@ feed configuration at `~/.config/omarchy/rss-reader.json`.
 The keyboard's RGB lighting needs the
 [Dareu EK75 OpenRGB driver](https://github.com/KitsuneSemCalda/Dareu-EK75-OpenRGB-Compat),
 because the packaged `openrgb` has no support for it. `--openrgb` clones it to
-`~/.local/share/dareu-ek75-openrgb` (a private repository, so it uses your
-`gh` login), or updates an existing clone, then runs its `install.sh`: the udev
+`~/.local/share/dareu-ek75-openrgb`, or updates an existing clone, then runs its
+`install.sh`: the udev
 rule (asks for sudo), an OpenRGB build with the driver, the launcher, and a hook
 that colours the keyboard with each Omarchy theme's accent. It needs the Qt 6
 build dependencies of OpenRGB and takes a while on the first run.

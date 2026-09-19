@@ -459,14 +459,13 @@ sub ensure_plugin {
 sub ensure_openrgb {
     # The build and the launcher point back into this checkout, so it has to
     # outlive the dotfiles clone.
-    my $url = 'KitsuneSemCalda/Dareu-EK75-OpenRGB-Compat';
+    my $url = 'https://github.com/KitsuneSemCalda/Dareu-EK75-OpenRGB-Compat.git';
     my $dir = File::Spec->catdir($target, '.local', 'share', 'dareu-ek75-openrgb');
 
     if (-d File::Spec->catdir($dir, '.git')) {
         run_command('git', '-C', $dir, 'pull', '--ff-only');
     } else {
-        # The repository is private: gh reuses your GitHub login for the clone.
-        run_command('gh', 'repo', 'clone', $url, $dir);
+        run_command('git', 'clone', $url, $dir);
     }
 
     # Installs the udev rule (sudo), builds OpenRGB with the driver, and sets
