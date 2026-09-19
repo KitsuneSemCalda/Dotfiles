@@ -111,7 +111,8 @@ The [installer](../Omarchy/omarchy.pl) always processes the copies before the op
 | `--apps` | Removes HEY/Basecamp and the 1Password service when detected; installs PrismLauncher, Bitwarden, AppFlowy, and CurseForge; registers Amazon Shopping, Mercado Livre, Pinterest, Z Ai, WebMotors, Panini Brasil, GitHub, GitLab, Codeberg, Copilot, Claude, ChatGPT, Grok, and Gemini |
 | `--plugin` | Adds Feader-RSS or enables an existing installation on the right side |
 | `--theme` | Installs Sword Art Omarchy if absent and applies it; preserves any broken theme link |
-| `--all` | Fonts → apps → plugin → theme, after the copies |
+| `--openrgb` | Clones or updates the Dareu EK75 OpenRGB driver into `~/.local/share/dareu-ek75-openrgb` and runs its installer (udev rule with sudo, OpenRGB build, launcher, theme hook) |
+| `--all` | Fonts → apps → plugin → theme → OpenRGB, after the copies |
 
 ### Power: a one-time decision at session start
 

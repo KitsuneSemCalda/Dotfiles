@@ -16,7 +16,7 @@ installers are tested on Linux and Windows in CI on every push.
 
 | Module | What it is | Installer |
 |--------|------------|-----------|
-| [`SamsungBook-Np550xda/Omarchy`](SamsungBook-Np550xda/Omarchy/README.md) | Hyprland (Lua), Alacritty, btop, GTK, fonts, starship, webapps, power profile and an optional Docker stack | `omarchy.pl` (Perl) |
+| [`SamsungBook-Np550xda/Omarchy`](SamsungBook-Np550xda/Omarchy/README.md) | Hyprland (Lua), Alacritty, btop, GTK, fonts, starship, webapps, power profile, Dareu EK75 OpenRGB support and an optional Docker stack | `omarchy.pl` (Perl) |
 | [`SamsungBook-Np550xda/Windows-11`](SamsungBook-Np550xda/Windows-11/README.md) | GlazeWM, PowerShell profile, Windows Terminal scheme, Rainmeter HUD and a debloat script | `win11.ps1` (PowerShell) |
 | [`Skill-Library`](Skill-Library/README.md) | Curated `SKILL.md` skills for Claude Code, Codex and other agent CLIs | `install.pl` / `install.ps1` |
 

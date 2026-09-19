@@ -72,6 +72,15 @@ It also registers the [Sword Art Omarchy](https://github.com/KitsuneSemCalda/Swo
 theme and the [Feader-RSS](https://github.com/KitsuneSemCalda/Feader-RSS) plugin, with
 feed configuration at `~/.config/omarchy/rss-reader.json`.
 
+The keyboard's RGB lighting needs the
+[Dareu EK75 OpenRGB driver](https://github.com/KitsuneSemCalda/Dareu-EK75-OpenRGB-Compat),
+because the packaged `openrgb` has no support for it. `--openrgb` clones it to
+`~/.local/share/dareu-ek75-openrgb` (a private repository, so it uses your
+`gh` login), or updates an existing clone, then runs its `install.sh`: the udev
+rule (asks for sudo), an OpenRGB build with the driver, the launcher, and a hook
+that colours the keyboard with each Omarchy theme's accent. It needs the Qt 6
+build dependencies of OpenRGB and takes a while on the first run.
+
 ## Installation
 
 The installer changes nothing by default when a conflicting file exists. See
@@ -109,7 +118,7 @@ the copies themselves, but only runs against the real HOME — it is skipped
 when `--target` points elsewhere for testing.
 
 The steps can also be run separately with `--fonts`, `--apps`,
-`--plugin`, or `--theme`. `--apps` uses the official repositories for
+`--plugin`, `--theme`, or `--openrgb`. `--apps` uses the official repositories for
 PrismLauncher and the AUR packages for Bitwarden, AppFlowy, and CurseForge,
 installs the web apps listed above (skipping any already present), and
 removes HEY/Basecamp and 1Password if it finds them installed.
