@@ -21,6 +21,7 @@ my $apps    = 0;
 my $fonts   = 0;
 my $plugin  = 0;
 my $theme   = 0;
+my $openrgb = 0;
 my $all     = 0;
 my $help    = 0;
 my $target  = $ENV{HOME};
@@ -33,6 +34,7 @@ GetOptions(
     'fonts'    => \$fonts,
     'plugin'   => \$plugin,
     'theme'    => \$theme,
+    'openrgb'  => \$openrgb,
     'all'      => \$all,
     'target=s' => \$target,
     'help'     => \$help,
@@ -40,10 +42,10 @@ GetOptions(
 
 usage(0) if $help;
 
-$apps = $fonts = $plugin = $theme = 1 if $all;
+$apps = $fonts = $plugin = $theme = $openrgb = 1 if $all;
 
-if ($restore && ($backup || $apps || $fonts || $plugin || $theme)) {
-    die "--restore cannot be combined with --backup, --apps, --fonts, --plugin, --theme, or --all\n";
+if ($restore && ($backup || $apps || $fonts || $plugin || $theme || $openrgb)) {
+    die "--restore cannot be combined with --backup, --apps, --fonts, --plugin, --theme, --openrgb, or --all\n";
 }
 
 die "HOME is not set; use --target PATH\n"
@@ -60,7 +62,7 @@ die "Missing source directory: $source_root\n" unless -d $source_root;
 die "Missing destination: $target\n" unless -d $target;
 
 my $home_root = abs_path($ENV{HOME} // '') // '';
-if (($apps || $fonts || $plugin || $theme) && $target ne $home_root) {
+if (($apps || $fonts || $plugin || $theme || $openrgb) && $target ne $home_root) {
     die "Omarchy actions can only use the real HOME; use --target only to test file installation\n";
 }
 
@@ -201,6 +203,7 @@ ensure_fonts()  if $fonts;
 ensure_apps()   if $apps;
 ensure_plugin() if $plugin;
 ensure_theme()  if $theme;
+ensure_openrgb() if $openrgb;
 
 say $dry_run ? 'Dry-run finished.' : 'Dotfiles installed.';
 exit 0;
@@ -453,6 +456,24 @@ sub ensure_plugin {
     }
 }
 
+sub ensure_openrgb {
+    # The build and the launcher point back into this checkout, so it has to
+    # outlive the dotfiles clone.
+    my $url = 'KitsuneSemCalda/Dareu-EK75-OpenRGB-Compat';
+    my $dir = File::Spec->catdir($target, '.local', 'share', 'dareu-ek75-openrgb');
+
+    if (-d File::Spec->catdir($dir, '.git')) {
+        run_command('git', '-C', $dir, 'pull', '--ff-only');
+    } else {
+        # The repository is private: gh reuses your GitHub login for the clone.
+        run_command('gh', 'repo', 'clone', $url, $dir);
+    }
+
+    # Installs the udev rule (sudo), builds OpenRGB with the driver, and sets
+    # up the launcher and the theme hook.
+    run_command('bash', File::Spec->catfile($dir, 'install.sh'));
+}
+
 sub ensure_theme {
     my $url = 'https://github.com/KitsuneSemCalda/Sword-Art-Omarchy';
     my $dir = File::Spec->catdir($target, '.config', 'omarchy', 'themes', 'sword-art-omarchy');
@@ -573,7 +594,8 @@ Usage: perl omarchy.pl [options]
   --fonts            installs Lexend and enables the font profile
   --plugin           installs/enables Feader-RSS
   --theme            installs/applies the Sword Art Omarchy theme
-  --all              runs --apps --fonts --plugin --theme
+  --openrgb          installs the Dareu EK75 OpenRGB driver, udev rule and theme hook
+  --all              runs --apps --fonts --plugin --theme --openrgb
   --target PATH      uses a different root directory only to test file installation
   --help             shows this help
 USAGE
