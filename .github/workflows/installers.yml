@@ -13,5 +13,4 @@ jobs:
         shell: [powershell, pwsh]
     steps:
       - uses: actions/checkout@v5
-      - shell: ${{ matrix.shell }}
-        run: ./SamsungBook-Np550xda/tests/install.ps1
+      - run: ${{ matrix.shell }} -NoProfile -File ./SamsungBook-Np550xda/tests/install.ps1
