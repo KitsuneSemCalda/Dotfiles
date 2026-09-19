@@ -1,0 +1,17 @@
+name: Installer checks
+on: [push, pull_request]
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 SamsungBook-Np550xda/tests/install.py
+  windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        shell: [powershell, pwsh]
+    steps:
+      - uses: actions/checkout@v5
+      - shell: ${{ matrix.shell }}
+        run: ./SamsungBook-Np550xda/tests/install.ps1
