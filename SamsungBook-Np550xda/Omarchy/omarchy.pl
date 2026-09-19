@@ -4,6 +4,8 @@ use strict;
 use warnings;
 
 use Cwd qw(abs_path);
+use Digest::SHA ();
+use JSON::PP qw(encode_json decode_json);
 use File::Basename qw(dirname);
 use File::Copy qw(copy move);
 use File::Find qw(find);
@@ -59,10 +61,32 @@ die "Missing destination: $target\n" unless -d $target;
 
 my $home_root = abs_path($ENV{HOME} // '') // '';
 if (($apps || $fonts || $plugin || $theme) && $target ne $home_root) {
-    die "Omarchy actions can only use the real HOME; use --target only to test symlinks\n";
+    die "Omarchy actions can only use the real HOME; use --target only to test file installation\n";
 }
 
 my $backup_base = File::Spec->catdir($target, '.local', 'state', 'dotfiles', 'backups');
+
+my $state_path = File::Spec->catfile($target, '.local', 'state', 'dotfiles', 'installed.json');
+my $installed = {};
+if (-f $state_path) {
+    open my $fh, '<', $state_path or die "Cannot read $state_path: $!";
+    local $/;
+    $installed = decode_json(<$fh>);
+}
+
+sub file_hash {
+    my ($path) = @_;
+    open my $fh, '<:raw', $path or die "Cannot read $path: $!";
+    return Digest::SHA->new(256)->addfile($fh)->hexdigest;
+}
+
+sub save_state {
+    make_path(dirname($state_path));
+    open my $fh, '>', "$state_path.tmp" or die "Cannot write state: $!";
+    print {$fh} encode_json($installed);
+    close $fh or die "Cannot close state: $!";
+    rename "$state_path.tmp", $state_path or die "Cannot replace state: $!";
+}
 
 if ($restore) {
     restore_backups($backup_base);
@@ -85,20 +109,19 @@ find(
 
 # Passagem de validacao (somente leitura): monta o plano de acao para cada
 # arquivo antes de tocar em qualquer coisa. Se houver conflito, aborta aqui
-# sem ter criado nenhum link ou movido nenhum backup.
+# sem ter criado nenhuma copia ou movido nenhum backup.
 my (@plan, @conflicts);
 for my $source (sort @sources) {
     my $relative    = File::Spec->abs2rel($source, $source_root);
     my $destination = File::Spec->catfile($target, $relative);
 
-    if (-l $destination) {
-        my $link       = readlink($destination);
-        my $link_abs   = defined $link ? File::Spec->rel2abs($link, dirname($destination)) : '';
-        my $source_abs = abs_path($source);
-        if (defined $link && $link_abs eq $source_abs) {
-            push @plan, { relative => $relative, action => 'ok' };
-            next;
-        }
+    if (points_to_source($destination, $relative)
+        || (!-l $destination && -f $destination
+            && defined $installed->{$relative}
+            && file_hash($destination) eq $installed->{$relative})) {
+        push @plan, { source => $source, destination => $destination,
+            relative => $relative, action => 'copy' };
+        next;
     }
 
     if (-e $destination || -l $destination) {
@@ -115,7 +138,7 @@ for my $source (sort @sources) {
             source      => $source,
             destination => $destination,
             relative    => $relative,
-            action      => 'backup_link',
+            action      => 'backup_copy',
         };
         next;
     }
@@ -124,7 +147,7 @@ for my $source (sort @sources) {
         source      => $source,
         destination => $destination,
         relative    => $relative,
-        action      => 'link',
+        action      => 'copy',
     };
 }
 
@@ -138,15 +161,10 @@ my @applied;
 for my $item (@plan) {
     my $relative = $item->{relative};
 
-    if ($item->{action} eq 'ok') {
-        say "OK      $relative";
-        next;
-    }
-
     my ($source, $destination) = @{$item}{qw(source destination)};
     my $parent = dirname($destination);
 
-    if ($item->{action} eq 'backup_link') {
+    if ($item->{action} eq 'backup_copy') {
         my $backup_path = File::Spec->catfile($backup_root, $relative);
         say "BACKUP  $relative -> " . File::Spec->abs2rel($backup_path, $target);
         unless ($dry_run) {
@@ -157,13 +175,20 @@ for my $item (@plan) {
         }
     }
 
-    say(($dry_run ? 'LINK?   ' : 'LINK    ') . "$relative -> $source");
+    say(($dry_run ? 'COPY?   ' : 'COPY    ') . "$relative -> $source");
     next if $dry_run;
 
     make_path($parent) unless -d $parent;
-    symlink($source, $destination)
-        or apply_failure(\@applied, "Failed to create symlink $destination: $!");
-    push @applied, "LINK $relative";
+    my $staged = "$destination.dotfiles-tmp-$$";
+    copy($source, $staged)
+        or apply_failure(\@applied, "Failed to copy $source: $!");
+    chmod((stat($source))[2] & 0777, $staged)
+        or apply_failure(\@applied, "Failed to set permissions: $!");
+    rename($staged, $destination)
+        or apply_failure(\@applied, "Failed to replace $destination: $!");
+    $installed->{$relative} = file_hash($destination);
+    save_state();
+    push @applied, "COPY $relative";
 }
 
 if ($target eq $home_root) {
@@ -224,7 +249,10 @@ sub restore_backups {
         my $destination = File::Spec->catfile($target, $relative);
         my $occupied    = -e $destination || -l $destination;
 
-        if ($occupied && !points_to_source($destination, $relative)) {
+        if ($occupied && !points_to_source($destination, $relative)
+            && !(!-l $destination && -f $destination
+                && defined $installed->{$relative}
+                && file_hash($destination) eq $installed->{$relative})) {
             push @conflicts, $relative;
             next;
         }
@@ -237,7 +265,7 @@ sub restore_backups {
     }
 
     if (@conflicts) {
-        warn "CONFLICT $_ (the destination is not a symlink from these dotfiles)\n"
+        warn "CONFLICT $_ (the destination is not an unchanged installation)\n"
             for @conflicts;
         die scalar(@conflicts) . " conflict(s); restore aborted without changing files\n";
     }
@@ -252,6 +280,8 @@ sub restore_backups {
         unlink $action->{destination}
             if -e $action->{destination} || -l $action->{destination};
         restore_entry($action->{backup_path}, $action->{destination});
+        delete $installed->{$action->{relative}};
+        save_state();
     }
 
     say $dry_run
@@ -542,7 +572,7 @@ Usage: perl omarchy.pl [options]
   --plugin           installs/enables Feader-RSS
   --theme            installs/applies the Sword Art Omarchy theme
   --all              runs --apps --fonts --plugin --theme
-  --target PATH      uses a different root directory only to test symlinks
+  --target PATH      uses a different root directory only to test file installation
   --help             shows this help
 USAGE
     exit $status;
