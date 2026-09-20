@@ -400,6 +400,8 @@ sub ensure_apps {
     my @webapps = (
         { name => 'Amazon Shopping',  url => 'https://www.amazon.com.br' },
         { name => 'Mercado Livre',    url => 'https://mercadolivre.com.br' },
+        { name => 'Instagram',        url => 'http://instagram.com/'},
+        { name => 'Facebook',         url => 'https://www.facebook.com/'}
         { name => 'HBO Max',          url => 'https://play.hbomax.com/' },
         { name => 'TikTok',           url => 'https://www.tiktok.com/pt-BR/' },
         { name => 'Pinterest',        url => 'https://br.pinterest.com/' },
