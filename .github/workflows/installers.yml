@@ -1,16 +1,24 @@
 name: Installer checks
-on: [push, pull_request]
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
 jobs:
   linux:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
-      - run: python3 SamsungBook-Np550xda/tests/install.py
+      - name: Check Perl syntax
+        run: perl -c SamsungBook-Np550xda/Omarchy/omarchy.pl
+      - name: Test installation, backups and restore
+        run: python3 SamsungBook-Np550xda/tests/install.py
   windows:
     runs-on: windows-latest
+    timeout-minutes: 10
     strategy:
       matrix:
         shell: [powershell, pwsh]
     steps:
       - uses: actions/checkout@v5
-      - run: ${{ matrix.shell }} -NoProfile -File ./SamsungBook-Np550xda/tests/install.ps1
+      - name: Test Windows installer (${{ matrix.shell }})
+        run: ${{ matrix.shell }} -NoProfile -File ./SamsungBook-Np550xda/tests/install.ps1

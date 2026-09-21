@@ -96,7 +96,7 @@ if ($restore) {
 }
 
 my $stamp       = strftime('%Y%m%d-%H%M%S', localtime);
-my $backup_root = File::Spec->catdir($backup_base, $stamp);
+my $backup_root;
 my @sources;
 
 find(
@@ -167,6 +167,9 @@ for my $item (@plan) {
     my $parent = dirname($destination);
 
     if ($item->{action} eq 'backup_copy') {
+        $backup_root //= $dry_run
+            ? File::Spec->catdir($backup_base, $stamp)
+            : reserve_backup_root();
         my $backup_path = File::Spec->catfile($backup_root, $relative);
         say "BACKUP  $relative -> " . File::Spec->abs2rel($backup_path, $target);
         unless ($dry_run) {
@@ -208,6 +211,18 @@ ensure_openrgb() if $openrgb;
 say $dry_run ? 'Dry-run finished.' : 'Dotfiles installed.';
 exit 0;
 
+# Cria (atomicamente) um diretorio de backup exclusivo desta execucao.
+sub reserve_backup_root {
+    make_path($backup_base) unless -d $backup_base;
+    for my $n (0 .. 999) {
+        my $name = $n ? sprintf('%s-%03d', $stamp, $n) : $stamp;
+        my $dir  = File::Spec->catdir($backup_base, $name);
+        return $dir if mkdir $dir;
+        die "Cannot create backup directory $dir: $!\n" unless $!{EEXIST};
+    }
+    die "Cannot reserve a unique backup directory under $backup_base\n";
+}
+
 sub apply_failure {
     my ($applied, $message) = @_;
     my $summary = @$applied
@@ -223,7 +238,7 @@ sub restore_backups {
         or die "Missing backups directory: $backup_base\n";
 
     my @snapshots = sort grep {
-        /^\d{8}-\d{6}$/ && -d File::Spec->catdir($backup_base, $_)
+        /^\d{8}-\d{6}(?:-\d{3})?$/ && -d File::Spec->catdir($backup_base, $_)
     } readdir $backup_dir;
     closedir $backup_dir;
 
@@ -280,8 +295,6 @@ sub restore_backups {
             . "$action->{relative} <- $relative_backup");
         next if $dry_run;
 
-        unlink $action->{destination}
-            if -e $action->{destination} || -l $action->{destination};
         restore_entry($action->{backup_path}, $action->{destination});
         delete $installed->{$action->{relative}};
         save_state();
@@ -314,17 +327,25 @@ sub restore_entry {
     my $parent = dirname($destination);
     make_path($parent) unless -d $parent;
 
+    my $staged = "$destination.dotfiles-tmp-$$";
+    unlink $staged if -e $staged || -l $staged;
+
     if (-l $backup_path) {
         my $link = readlink($backup_path);
         die "Could not read the backup symlink $backup_path\n"
             unless defined $link;
-        symlink($link, $destination)
+        symlink($link, $staged)
             or die "Failed to restore symlink $destination: $!\n";
-        return;
+    } else {
+        my $mode = (stat($backup_path))[2] & 07777;
+        copy($backup_path, $staged)
+            or die "Failed to copy $backup_path to $destination: $!\n";
+        chmod($mode, $staged)
+            or do { unlink $staged; die "Failed to set permissions on $staged: $!\n" };
     }
 
-    copy($backup_path, $destination)
-        or die "Failed to copy $backup_path to $destination: $!\n";
+    rename($staged, $destination)
+        or do { unlink $staged; die "Failed to replace $destination: $!\n" };
 }
 
 sub ensure_fonts {
@@ -483,6 +504,9 @@ sub ensure_theme {
     # A previous local checkout may have left a dangling symlink. Preserve it
     # before the official installer clones the theme into the same path.
     if (-l $dir && !-e $dir) {
+        $backup_root //= $dry_run
+            ? File::Spec->catdir($backup_base, $stamp)
+            : reserve_backup_root();
         my $link_backup = File::Spec->catfile(
             $backup_root,
             '.config',
