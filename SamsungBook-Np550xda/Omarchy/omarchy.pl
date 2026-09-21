@@ -402,6 +402,7 @@ sub ensure_apps {
         { name => 'Mercado Livre',    url => 'https://mercadolivre.com.br' },
         { name => 'Instagram',        url => 'http://instagram.com/'},
         { name => 'Facebook',         url => 'https://www.facebook.com/'}
+        { name => 'Twitch',           url => 'https://www.twitch.tv'},
         { name => 'HBO Max',          url => 'https://play.hbomax.com/' },
         { name => 'TikTok',           url => 'https://www.tiktok.com/pt-BR/' },
         { name => 'Pinterest',        url => 'https://br.pinterest.com/' },
