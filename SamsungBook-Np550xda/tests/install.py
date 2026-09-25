@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Exercise installation with a disposable checkout and destination."""
+import os
 import pathlib
 import shutil
 import subprocess
@@ -84,4 +85,58 @@ with tempfile.TemporaryDirectory() as tmp:
     dest.unlink()
     run()
     assert dest.read_text() == 'updated\n'
-print('OK: migration, copies, permissions, conflicts, backup collisions, restore failure and symlinks')
+
+    # --plugin must not just enable Feader-RSS: `omarchy plugin add`/`enable`
+    # alone only copies the repository, it never builds feader-rss-fetch (see
+    # the plugin's own README). A fake `omarchy` stands in for the real one so
+    # this runs without Omarchy or network access.
+    plugin_id = 'io.github.kitsunesemcalda.feader-rss'
+    plugin_dir = target / '.config/omarchy/plugins' / plugin_id
+    install_sh = plugin_dir / 'scripts/install.sh'
+    backend = plugin_dir / 'feader-rss-fetch'
+    fake_bin = root / 'fakebin'
+    fake_bin.mkdir()
+    fake_omarchy = fake_bin / 'omarchy'
+    fake_omarchy.write_text(f'''#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == "plugin" && "$2" == "add" ]]; then
+  mkdir -p "{plugin_dir}/scripts"
+  cat > "{install_sh}" <<'EOS'
+#!/usr/bin/env bash
+set -euo pipefail
+echo fake-binary > "{backend}"
+chmod +x "{backend}"
+EOS
+  chmod +x "{install_sh}"
+fi
+''')
+    fake_omarchy.chmod(0o755)
+    # --plugin refuses to run against a --target that isn't the real HOME (so
+    # tests can't accidentally touch it); point HOME at the disposable target
+    # instead of passing --target, to exercise the real guarded code path.
+    env = {**os.environ, 'PATH': f"{fake_bin}:{os.environ['PATH']}", 'HOME': str(target)}
+
+    def run_plugin(*args, success=True):
+        result = subprocess.run(
+            ['perl', str(repo / 'omarchy.pl'), *args],
+            capture_output=True, text=True, env=env,
+        )
+        assert (result.returncode == 0) == success, result.stdout + result.stderr
+        return result
+
+    run_plugin('--plugin')
+    assert backend.is_file() and backend.stat().st_mode & 0o111, 'install.sh did not run after plugin add'
+
+    # Already installed with a backend in place: re-enabling must not rebuild it.
+    backend.write_text('sentinel\n')
+    run_plugin('--plugin')
+    assert backend.read_text() == 'sentinel\n', 'ensure_plugin rebuilt an already-present backend'
+
+    # install.sh failing to produce a binary must fail the run instead of
+    # silently leaving the plugin enabled with no backend to talk to.
+    backend.unlink()
+    install_sh.write_text('#!/usr/bin/env bash\nexit 0\n')
+    install_sh.chmod(0o755)
+    run_plugin('--plugin', success=False)
+    assert not backend.exists()
+print('OK: migration, copies, permissions, conflicts, backup collisions, restore failure, symlinks and plugin backend')

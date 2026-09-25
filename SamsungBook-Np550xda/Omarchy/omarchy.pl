@@ -469,6 +469,7 @@ sub ensure_plugin {
     my $id  = 'io.github.kitsunesemcalda.feader-rss';
     my $url = 'https://github.com/KitsuneSemCalda/Feader-RSS.git';
     my $dir = File::Spec->catdir($target, '.config', 'omarchy', 'plugins', $id);
+    my $binary = File::Spec->catfile($dir, 'feader-rss-fetch');
 
     if (-d $dir) {
         say "OK      plugin $id is already installed";
@@ -477,6 +478,18 @@ sub ensure_plugin {
         # No --yes: Omarchy shows the security confirmation for code that
         # will run inside the shell's persistent process.
         run_command('omarchy', 'plugin', 'add', $url, '--enable');
+    }
+
+    # `omarchy plugin add`/`enable` only copies the repository; it does not
+    # run an install hook or build feader-rss-fetch (the plugin's own README
+    # says as much). Without this the panel gets enabled with no backend to
+    # talk to. scripts/install.sh is the maintained installer that builds or
+    # downloads the checksum-verified binary; skip it only when one is
+    # already in place.
+    unless (-x $binary) {
+        run_command('bash', File::Spec->catfile($dir, 'scripts', 'install.sh'));
+        die "Feader RSS backend still missing after install.sh: $binary\n"
+            unless $dry_run || -x $binary;
     }
 }
 

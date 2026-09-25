@@ -256,8 +256,10 @@ function Restore-Backups {
 
     Write-Action 'BACKUP' $snapshot.Name
 
-    # Primeira passagem: so valida. Se algo mudou o destino depois da
-    # instalacao (conflito), aborta sem tocar em nenhum arquivo.
+    # Primeira passagem: so valida. Aborta sem tocar em nenhum arquivo se o
+    # destino mudou desde a instalacao (conflito) ou se a origem do backup
+    # estiver ausente/ilegivel - sem isso, a segunda passagem podia apagar um
+    # destino ainda utilizavel antes de descobrir que nao ha nada para copiar.
     $conflicts = @()
     foreach ($entry in $manifest) {
         $destination = $entry.Destination
@@ -266,6 +268,15 @@ function Restore-Backups {
             if ($currentHash -ne $entry.Hash) {
                 $conflicts += "$destination (conteudo mudou desde a instalacao)"
             }
+        }
+
+        $backupFile = Join-Path $snapshot.FullName $entry.RelativePath
+        try {
+            if (-not (Test-Path -LiteralPath $backupFile)) {
+                $conflicts += "$backupFile (arquivo de backup ausente)"
+            }
+        } catch {
+            $conflicts += "$backupFile (arquivo de backup ilegivel: $_)"
         }
     }
     if ($conflicts.Count -gt 0) {
@@ -277,13 +288,25 @@ function Restore-Backups {
         $destination = $entry.Destination
         Write-Action (Get-Tag 'RESTORE?' 'RESTORE') "$destination <- $backupFile"
         if ($DryRun) { continue }
+
+        # Preparar a restauracao ao lado do destino antes de remover o
+        # conteudo atual: se a copia falhar, o destino original permanece
+        # intacto em vez de ter sido apagado primeiro.
         New-Item -ItemType Directory -Force -Path (Split-Path $destination) | Out-Null
+        $staged = "$destination.dotfiles-$([guid]::NewGuid())"
+        try {
+            Copy-Item -LiteralPath $backupFile -Destination $staged -Recurse -Force
+        } catch {
+            if (Test-Path -LiteralPath $staged) { Remove-Item -LiteralPath $staged -Recurse -Force -ErrorAction SilentlyContinue }
+            throw "Falha ao preparar restauracao de $destination a partir de $backupFile : $_`nDestino original preservado."
+        }
+
         $old = Get-Item -LiteralPath $destination -Force -ErrorAction SilentlyContinue
         if ($old) {
             if ($old.LinkType) { Remove-Item -LiteralPath $destination -Force }
             else { Remove-Item -LiteralPath $destination -Recurse -Force }
         }
-        Copy-Item -LiteralPath $backupFile -Destination $destination -Recurse -Force
+        Move-Item -LiteralPath $staged -Destination $destination
         $Installed.Remove($destination)
         Save-InstalledState
     }
