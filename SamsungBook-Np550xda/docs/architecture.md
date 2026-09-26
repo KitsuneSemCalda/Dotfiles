@@ -78,7 +78,7 @@ flowchart TD
 | Same file, repeat rate | Rate `40`, delay `250`, Num Lock on | Reaffirms the base values; not an additional optimization |
 | [.config/hypr/looknfeel.lua](../Omarchy/home/.config/hypr/looknfeel.lua) | Gaps `5/10`, border `2`, rounding `0`, shadow and blur off before the theme | Keeps the gaps; border `1`, rounding `8`, shadow range `12`/render power `2`, blur size `4`/passes `2`; animations inherited |
 | [.config/hypr/bindings.lua](../Omarchy/home/.config/hypr/bindings.lua) | Shortcuts loaded from the defaults | Removes `Super+Shift+C`, `E`, `Alt+E`, and `Slash`; adds no replacements |
-| [.config/hypr/autostart.lua](../Omarchy/home/.config/hypr/autostart.lua) | Template with no active personal autostart | Runs the Perl power-profile selector; falls back to `powerprofilesctl set balanced` |
+| [.config/hypr/autostart.lua](../Omarchy/home/.config/hypr/autostart.lua) | Template with no active personal autostart | No personal entries; the power profile is left to Omarchy's own `omarchy-powerprofiles-init`, already invoked by `default.hypr.omarchy` |
 | [.config/hypr/hyprland.lua](../Omarchy/home/.config/hypr/hyprland.lua) | Chain of defaults and overrides | Adds a conditional `felixzsh.key-visualizer` hook; the installer does not install that plugin |
 
 Blur and shadow are **enabled on top of defaults that turn them off**. The values
@@ -114,25 +114,27 @@ The [installer](../Omarchy/omarchy.pl) always processes the copies before the op
 | `--openrgb` | Clones or updates the Dareu EK75 OpenRGB driver into `~/.local/share/dareu-ek75-openrgb` and runs its installer (udev rule with sudo, OpenRGB build, launcher, theme hook) |
 | `--all` | Fonts → apps → plugin → theme → OpenRGB, after the copies |
 
-### Power: a one-time decision at session start
+### Power: delegated to the omarchy CLI
 
 ```mermaid
 flowchart TD
-  A["Hyprland autostart"] --> B{"Personal script exists?"}
-  B -->|No| C["Requests balanced directly"]
-  B -->|Yes| D["Runs omarchy-power-profile via Perl"]
-  D --> E{"powerprofilesctl available?"}
-  E -->|No| F["Exits without changes"]
-  E -->|Yes| G["Reads status and capacity of the first BAT found"]
-  G --> H{"Discharging and charge <= 25%?"}
-  H -->|Yes| I["power-saver"]
-  H -->|No or reading unavailable| J["balanced"]
+  A["Hyprland start"] --> B["default.hypr.omarchy (loaded before the personal overrides)"]
+  B --> C["omarchy-powerprofiles-init"]
+  C --> D["omarchy-powerprofiles-set autodetect"]
+  D --> E{"UPower OnBattery?"}
+  E -->|No| F["ac state: performance if available, else balanced"]
+  E -->|Yes| G["battery state: last profile saved for this state, else balanced"]
 ```
 
-Source: [omarchy-power-profile](../Omarchy/home/.local/bin/omarchy-power-profile).
-The threshold is remaining battery charge, not CPU load nor battery health.
-There is no timer, daemon, or continuous reaction to a power-source change; a new evaluation
-requires running the script again.
+A previous version of [.config/hypr/autostart.lua](../Omarchy/home/.config/hypr/autostart.lua)
+ran a personal Perl script that duplicated this via a direct `powerprofilesctl`
+call, using a cruder heuristic (discharging and charge <= 25%) that executed
+right after `omarchy-powerprofiles-init` and overrode its result. That script
+and the autostart entry were removed; the omarchy CLI's own decision (backed
+by the UPower AC/battery signal and persisted per ac/battery state under
+`~/.local/state/omarchy/powerprofiles/`) is now the only one in effect. There
+is still no timer or daemon reacting to a power-source change mid-session;
+`omarchy-powerprofiles-init` only runs again at the next Hyprland start.
 
 ## Windows: components added and their targets
 

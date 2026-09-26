@@ -1,14 +1,9 @@
--- The observed battery is at roughly 30.7% of its original capacity.
--- If the Perl utility is installed, it picks balanced or power-saver
--- based on the current charge; otherwise we keep the simple fallback.
-
-local home = os.getenv('HOME')
-local profile_script = home and (home .. '/.local/bin/omarchy-power-profile') or nil
-local script_file = profile_script and io.open(profile_script, 'r') or nil
-
-if script_file then
-    script_file:close()
-    o.launch_on_start(string.format('perl %q', profile_script))
-else
-    o.launch_on_start('powerprofilesctl set balanced')
-end
+-- Personal autostart overrides.
+--
+-- Omarchy's own default autostart (loaded earlier via default.hypr.omarchy)
+-- already runs `omarchy-powerprofiles-init` on every session start, which
+-- picks the profile from the AC/battery signal (UPower) and remembers the
+-- user's choice per state. A previous version of this file duplicated that
+-- with a hand-rolled Perl script calling `powerprofilesctl` directly, using a
+-- cruder battery-percentage heuristic that ran right after and overrode the
+-- omarchy CLI's own decision. Removed: there is nothing left to add here.

@@ -18,11 +18,10 @@ Hyprland. The full snapshot used to make these decisions is at
 - Btrfs filesystem with swapfile and zram
 
 The initial choices follow this profile: scale 1 and interface/terminal
-fonts at size 20, plus `preferred` monitor mode, moderate visual
-effects for the Iris Xe, and a `balanced` power profile by default. At session
-startup, the included Perl utility selects `power-saver` if the battery is
-discharging with 25% charge or less; otherwise it selects `balanced`.
-There is no continuous monitoring.
+fonts at size 20, plus `preferred` monitor mode, and moderate visual
+effects for the Iris Xe. The power profile is left to Omarchy's own
+`omarchy powerprofiles init`, which already runs at session start and picks
+`power-saver` or `balanced`/`performance` from the AC/battery signal.
 
 ## Structure
 
@@ -38,8 +37,6 @@ home/
 │   ├── omarchy/rss-reader.json # Feader-RSS feeds
 │   ├── omarchy/shell.toml      # Omarchy interface base size
 │   └── starship.toml
-└── .local/bin/
-    └── omarchy-power-profile  # power-profile selector written in Perl
 hardware/
 └── inxi-Fz.txt
 docker/
