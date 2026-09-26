@@ -233,14 +233,15 @@ Sources: [Compose](../Omarchy/docker/docker-compose.yml),
 
 ```mermaid
 flowchart LR
-  U["Host projects and clients"] -->|"127.0.0.1:5432"| PG["Postgres 17-alpine"]
-  U -->|"127.0.0.1:6379"| RE["Redis 7-alpine"]
-  U -->|"127.0.0.1:7591"| FM["FrankMD :80"]
+  U["Host and trusted LAN clients"] -->|"host:5432"| PG["Postgres 17-alpine"]
+  U -->|"host:6379"| RE["Redis 7-alpine"]
+  U -->|"host:7591"| FM["FrankMD :80"]
   AG["Detected CLIs"] --> WR["ai-memory wrapper + MCP/hooks"]
   WR -->|"local service :49374"| AI["ai-memory"]
   DNS["Host DNS after --dns"] -->|"127.0.0.1:53 TCP/UDP"| PH["Pi-hole"]
+  LAN["Trusted LAN clients"] -->|"LAN_IP:53 TCP/UDP"| PH
   DNS -.->|"Configured fallback server"| CF["1.1.1.1"]
-  U -->|"127.0.0.1:8080"| PH
+  U -->|"host:8080"| PH
   PG --> PV["postgres-data volume"]
   RE --> RV["redis-data volume"]
   FM --> NV["Bind mount FRANKMD_NOTES_DIR to /rails/notes"]
@@ -250,12 +251,13 @@ flowchart LR
 
 There is no declared link between FrankMD or ai-memory and Postgres/Redis: they are
 independent services in the Compose file, with no `depends_on`. All use
-`restart: unless-stopped`. FrankMD, ai-memory, and Pi-hole use `latest` images;
-exact reproducibility is not pinned by digest. Published ports are
-restricted to loopback; this does not isolate the containers from each other.
+`restart: unless-stopped`. Images use explicit version tags, although exact
+reproducibility is not pinned by digest. Published ports listen on all host
+interfaces, including the local network; this does not isolate the containers
+from each other.
 
-- `--up`: creates the notes folder; creates `.env` only if absent, with
-  random secrets and `0600` permissions; runs `docker compose up -d`.
+- `--up`: creates the notes folder; creates `.env` only if absent, with random
+  secrets and `0600` permissions; refreshes `LAN_IP`; runs `docker compose up -d`.
 - `--agents`: fetches the wrapper if needed, verifies its SHA-256, and delegates the
   MCP/hooks installation to claude, codex, gemini, cursor-agent, opencode, and grok
   detected on the PATH. The actual files changed depend on the external wrapper.

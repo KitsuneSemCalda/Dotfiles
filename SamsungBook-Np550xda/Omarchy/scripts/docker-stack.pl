@@ -66,7 +66,7 @@ die "Missing docker/ directory at $docker_dir\n" unless -d $docker_dir;
 if ($up) {
     my $notes_abs = File::Spec->rel2abs($notes_dir);
     ensure_notes_dir($notes_abs);
-    ensure_env($notes_abs);
+    ensure_env($notes_abs, local_ip());
     compose('up', '-d');
     ensure_dns_hook();
 }
@@ -91,8 +91,33 @@ sub ensure_notes_dir {
 }
 
 sub ensure_env {
-    my ($notes_abs) = @_;
+    my ($notes_abs, $lan_ip) = @_;
     if (-e $env_file) {
+        open my $input, '<', $env_file or die "Could not read $env_file: $!\n";
+        my @lines = <$input>;
+        close $input;
+
+        my $lan_line = "LAN_IP=$lan_ip\n";
+        my $found = 0;
+        my $changed = 0;
+        for (@lines) {
+            next unless /^LAN_IP=/;
+            $found = 1;
+            $changed = 1 if $_ ne $lan_line;
+            $_ = $lan_line;
+        }
+        push @lines, $lan_line unless $found;
+        $changed = 1 unless $found;
+
+        if ($changed && !$dry_run) {
+            open my $output, '>', $env_file or die "Could not update $env_file: $!\n";
+            print {$output} @lines;
+            close $output or die "Could not close $env_file: $!\n";
+            chmod 0600, $env_file;
+            say "ENV     LAN_IP=$lan_ip saved in $env_file";
+        } elsif ($changed) {
+            say "ENV?    LAN_IP would be updated to $lan_ip in $env_file";
+        }
         say "OK      $env_file already exists (secrets are not regenerated)";
         return;
     }
@@ -110,6 +135,7 @@ sub ensure_env {
         [FRANKMD_SECRET_KEY_BASE     => random_hex(64)],
         [FRANKMD_AUTH_TOKEN          => random_hex(24)],
         [TZ                          => 'America/Sao_Paulo'],
+        [LAN_IP                      => $lan_ip],
         [PIHOLE_PASSWORD             => random_hex(16)],
         [AI_MEMORY_LLM_PROVIDER      => ''],
         [ANTHROPIC_API_KEY           => ''],
@@ -122,6 +148,12 @@ sub ensure_env {
     close $file or die "Could not close $env_file: $!\n";
     chmod 0600, $env_file;
     say "ENV     $env_file created with generated secrets (permission 600)";
+}
+
+sub local_ip {
+    my $route = qx{ip route get 1.1.1.1 2>/dev/null};
+    return $1 if $route =~ /\bsrc\s+(\S+)/;
+    die "Could not detect the local-network IP address\n";
 }
 
 sub random_hex {

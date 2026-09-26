@@ -136,8 +136,8 @@ option that applies external changes.
 
 ## Docker stack
 
-`docker/docker-compose.yml` brings up five services, all published only on
-`127.0.0.1` (none are reachable over the local network):
+`docker/docker-compose.yml` brings up five services published on the host so
+they are reachable from trusted devices on the local network:
 
 - **postgres** (`17-alpine`) and **redis** (`7-alpine`) — general-purpose
   database and cache for local projects, ports `5432` and `6379`.

@@ -12,7 +12,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     ports:
-      - "127.0.0.1:5432:5432"
+      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
@@ -27,7 +27,7 @@ services:
     volumes:
       - redis-data:/data
     ports:
-      - "127.0.0.1:6379:6379"
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
@@ -44,7 +44,7 @@ services:
     volumes:
       - ${FRANKMD_NOTES_DIR}:/rails/notes
     ports:
-      - "127.0.0.1:7591:80"
+      - "7591:80"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/up"]
       interval: 30s
@@ -56,7 +56,7 @@ services:
     container_name: omarchy-ai-memory
     restart: unless-stopped
     ports:
-      - "127.0.0.1:49374:49374"
+      - "49374:49374"
     volumes:
       - ai-memory-data:/data
     environment:
@@ -74,12 +74,13 @@ services:
       FTLCONF_webserver_api_password: ${PIHOLE_PASSWORD}
     volumes:
       - pihole-etc:/etc/pihole
-    # Bound only to 127.0.0.1: this laptop uses Pi-hole as its DNS, but it
-    # is not exposed to the rest of the local network (user's choice).
+    # Exposed to the local network so other devices can use Pi-hole DNS and UI.
     ports:
       - "127.0.0.1:53:53/tcp"
       - "127.0.0.1:53:53/udp"
-      - "127.0.0.1:8080:80"
+      - "${LAN_IP}:53:53/tcp"
+      - "${LAN_IP}:53:53/udp"
+      - "8080:80"
     cap_add:
       - NET_ADMIN
     healthcheck:
