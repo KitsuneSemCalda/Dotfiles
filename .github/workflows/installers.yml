@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Check Perl syntax
         run: perl -c SamsungBook-Np550xda/Omarchy/omarchy.pl
       - name: Test installation, backups and restore
@@ -19,6 +19,6 @@ jobs:
       matrix:
         shell: [powershell, pwsh]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Test Windows installer (${{ matrix.shell }})
         run: ${{ matrix.shell }} -NoProfile -File ./SamsungBook-Np550xda/tests/install.ps1
