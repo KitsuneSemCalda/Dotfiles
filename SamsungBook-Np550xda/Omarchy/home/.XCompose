@@ -1,0 +1,14 @@
+# Run omarchy-restart-xcompose to apply changes
+
+# Include fast emoji access
+include "/usr/share/omarchy/default/xcompose"
+
+# Identification
+<Multi_key> <space> <n> : ""
+<Multi_key> <space> <e> : ""
+
+# The en_US locale maps dead_acute (the ' key on the intl layout) + c to
+# c-acute (ć); override it to produce c-cedilla (ç) instead, since ç is used
+# constantly in Portuguese and ć never is.
+<dead_acute> <c> : "ç" ccedilla
+<dead_acute> <C> : "Ç" Ccedilla
