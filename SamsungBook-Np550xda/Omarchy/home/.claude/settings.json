@@ -1,0 +1,113 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "AI_MEMORY_HOOK_URL=http://127.0.0.1:49374 /home/kitsune/.local/share/ai-memory/hooks/claude-code/session-start.sh"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "AI_MEMORY_HOOK_URL=http://127.0.0.1:49374 /home/kitsune/.local/share/ai-memory/hooks/claude-code/user-prompt-submit.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "AI_MEMORY_HOOK_URL=http://127.0.0.1:49374 /home/kitsune/.local/share/ai-memory/hooks/claude-code/pre-tool-use.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "AI_MEMORY_HOOK_URL=http://127.0.0.1:49374 /home/kitsune/.local/share/ai-memory/hooks/claude-code/post-tool-use.sh"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "AI_MEMORY_HOOK_URL=http://127.0.0.1:49374 /home/kitsune/.local/share/ai-memory/hooks/claude-code/pre-compact.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "AI_MEMORY_HOOK_URL=http://127.0.0.1:49374 /home/kitsune/.local/share/ai-memory/hooks/claude-code/stop.sh"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "AI_MEMORY_HOOK_URL=http://127.0.0.1:49374 /home/kitsune/.local/share/ai-memory/hooks/claude-code/session-end.sh"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "AI_MEMORY_HOOK_URL=http://127.0.0.1:49374 /home/kitsune/.local/share/ai-memory/hooks/claude-code/subagent-start.sh"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "AI_MEMORY_HOOK_URL=http://127.0.0.1:49374 /home/kitsune/.local/share/ai-memory/hooks/claude-code/subagent-stop.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "theme": "auto",
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  },
+  "includeCoAuthoredBy": false,
+  "enabledPlugins": {
+    "clangd-lsp@claude-plugins-official": true
+  }
+}
