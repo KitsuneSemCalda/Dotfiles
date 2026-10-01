@@ -427,6 +427,7 @@ sub ensure_apps {
         { name => 'HBO Max',          url => 'https://play.hbomax.com/' },
         { name => 'TikTok',           url => 'https://www.tiktok.com/pt-BR/' },
         { name => 'Pinterest',        url => 'https://br.pinterest.com/' },
+        { name => 'Reddit',           url => 'https://www.reddit.com/' },
         { name => 'Z Ai',             url => 'https://chat.z.ai/' },
         { name => 'WebMotors',        url => 'https://www.webmotors.com.br/' },
         { name => 'Panini Brasil',    url => 'https://panini.com.br/' },
