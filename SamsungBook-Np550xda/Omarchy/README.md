@@ -35,6 +35,8 @@ home/
 │   ├── gtk-4.0/settings.ini
 │   ├── hypr/                   # Omarchy's native Lua configuration
 │   ├── omarchy/rss-reader.json # Feader-RSS feeds
+│   ├── omarchy/shell.json      # saved bar layout
+│   ├── omarchy-liquid-glass/   # saved state.json and looks.json
 │   ├── omarchy/shell.toml      # Omarchy interface base size
 │   └── starship.toml
 hardware/
@@ -66,8 +68,31 @@ Gemini. It also removes any previously installed HEY or Basecamp web app and
 any 1Password installation (package, AUR package, or browser extension) via
 `omarchy remove service`, since neither is part of this profile.
 It also registers the [Sword Art Omarchy](https://github.com/KitsuneSemCalda/Sword-Art-Omarchy)
-theme and the [Feader-RSS](https://github.com/KitsuneSemCalda/Feader-RSS) plugin, with
-feed configuration at `~/.config/omarchy/rss-reader.json`.
+theme. `--plugin` (also `--plugins`) reinstalls the 12 desktop plugins:
+Feader RSS, Spaces, Liquid Glass, OmaVM, and the eight Omarchy AI plugins
+(settings, watchdog, assistant-huds, chat-hud, window-labels, myapi,
+tv-discovery, quota-alert). Spaces replaces the built-in workspace switcher.
+Feader RSS feeds live at `~/.config/omarchy/rss-reader.json`.
+
+The saved bar layout and Liquid Glass preferences are included under `home/`.
+The Liquid Glass installer rebuilds HyprGlass and restores the saved look,
+terminal transparency, padding, hooks and Glass Tuner binding (Super+Ctrl+G).
+Its `state.json` and named presets in `looks.json` are copied before installation,
+so upstream defaults do not replace this profile's preferences.
+
+`--omastore` reinstalls OmaStore's checksum-verified release into `~/.local`;
+`--plugin` and `--all` include it automatically. OmaVM and Omarchy AI are
+installed through OmaStore, including their system dependency checks. The
+Omarchy AI installer then sets up its Python environment, user service and all
+eight desktop plugins. Existing AI configuration and API keys stay outside
+this repository; a fresh machine needs its keys entered in the settings.
+The source checkouts used by the plugin installers stay under
+`~/.local/share/dotfiles/sources/` and survive removal of this dotfiles clone.
+
+Existing plugin directories and the OmaVM CLI launcher are preserved under
+`~/.local/state/dotfiles/plugin-backups/<timestamp>/` before replacement.
+These are manual recovery copies; `--restore` handles the separate dotfile
+backups, not application versions, compiled plugins or services.
 
 The keyboard's RGB lighting needs the
 [Dareu EK75 OpenRGB driver](https://github.com/KitsuneSemCalda/Dareu-EK75-OpenRGB-Compat),
@@ -115,17 +140,24 @@ the copies themselves, but only runs against the real HOME — it is skipped
 when `--target` points elsewhere for testing.
 
 The steps can also be run separately with `--fonts`, `--apps`,
-`--plugin`, `--theme`, or `--openrgb`. `--apps` uses the official repositories for
+`--plugin`, `--omastore`, `--theme`, or `--openrgb`. `--apps` uses the official repositories for
 PrismLauncher and the AUR packages for Bitwarden, AppFlowy, and CurseForge,
 installs the web apps listed above (skipping any already present), and
 removes HEY/Basecamp and 1Password if it finds them installed.
 
-To also apply fonts, apps, plugin, and theme — including network
-operations and possible package-manager password prompts:
+To reinstall the complete profile, including apps, plugins, OmaStore, fonts,
+theme and OpenRGB, and reboot after successful installation:
 
 ```bash
-perl ./omarchy.pl --all --backup
+perl ./omarchy.pl --all --backup --reboot
 ```
+
+`--reboot` requests a normal system reboot only after every requested step
+succeeds and `hyprctl reload`/`hyprctl configerrors` pass. A failed installer or
+invalid Hyprland configuration prevents the reboot. `--all` without `--reboot`
+does not reboot; `--dry-run` never executes either installation commands or reboot.
+Run the real installation inside the Omarchy desktop session, with a terminal
+available for package-manager and HyprGlass administrator prompts.
 
 The installer copies the files under `home/`, preserving executable permissions.
 Legacy links to this checkout are replaced automatically. You can remove the

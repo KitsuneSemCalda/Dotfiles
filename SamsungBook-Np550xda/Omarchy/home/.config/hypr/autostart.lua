@@ -7,3 +7,8 @@
 -- with a hand-rolled Perl script calling `powerprofilesctl` directly, using a
 -- cruder battery-percentage heuristic that ran right after and overrode the
 -- omarchy CLI's own decision. Removed: there is nothing left to add here.
+
+-- omarchy-liquid-glass >>>
+-- load hyprpm plugins (HyprGlass Liquid), then re-read the config so liquid_glass.lua sees it
+o.launch_on_start("sh -c 'hyprpm reload -n; hyprctl reload'")
+-- <<< omarchy-liquid-glass

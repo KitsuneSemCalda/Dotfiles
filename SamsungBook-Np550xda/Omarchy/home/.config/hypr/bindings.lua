@@ -8,3 +8,7 @@ hl.unbind('SUPER + SHIFT + C')
 hl.unbind('SUPER + SHIFT + E')
 hl.unbind('SUPER + SHIFT + ALT + E')
 hl.unbind('SUPER + SHIFT + SLASH')
+
+-- omarchy-liquid-glass >>>
+o.bind("SUPER + CTRL + G", "Glass Tuner", "python3 " .. string.format("%q", os.getenv("HOME") .. "/.local/share/omarchy-liquid-glass/tuner/tuner.py"))
+-- <<< omarchy-liquid-glass

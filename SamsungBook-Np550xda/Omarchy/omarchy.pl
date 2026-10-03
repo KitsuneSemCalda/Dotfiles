@@ -20,6 +20,8 @@ my $restore = 0;
 my $apps    = 0;
 my $fonts   = 0;
 my $plugin  = 0;
+my $omastore = 0;
+my $reboot = 0;
 my $theme   = 0;
 my $openrgb = 0;
 my $all     = 0;
@@ -32,7 +34,9 @@ GetOptions(
     'restore'  => \$restore,
     'apps'     => \$apps,
     'fonts'    => \$fonts,
-    'plugin'   => \$plugin,
+    'plugin|plugins' => \$plugin,
+    'omastore' => \$omastore,
+    'reboot'   => \$reboot,
     'theme'    => \$theme,
     'openrgb'  => \$openrgb,
     'all'      => \$all,
@@ -43,9 +47,10 @@ GetOptions(
 usage(0) if $help;
 
 $apps = $fonts = $plugin = $theme = $openrgb = 1 if $all;
+$omastore = 1 if $all || $plugin;
 
-if ($restore && ($backup || $apps || $fonts || $plugin || $theme || $openrgb)) {
-    die "--restore cannot be combined with --backup, --apps, --fonts, --plugin, --theme, --openrgb, or --all\n";
+if ($restore && ($backup || $apps || $fonts || $plugin || $theme || $openrgb || $omastore || $reboot)) {
+    die "--restore cannot be combined with installation actions or --reboot\n";
 }
 
 die "HOME is not set; use --target PATH\n"
@@ -62,7 +67,7 @@ die "Missing source directory: $source_root\n" unless -d $source_root;
 die "Missing destination: $target\n" unless -d $target;
 
 my $home_root = abs_path($ENV{HOME} // '') // '';
-if (($apps || $fonts || $plugin || $theme || $openrgb) && $target ne $home_root) {
+if (($apps || $fonts || $plugin || $theme || $openrgb || $omastore || $reboot) && $target ne $home_root) {
     die "Omarchy actions can only use the real HOME; use --target only to test file installation\n";
 }
 
@@ -97,6 +102,7 @@ if ($restore) {
 
 my $stamp       = strftime('%Y%m%d-%H%M%S', localtime);
 my $backup_root;
+my $plugin_backup_root;
 my @sources;
 
 find(
@@ -204,23 +210,35 @@ if ($target eq $home_root) {
 
 ensure_fonts()  if $fonts;
 ensure_apps()   if $apps;
+ensure_omastore() if $omastore;
 ensure_plugin() if $plugin;
 ensure_theme()  if $theme;
 ensure_openrgb() if $openrgb;
 
+if ($plugin || $reboot) {
+    run_command('hyprctl', 'reload');
+    unless ($dry_run) {
+        my $errors = command_output('hyprctl', 'configerrors');
+        die "Hyprland configuration errors; refusing reboot:\n$errors" if $errors =~ /\S/;
+    }
+}
+
 say $dry_run ? 'Dry-run finished.' : 'Dotfiles installed.';
+run_command('systemctl', 'reboot') if $reboot;
 exit 0;
 
 # Cria (atomicamente) um diretorio de backup exclusivo desta execucao.
 sub reserve_backup_root {
-    make_path($backup_base) unless -d $backup_base;
+    my ($base) = @_;
+    $base //= $backup_base;
+    make_path($base) unless -d $base;
     for my $n (0 .. 999) {
         my $name = $n ? sprintf('%s-%03d', $stamp, $n) : $stamp;
-        my $dir  = File::Spec->catdir($backup_base, $name);
+        my $dir  = File::Spec->catdir($base, $name);
         return $dir if mkdir $dir;
         die "Cannot create backup directory $dir: $!\n" unless $!{EEXIST};
     }
-    die "Cannot reserve a unique backup directory under $backup_base\n";
+    die "Cannot reserve a unique backup directory under $base\n";
 }
 
 sub apply_failure {
@@ -469,31 +487,155 @@ sub ensure_skills {
     run_command($^X, $installer);
 }
 
-sub ensure_plugin {
-    my $id  = 'io.github.kitsunesemcalda.feader-rss';
-    my $url = 'https://github.com/KitsuneSemCalda/Feader-RSS.git';
-    my $dir = File::Spec->catdir($target, '.config', 'omarchy', 'plugins', $id);
-    my $binary = File::Spec->catfile($dir, 'feader-rss-fetch');
-
-    if (-d $dir) {
-        say "OK      plugin $id is already installed";
-        run_command('omarchy', 'plugin', 'enable', $id, 'right');
+# Keep source checkouts outside the installed plugins: replacing runtime files
+# must not lose the installer, and the dotfiles checkout can still be removed.
+sub plugin_source {
+    my ($name, $url) = @_;
+    my $dir = File::Spec->catdir($target, '.local', 'share', 'dotfiles', 'sources', $name);
+    if (-d File::Spec->catdir($dir, '.git')) {
+        run_command('git', '-C', $dir, 'pull', '--ff-only');
     } else {
-        # No --yes: Omarchy shows the security confirmation for code that
-        # will run inside the shell's persistent process.
-        run_command('omarchy', 'plugin', 'add', $url, '--enable');
+        die "Unmanaged source directory: $dir\n" if -e $dir;
+        run_command('git', 'clone', '--depth', '1', $url, $dir);
     }
+    return $dir;
+}
 
-    # `omarchy plugin add`/`enable` only copies the repository; it does not
-    # run an install hook or build feader-rss-fetch (the plugin's own README
-    # says as much). Without this the panel gets enabled with no backend to
-    # talk to. scripts/install.sh is the maintained installer that builds or
-    # downloads the checksum-verified binary; skip it only when one is
-    # already in place.
-    unless (-x $binary) {
-        run_command('bash', File::Spec->catfile($dir, 'scripts', 'install.sh'));
-        die "Feader RSS backend still missing after install.sh: $binary\n"
-            unless $dry_run || -x $binary;
+sub ensure_omastore {
+    my $source = plugin_source('OmaStore', 'https://github.com/KitsuneForgering/OmaStore.git');
+    # The maintained installer verifies the release checksum and installs into
+    # ~/.local. Skill-Library already owns this profile's agent skills.
+    run_command('sh', File::Spec->catfile($source, 'packaging', 'install.sh'), '--no-skills');
+    $ENV{PATH} = File::Spec->catdir($target, '.local', 'bin') . ':' . ($ENV{PATH} // '');
+}
+
+sub backup_plugin {
+    my ($id) = @_;
+    my $dir = File::Spec->catdir($target, '.config', 'omarchy', 'plugins', $id);
+    return unless -e $dir || -l $dir;
+    $plugin_backup_root //= $dry_run
+        ? File::Spec->catdir($target, '.local', 'state', 'dotfiles', 'plugin-backups', $stamp)
+        : reserve_backup_root(File::Spec->catdir($target, '.local', 'state', 'dotfiles', 'plugin-backups'));
+    my $dest = File::Spec->catdir($plugin_backup_root, $id);
+    run_command('mkdir', '-p', dirname($dest));
+    run_command('cp', '-a', $dir, $dest);
+}
+
+sub replace_plugin {
+    my ($id, $source) = @_;
+    my $dir = File::Spec->catdir($target, '.config', 'omarchy', 'plugins', $id);
+    my $stage = "$dir.dotfiles-tmp-$$";
+    die "Staging path already exists: $stage\n" if -e $stage || -l $stage;
+    run_command('omarchy', 'plugin', 'validate', $source);
+    run_command('cp', '-a', $source, $stage);
+    unless ($dry_run) {
+        if (-e $dir || -l $dir) {
+            $plugin_backup_root //= reserve_backup_root(File::Spec->catdir($target, '.local', 'state', 'dotfiles', 'plugin-backups'));
+            my $old = File::Spec->catdir($plugin_backup_root, $id);
+            make_path(dirname($old));
+            move($dir, $old) or die "Cannot preserve $dir: $!\n";
+            unless (rename $stage, $dir) {
+                my $error = $!;
+                move($old, $dir) or die "Cannot restore $dir from $old: $!\n";
+                die "Cannot install $dir: $error\n";
+            }
+        } else {
+            rename $stage, $dir or die "Cannot install $dir: $!\n";
+        }
+    }
+}
+
+sub command_output {
+    my (@command) = @_;
+    open my $fh, '-|', @command or die "Cannot run @command: $!\n";
+    local $/;
+    my $result = <$fh> // '';
+    close $fh or die "Command failed: @command\n";
+    return $result;
+}
+
+sub store_app {
+    my ($repo) = @_;
+    my $store = File::Spec->catfile($target, '.local', 'bin', 'omastore');
+    run_command($store, 'index', '--force', $repo);
+    run_command($store, 'install', $repo);
+    run_command($store, 'deps', '--install', $repo);
+    return if $dry_run;
+    my $detail = decode_json(command_output($store, 'show', '--json', $repo));
+    my $exec = $detail->{Install}{ExecPath};
+    die "OmaStore did not install an executable for $repo\n" unless defined $exec && -x $exec;
+    return $exec;
+}
+
+sub ensure_plugin {
+    ensure_repo_packages('go');
+    run_command('mkdir', '-p', File::Spec->catdir($target, '.config', 'omarchy', 'plugins'));
+    my $feader = plugin_source('Feader-RSS', 'https://github.com/KitsuneForgering/Feader-RSS.git');
+    backup_plugin('io.github.kitsunesemcalda.feader-rss');
+    # Always rebuild when replacing the QML, so its protocol matches the backend.
+    run_command('bash', File::Spec->catfile($feader, 'scripts', 'install.sh'));
+    my $backend = File::Spec->catfile($target, '.config', 'omarchy', 'plugins',
+        'io.github.kitsunesemcalda.feader-rss', 'feader-rss-fetch');
+    die "Feader RSS backend missing: $backend\n" unless $dry_run || -x $backend;
+
+    my $spaces = plugin_source('Spaces', 'https://github.com/tornikegomareli/omarchy-spaces.git');
+    replace_plugin('tornikegomareli.spaces', $spaces);
+    my $glass = plugin_source('Liquid-Glass', 'https://github.com/fasi96/omarchy-liquid-glass.git');
+    replace_plugin('io.github.fasi96.liquid-glass', $glass);
+    # Its installer preserves state.json and looks.json and generates the Lua
+    # and terminal settings from them. These saved files are part of home/.
+    run_command('bash', File::Spec->catfile($glass, 'install.sh'), '--yes',
+        '--replace-hyprglass', '--hyprpm-update');
+
+    my $vm_exec = store_app('KitsuneForgering/OmaVM');
+    unless ($dry_run) {
+        my $bin = File::Spec->catdir($target, '.local', 'bin');
+        my $cli = File::Spec->catfile(dirname($vm_exec), 'omavm');
+        die "OmaVM CLI missing: $cli\n" unless -x $cli;
+        my $launcher = File::Spec->catfile($bin, 'omavm');
+        if (-e $launcher || -l $launcher) {
+            $plugin_backup_root //= reserve_backup_root(File::Spec->catdir($target, '.local', 'state', 'dotfiles', 'plugin-backups'));
+            run_command('cp', '-a', $launcher, File::Spec->catfile($plugin_backup_root, 'omavm-cli'));
+        }
+        # A wrapper preserves the release's sibling bin/data layout and keeps
+        # the checksum-verified binary owned by OmaStore.
+        my $staged = "$launcher.dotfiles-tmp-$$";
+        die "Staging path already exists: $staged\n" if -e $staged || -l $staged;
+        open my $fh, '>', $staged or die "Cannot write $staged: $!\n";
+        print {$fh} "#!/bin/sh\nexec " . shell_quote($cli) . ' "$@"' . "\n";
+        close $fh or die "Cannot close $staged: $!\n";
+        chmod 0755, $staged or die "Cannot chmod $staged: $!\n";
+        rename $staged, $launcher or die "Cannot replace $launcher: $!\n";
+    }
+    my $vm = plugin_source('OmaVM', 'https://github.com/KitsuneForgering/OmaVM.git');
+    replace_plugin('dev.omavm.bar', File::Spec->catdir($vm, 'contrib', 'dev.omavm.bar'));
+
+    my $ai_exec = store_app('omribenami/Omarchy-AI');
+    my $ai = $dry_run ? '<Omarchy-AI-release>' : dirname(dirname($ai_exec));
+    for my $id (qw(settings watchdog assistant-huds chat-hud window-labels myapi tv-discovery quota-alert)) {
+        replace_plugin("omarchy-ai.$id", File::Spec->catdir($ai, 'quickshell', 'plugins', "omarchy-ai.$id"));
+    }
+    # OmaStore only extracts the release. The full upstream installer provides
+    # dependencies, the venv, systemd unit and all eight rendered QML plugins.
+    run_command('bash', File::Spec->catfile($ai, 'install.sh'));
+    run_command('systemctl', '--user', 'enable', '--now', 'omarchy-ai.service');
+    run_command('systemctl', '--user', 'restart', 'omarchy-ai.service');
+
+    run_command('omarchy-shell', 'shell', 'rescanPlugins');
+    run_command('omarchy', 'plugin', 'disable', 'omarchy.workspaces');
+    run_command('omarchy', 'plugin', 'enable', 'tornikegomareli.spaces', 'left');
+    for my $id ('io.github.fasi96.liquid-glass', 'io.github.kitsunesemcalda.feader-rss', 'dev.omavm.bar') {
+        run_command('omarchy', 'plugin', 'enable', $id, 'right');
+    }
+    run_command('omarchy', 'restart', 'shell');
+    unless ($dry_run) {
+        my $catalog = decode_json(command_output('omarchy', 'plugin', 'list', '--json'));
+        my %enabled = map { $_->{id} => $_->{enabled} } @$catalog;
+        for my $id ('tornikegomareli.spaces', 'io.github.fasi96.liquid-glass',
+            'io.github.kitsunesemcalda.feader-rss', 'dev.omavm.bar',
+            map { "omarchy-ai.$_" } qw(settings watchdog assistant-huds chat-hud window-labels myapi tv-discovery quota-alert)) {
+            die "Plugin was not enabled: $id\n" unless $enabled{$id};
+        }
     }
 }
 
@@ -635,10 +777,12 @@ Usage: perl omarchy.pl [options]
   --restore          restores the most recent backup without deleting the copy
   --apps             removes old items and installs the requested apps/web apps
   --fonts            installs Lexend and enables the font profile
-  --plugin           installs/enables Feader-RSS
+  --plugin, --plugins replaces/enables all 12 desktop plugins and their backends
+  --omastore         installs/reinstalls OmaStore (also implied by --plugin)
+  --reboot           reboots after successful installation and Hyprland validation
   --theme            installs/applies the Sword Art Omarchy theme
   --openrgb          installs the Dareu EK75 OpenRGB driver, udev rule and theme hook
-  --all              runs --apps --fonts --plugin --theme --openrgb
+  --all              runs --apps --fonts --plugin --omastore --theme --openrgb
   --target PATH      uses a different root directory only to test file installation
   --help             shows this help
 USAGE
