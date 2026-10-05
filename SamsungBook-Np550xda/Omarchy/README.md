@@ -36,7 +36,7 @@ home/
 │   ├── hypr/                   # Omarchy's native Lua configuration
 │   ├── omarchy/rss-reader.json # Feader-RSS feeds
 │   ├── omarchy/shell.json      # saved bar layout
-│   ├── omarchy-liquid-glass/   # saved state.json and looks.json
+│   ├── omarchy-liquid-glass/   # retained Liquid Glass preferences
 │   ├── omarchy/shell.toml      # Omarchy interface base size
 │   └── starship.toml
 hardware/
@@ -68,28 +68,23 @@ Gemini. It also removes any previously installed HEY or Basecamp web app and
 any 1Password installation (package, AUR package, or browser extension) via
 `omarchy remove service`, since neither is part of this profile.
 It also registers the [Sword Art Omarchy](https://github.com/KitsuneSemCalda/Sword-Art-Omarchy)
-theme. `--plugin` (also `--plugins`) reinstalls the 12 desktop plugins:
-Feader RSS, Spaces, Liquid Glass, OmaVM, and the eight Omarchy AI plugins
-(settings, watchdog, assistant-huds, chat-hud, window-labels, myapi,
-tv-discovery, quota-alert). Spaces replaces the built-in workspace switcher.
+theme. `--plugin` (also `--plugins`) reinstalls the three external shell plugins
+in the current profile: Feader RSS, Spaces, and Widget on Glass. Spaces replaces
+the built-in workspace switcher; Widget on Glass is a panel opened on demand.
 Feader RSS feeds live at `~/.config/omarchy/rss-reader.json`.
 
-The saved bar layout and Liquid Glass preferences are included under `home/`.
-The Liquid Glass installer rebuilds HyprGlass and restores the saved look,
-terminal transparency, padding, hooks and Glass Tuner binding (Super+Ctrl+G).
-Its `state.json` and named presets in `looks.json` are copied before installation,
-so upstream defaults do not replace this profile's preferences.
+The saved bar layout under `home/` matches the current shell configuration.
+Older Liquid Glass preferences and Hyprland settings remain in this dotfile
+snapshot, but `--plugin` no longer installs or enables Liquid Glass.
 
 `--omastore` reinstalls OmaStore's checksum-verified release into `~/.local`;
-`--plugin` and `--all` include it automatically. OmaVM and Omarchy AI are
-installed through OmaStore, including their system dependency checks. The
-Omarchy AI installer then sets up its Python environment, user service and all
-eight desktop plugins. Existing AI configuration and API keys stay outside
-this repository; a fresh machine needs its keys entered in the settings.
+`--all` includes it, while `--plugin` does not. The plugin installer uses the
+published Widget on Glass repository; unpublished edits to a local checkout
+are not part of a fresh installation.
 The source checkouts used by the plugin installers stay under
 `~/.local/share/dotfiles/sources/` and survive removal of this dotfiles clone.
 
-Existing plugin directories and the OmaVM CLI launcher are preserved under
+Existing plugin directories are preserved under
 `~/.local/state/dotfiles/plugin-backups/<timestamp>/` before replacement.
 These are manual recovery copies; `--restore` handles the separate dotfile
 backups, not application versions, compiled plugins or services.

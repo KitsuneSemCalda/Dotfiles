@@ -7,9 +7,9 @@
           "id": "omarchy.indicators"
         },
         {
-          "format": "dddd HH:mm",
-          "formatAlt": "d MMMM 'W'ww yyyy",
           "id": "omarchy.clock",
+          "format": "ddd d MMM HH:mm",
+          "formatAlt": "d MMMM 'W'ww yyyy",
           "verticalFormat": "HH\n—\nmm"
         },
         {
@@ -27,22 +27,21 @@
           "id": "omarchy.menu"
         },
         {
-          "id": "tornikegomareli.spaces"
+          "id": "tornikegomareli.spaces",
+          "showApps": "hover",
+          "iconSize": 16
         },
         {
+          "dynamicWidth": true,
           "id": "omarchy.media",
-          "showIcon": false,
-          "showTitle": false,
           "showArtist": false,
-          "dynamicWidth": true
+          "showIcon": false,
+          "showTitle": false
         }
       ],
       "right": [
         {
           "id": "omarchy.tray"
-        },
-        {
-          "id": "io.github.fasi96.liquid-glass"
         },
         {
           "id": "io.github.kitsunesemcalda.feader-rss"
@@ -67,17 +66,21 @@
         },
         {
           "id": "omarchy.power",
-          "showPercentage": true
+          "showPercentage": false
         }
       ]
     },
     "position": "top",
-    "transparent": true
+    "transparent": false
   },
   "idle": {
     "lock": 300,
     "screensaver": 150
   },
-  "plugins": [],
+  "plugins": [
+    {
+      "id": "kitsuneforgering.widget-on-glass"
+    }
+  ],
   "version": 1
 }

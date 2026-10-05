@@ -47,7 +47,7 @@ GetOptions(
 usage(0) if $help;
 
 $apps = $fonts = $plugin = $theme = $openrgb = 1 if $all;
-$omastore = 1 if $all || $plugin;
+$omastore = 1 if $all;
 
 if ($restore && ($backup || $apps || $fonts || $plugin || $theme || $openrgb || $omastore || $reboot)) {
     die "--restore cannot be combined with installation actions or --reboot\n";
@@ -554,19 +554,6 @@ sub command_output {
     return $result;
 }
 
-sub store_app {
-    my ($repo) = @_;
-    my $store = File::Spec->catfile($target, '.local', 'bin', 'omastore');
-    run_command($store, 'index', '--force', $repo);
-    run_command($store, 'install', $repo);
-    run_command($store, 'deps', '--install', $repo);
-    return if $dry_run;
-    my $detail = decode_json(command_output($store, 'show', '--json', $repo));
-    my $exec = $detail->{Install}{ExecPath};
-    die "OmaStore did not install an executable for $repo\n" unless defined $exec && -x $exec;
-    return $exec;
-}
-
 sub ensure_plugin {
     ensure_repo_packages('go');
     run_command('mkdir', '-p', File::Spec->catdir($target, '.config', 'omarchy', 'plugins'));
@@ -580,60 +567,20 @@ sub ensure_plugin {
 
     my $spaces = plugin_source('Spaces', 'https://github.com/tornikegomareli/omarchy-spaces.git');
     replace_plugin('tornikegomareli.spaces', $spaces);
-    my $glass = plugin_source('Liquid-Glass', 'https://github.com/fasi96/omarchy-liquid-glass.git');
-    replace_plugin('io.github.fasi96.liquid-glass', $glass);
-    # Its installer preserves state.json and looks.json and generates the Lua
-    # and terminal settings from them. These saved files are part of home/.
-    run_command('bash', File::Spec->catfile($glass, 'install.sh'), '--yes',
-        '--replace-hyprglass', '--hyprpm-update');
-
-    my $vm_exec = store_app('KitsuneForgering/OmaVM');
-    unless ($dry_run) {
-        my $bin = File::Spec->catdir($target, '.local', 'bin');
-        my $cli = File::Spec->catfile(dirname($vm_exec), 'omavm');
-        die "OmaVM CLI missing: $cli\n" unless -x $cli;
-        my $launcher = File::Spec->catfile($bin, 'omavm');
-        if (-e $launcher || -l $launcher) {
-            $plugin_backup_root //= reserve_backup_root(File::Spec->catdir($target, '.local', 'state', 'dotfiles', 'plugin-backups'));
-            run_command('cp', '-a', $launcher, File::Spec->catfile($plugin_backup_root, 'omavm-cli'));
-        }
-        # A wrapper preserves the release's sibling bin/data layout and keeps
-        # the checksum-verified binary owned by OmaStore.
-        my $staged = "$launcher.dotfiles-tmp-$$";
-        die "Staging path already exists: $staged\n" if -e $staged || -l $staged;
-        open my $fh, '>', $staged or die "Cannot write $staged: $!\n";
-        print {$fh} "#!/bin/sh\nexec " . shell_quote($cli) . ' "$@"' . "\n";
-        close $fh or die "Cannot close $staged: $!\n";
-        chmod 0755, $staged or die "Cannot chmod $staged: $!\n";
-        rename $staged, $launcher or die "Cannot replace $launcher: $!\n";
-    }
-    my $vm = plugin_source('OmaVM', 'https://github.com/KitsuneForgering/OmaVM.git');
-    replace_plugin('dev.omavm.bar', File::Spec->catdir($vm, 'contrib', 'dev.omavm.bar'));
-
-    my $ai_exec = store_app('omribenami/Omarchy-AI');
-    my $ai = $dry_run ? '<Omarchy-AI-release>' : dirname(dirname($ai_exec));
-    for my $id (qw(settings watchdog assistant-huds chat-hud window-labels myapi tv-discovery quota-alert)) {
-        replace_plugin("omarchy-ai.$id", File::Spec->catdir($ai, 'quickshell', 'plugins', "omarchy-ai.$id"));
-    }
-    # OmaStore only extracts the release. The full upstream installer provides
-    # dependencies, the venv, systemd unit and all eight rendered QML plugins.
-    run_command('bash', File::Spec->catfile($ai, 'install.sh'));
-    run_command('systemctl', '--user', 'enable', '--now', 'omarchy-ai.service');
-    run_command('systemctl', '--user', 'restart', 'omarchy-ai.service');
+    my $glass = plugin_source('Widget-on-glass', 'https://github.com/KitsuneForgering/Widget-on-glass.git');
+    replace_plugin('kitsuneforgering.widget-on-glass', $glass);
 
     run_command('omarchy-shell', 'shell', 'rescanPlugins');
     run_command('omarchy', 'plugin', 'disable', 'omarchy.workspaces');
     run_command('omarchy', 'plugin', 'enable', 'tornikegomareli.spaces', 'left');
-    for my $id ('io.github.fasi96.liquid-glass', 'io.github.kitsunesemcalda.feader-rss', 'dev.omavm.bar') {
-        run_command('omarchy', 'plugin', 'enable', $id, 'right');
-    }
+    run_command('omarchy', 'plugin', 'enable', 'io.github.kitsunesemcalda.feader-rss', 'right');
+    run_command('omarchy', 'plugin', 'enable', 'kitsuneforgering.widget-on-glass');
     run_command('omarchy', 'restart', 'shell');
     unless ($dry_run) {
         my $catalog = decode_json(command_output('omarchy', 'plugin', 'list', '--json'));
         my %enabled = map { $_->{id} => $_->{enabled} } @$catalog;
-        for my $id ('tornikegomareli.spaces', 'io.github.fasi96.liquid-glass',
-            'io.github.kitsunesemcalda.feader-rss', 'dev.omavm.bar',
-            map { "omarchy-ai.$_" } qw(settings watchdog assistant-huds chat-hud window-labels myapi tv-discovery quota-alert)) {
+        for my $id ('tornikegomareli.spaces', 'io.github.kitsunesemcalda.feader-rss',
+            'kitsuneforgering.widget-on-glass') {
             die "Plugin was not enabled: $id\n" unless $enabled{$id};
         }
     }
@@ -777,8 +724,8 @@ Usage: perl omarchy.pl [options]
   --restore          restores the most recent backup without deleting the copy
   --apps             removes old items and installs the requested apps/web apps
   --fonts            installs Lexend and enables the font profile
-  --plugin, --plugins replaces/enables all 12 desktop plugins and their backends
-  --omastore         installs/reinstalls OmaStore (also implied by --plugin)
+  --plugin, --plugins replaces/enables Feader RSS, Spaces and Widget on Glass
+  --omastore         installs/reinstalls OmaStore
   --reboot           reboots after successful installation and Hyprland validation
   --theme            installs/applies the Sword Art Omarchy theme
   --openrgb          installs the Dareu EK75 OpenRGB driver, udev rule and theme hook

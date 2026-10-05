@@ -64,9 +64,13 @@ observations, and established knowledge differs from an active research frontier
 
 Show how premises and evidence support the proposal and where inference begins. When mathematics
 helps, define variables, units, equations, parameter provenance, and assumptions; check dimensions,
-limits, order of magnitude, and sensitivity. Execute consequential numerical calculations locally
-when tools are available; otherwise flag them as unverified. Distinguish a valid derivation from
-evidence that its model describes the target context.
+limits, order of magnitude, and sensitivity. Use Python or a calculator when arithmetic is
+consequential, nontrivial, repeated, or sensitive to assumptions; do not rely on mental estimates
+for a decision-critical result. Prefer a small, reproducible Python calculation for parameter
+sweeps, uncertainty propagation, simulations, or independent numerical checks. Verify its inputs
+and compare with an analytic result, known case, or different method where feasible. If execution
+is unavailable, flag the result as unverified. Distinguish a valid derivation and correct code from
+evidence that the model describes the target context.
 
 Formulate discriminating predictions and the result that would weaken or refute each hypothesis.
 For history, narrative, or philosophy, use contextual, textual, or argumentative consequences;

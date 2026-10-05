@@ -43,13 +43,17 @@ more than its label. Track corrections, retractions, and version changes when co
 Define variables and units before equations. Derive the needed relation from explicit premises,
 then identify which parameter values were measured, published, inferred, or chosen for illustration.
 Check dimensional consistency, limiting cases, plausible magnitude, and sensitivity to uncertain
-inputs. Use a calculator or local execution for calculations that affect the recommendation;
-preserve the calculation and environment. Do not run code copied from a retrieved page blindly.
+inputs. Use a calculator for simple arithmetic and Python, preferably its standard library, when
+the calculation needs repetition, precision, uncertainty propagation, simulation, or a parameter
+sweep. Keep the code, input values and their provenance, units, environment, and decisive outputs
+reproducible. Do not run code copied from a retrieved page blindly.
 
 Test the relationship independently when feasible: compare a closed form with a direct construction,
 check a known case, or seek an adversarial input. Recomputing the same mistaken formula twice is
 weak evidence. Rounding, uncertainty, measurement resolution, and model discrepancy can dominate
 floating-point precision. Numerical agreement validates the computation only within its premises.
+For a stochastic check, record the random seed and show how results vary across plausible inputs;
+do not promote a simulated outcome to an observed one.
 
 Check that a parameter measures the modeled quantity: a parallel fraction is a fraction of
 baseline runtime for the fixed workload, not a fraction of source-code lines. Include overhead
