@@ -61,6 +61,8 @@ skills directory, since that copy isn't versioned.
 
 Use [evaluation.md](evaluation.md) for routing and behavior probes when a skill changes. These cases are prompts to run and inspect, not an automated pass claim.
 
+For GitHub work, `iss-audit` triages reports before `github-resolution` implements approved tickets. `pr-audit` reviews proposed changes before merge. `pr-bump` batches eligible Dependabot updates and sends suspicious ones to `pr-audit`. `release` runs only on an explicit release request.
+
 ## Adding a skill
 
 Create `skills/<slug>/SKILL.md` with frontmatter and instructions, then run
