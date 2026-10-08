@@ -1,0 +1,4 @@
+interface:
+  display_name: "Principled Refactoring"
+  short_description: "Refactor using context-sensitive design principles"
+  default_prompt: "Use $principled-refactoring to improve this code's structure while preserving its required behavior."

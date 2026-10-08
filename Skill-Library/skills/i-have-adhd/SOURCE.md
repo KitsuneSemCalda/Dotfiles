@@ -6,5 +6,5 @@
 - License: MIT (see [LICENSE](LICENSE)).
 - Imported: 2026-09-19.
 
-Skill files are unchanged from upstream. The upstream root license is included
-locally alongside this provenance record.
+The local SKILL.md and Gemini command are adapted from upstream. The upstream
+root license is included locally alongside this provenance record.

@@ -57,6 +57,10 @@ installer after editing a skill here to push the update out (or just re-run
 `omarchy.pl`/`win11.ps1`), and edit skills here rather than in an agent's own
 skills directory, since that copy isn't versioned.
 
+## Evaluating changes
+
+Use [evaluation.md](evaluation.md) for routing and behavior probes when a skill changes. These cases are prompts to run and inspect, not an automated pass claim.
+
 ## Adding a skill
 
 Create `skills/<slug>/SKILL.md` with frontmatter and instructions, then run

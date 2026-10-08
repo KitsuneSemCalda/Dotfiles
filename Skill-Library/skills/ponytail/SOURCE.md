@@ -6,5 +6,5 @@
 - License: MIT (see [LICENSE](LICENSE)).
 - Imported: 2026-09-19.
 
-Skill files are unchanged from upstream. The upstream root license is included
-locally alongside this provenance record.
+The local SKILL.md is adapted from upstream. The upstream root license is
+included locally alongside this provenance record.

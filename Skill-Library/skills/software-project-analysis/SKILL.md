@@ -1,11 +1,11 @@
 ---
 name: software-project-analysis
-description: Analyze an existing software project as an engineered computational system across computer science, software engineering, architecture, systems, security, reliability, data, and product concerns. Use for a broad, evidence-based technical assessment and prioritized improvement plan. For a narrower performance audit, repository-health audit, or product-readiness review, use the corresponding focused skill.
+description: Analyze an existing software project across implementation, architecture, systems, reliability, security, data, and operational constraints. Use for a broad technical assessment and prioritized engineering plan. For product readiness, performance, or repository health as the main question, use the corresponding focused review.
 ---
 
 # Software Project Analysis
 
-Explain what the project does, how it works, where its real constraints lie, and which changes create the greatest justified engineering and product value. Apply bodies of knowledge as diagnostic tools, never as a compliance scorecard. A technically interesting change must produce a useful capability or improve a relevant quality at an acceptable cost.
+Explain what the project does, how it works, where its real constraints lie, and which changes create the greatest justified engineering and user value. Apply bodies of knowledge as diagnostic tools, never as a compliance scorecard. A technically interesting change must produce a useful capability or improve a relevant quality at an acceptable cost.
 
 ## Boundary and evidence
 
@@ -25,7 +25,7 @@ Do not assume hyperscale. Do not excuse a harmful algorithm solely because today
 2. **Software engineering:** Examine requirements, contracts, error handling, boundaries, APIs, dependency management, build and release, and tests around invariants, failure cases, and regressions. Treat coverage as execution evidence, not proof of correctness. Judge code clarity by whether a maintainer can change behavior safely, not by line-count rules.
 3. **Software architecture:** Map components, relationships, data ownership, failure domains, deployment units, and dependency direction. Turn desired qualities into concrete scenarios, then assess coupling, change propagation, scalability, reliability, security, operability, and tradeoffs. Prefer minimum sufficient architecture.
 4. **Systems engineering:** Consider interactions with users, hardware, operating systems, external services, and operational processes. Check end-to-end failure paths, resource and lifecycle constraints, and whether local decisions preserve system-level behavior.
-5. **Product engineering:** Trace installation through first and repeated successful use. Assess user value, defaults, usability, documentation, updates, compatibility, diagnostics, support cost, and operational economics. Distinguish technical readiness from evidence of demand.
+5. **User consequences:** Connect technical findings to installation, operation, or the primary task when relevant. Leave demand, adoption, and commercial viability to a product review unless requested.
 
 Read [references/conditional-lenses.md](references/conditional-lenses.md) for domain-specific questions and named practices. Apply only lenses relevant to the project's type and risks. Explain why a lens applies before recommending a change.
 
@@ -39,4 +39,4 @@ Prioritize correctness, data loss, security, and reliability risks according to 
 
 ## Report
 
-Use [references/reporting.md](references/reporting.md). Include positive findings, relevant complexity analysis, applicable bodies of knowledge, productization gaps, and a prioritized plan. Keep categories concise when the project provides little evidence; mark them not assessed rather than manufacturing findings. The final recommendations must make the project better for its actual purpose, not more compliant with this skill.
+Use [references/reporting.md](references/reporting.md). Include positive findings, relevant complexity analysis, applicable engineering concerns, and a prioritized plan. Keep categories concise when the project provides little evidence; mark them not assessed rather than manufacturing findings. The final recommendations must make the project better for its actual purpose, not more compliant with this skill.
