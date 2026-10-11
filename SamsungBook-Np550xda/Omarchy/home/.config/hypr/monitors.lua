@@ -14,3 +14,13 @@ hl.monitor({
     position = 'auto',
     scale = monitor_scale,
 })
+
+-- O painel interno BOE NT156FHM-N61 tem gamut menor que sRGB. O perfil EDID
+-- permite ao Hyprland converter as cores para as primárias reais do painel.
+hl.monitor({
+    output = 'eDP-1',
+    mode = 'preferred',
+    position = 'auto',
+    scale = monitor_scale,
+    cm = 'edid',
+})

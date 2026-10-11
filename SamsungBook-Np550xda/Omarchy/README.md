@@ -17,9 +17,10 @@ Hyprland. The full snapshot used to make these decisions is at
 - Battery capacity observed at 30.7% of design capacity
 - Btrfs filesystem with swapfile and zram
 
-The initial choices follow this profile: scale 1 and interface/terminal
-fonts at size 20, plus `preferred` monitor mode, and moderate visual
-effects for the Iris Xe. The power profile is left to Omarchy's own
+The current choices follow this profile: scale 1, interface font size 14,
+terminal font size 11, preferred monitor mode and EDID color management for
+the internal BOE panel, plus moderate visual effects for the Iris Xe.
+The power profile is left to Omarchy's own
 `omarchy powerprofiles init`, which already runs at session start and picks
 `power-saver` or `balanced`/`performance` from the AC/battery signal.
 
@@ -35,7 +36,8 @@ home/
 │   ├── gtk-4.0/settings.ini
 │   ├── hypr/                   # Omarchy's native Lua configuration
 │   ├── omarchy/rss-reader.json # Feader-RSS feeds
-│   ├── omarchy/shell.json      # saved bar layout
+│   ├── omarchy/shell.json      # saved bar layout, adapted for Glass
+│   ├── omarchy/island.json     # current island preferences
 │   ├── omarchy-liquid-glass/   # retained Liquid Glass preferences
 │   ├── omarchy/shell.toml      # Omarchy interface base size
 │   └── starship.toml
@@ -69,17 +71,20 @@ any 1Password installation (package, AUR package, or browser extension) via
 `omarchy remove service`, since neither is part of this profile.
 It also registers the [Sword Art Omarchy](https://github.com/KitsuneSemCalda/Sword-Art-Omarchy)
 theme. `--plugin` (also `--plugins`) reinstalls the three external shell plugins
-in the current profile: Feader RSS, Spaces, and Widget on Glass. Spaces replaces
-the built-in workspace switcher; Widget on Glass is a panel opened on demand.
+in the current profile: Feader RSS, Spaces, and
+[Glass](https://plugins.omarchy.org/plugin.html?id=kitsuneforgering.glass).
+Spaces replaces the built-in workspace switcher; Glass provides the bar and menu. `SUPER + SPACE`
+opens the Glass menu.
 Feader RSS feeds live at `~/.config/omarchy/rss-reader.json`.
 
-The saved bar layout under `home/` matches the current shell configuration.
+The saved bar layout under `home/` preserves the current Spaces, media and
+island preferences while selecting the Glass menu button and bar.
 Older Liquid Glass preferences and Hyprland settings remain in this dotfile
 snapshot, but `--plugin` no longer installs or enables Liquid Glass.
 
 `--omastore` reinstalls OmaStore's checksum-verified release into `~/.local`;
 `--all` includes it, while `--plugin` does not. The plugin installer uses the
-published Widget on Glass repository; unpublished edits to a local checkout
+published Glass plugin repository; unpublished edits to a local checkout
 are not part of a fresh installation.
 The source checkouts used by the plugin installers stay under
 `~/.local/share/dotfiles/sources/` and survive removal of this dotfiles clone.

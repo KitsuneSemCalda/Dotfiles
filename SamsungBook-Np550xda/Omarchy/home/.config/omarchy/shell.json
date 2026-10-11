@@ -24,12 +24,7 @@
       ],
       "left": [
         {
-          "id": "omarchy.menu"
-        },
-        {
-          "id": "tornikegomareli.spaces",
-          "showApps": "hover",
-          "iconSize": 16
+          "id": "kitsuneforgering.glass"
         },
         {
           "dynamicWidth": true,
@@ -37,6 +32,14 @@
           "showArtist": false,
           "showIcon": false,
           "showTitle": false
+        },
+        {
+          "id": "tornikegomareli.spaces",
+          "density": "normal",
+          "iconSize": 16,
+          "labelStyle": "number",
+          "previewSize": "large",
+          "showApps": "hover"
         }
       ],
       "right": [
@@ -71,7 +74,7 @@
       ]
     },
     "position": "top",
-    "transparent": false
+    "transparent": true
   },
   "idle": {
     "lock": 300,
@@ -79,7 +82,7 @@
   },
   "plugins": [
     {
-      "id": "kitsuneforgering.widget-on-glass"
+      "id": "kitsuneforgering.glass"
     }
   ],
   "version": 1

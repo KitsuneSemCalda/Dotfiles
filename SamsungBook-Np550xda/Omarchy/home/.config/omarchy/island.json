@@ -1,0 +1,23 @@
+{
+  "addonOptions": {},
+  "addons": {},
+  "askAi": "chatgpt",
+  "bannerSeconds": 5,
+  "batteryActivity": true,
+  "bluetoothActivity": true,
+  "clipboard": true,
+  "clock24h": true,
+  "colorfulLiveActivities": true,
+  "colorfulSettingsIcons": true,
+  "controlCenterHidden": "game,power,keyboard",
+  "controlCenterOrder": "wifi,bluetooth,focus,night,sound,microphone,display",
+  "downloads": true,
+  "hoverLift": true,
+  "mediaPill": true,
+  "microphoneMuteControl": false,
+  "motionScale": 1.5,
+  "notch": false,
+  "systemUpdates": true,
+  "volumeHud": true,
+  "workspaceHud": false
+}

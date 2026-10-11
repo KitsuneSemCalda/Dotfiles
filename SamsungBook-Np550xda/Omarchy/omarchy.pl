@@ -460,6 +460,9 @@ sub ensure_apps {
         { name => 'ChatGPT',          url => 'https://chatgpt.com/' },
         { name => 'Grok',             url => 'https://grok.com/' },
         { name => 'Gemini',           url => 'https://gemini.google.com/' },
+        { name => 'Waz',              url => 'https://www.waz.com.br/'},
+        { name => 'Pichau',           url => 'https://www.pichau.com.br/'},
+        { name => 'ChipArt',          url => 'https://www.chipart.com.br/?'}
     );
 
     for my $app (@webapps) {
@@ -521,6 +524,17 @@ sub backup_plugin {
     run_command('cp', '-a', $dir, $dest);
 }
 
+sub retire_plugin {
+    my ($id) = @_;
+    my $dir = File::Spec->catdir($target, '.config', 'omarchy', 'plugins', $id);
+    return unless -e $dir || -l $dir;
+    $plugin_backup_root //= $dry_run
+        ? File::Spec->catdir($target, '.local', 'state', 'dotfiles', 'plugin-backups', $stamp)
+        : reserve_backup_root(File::Spec->catdir($target, '.local', 'state', 'dotfiles', 'plugin-backups'));
+    my $dest = File::Spec->catdir($plugin_backup_root, $id);
+    run_command('mv', $dir, $dest);
+}
+
 sub replace_plugin {
     my ($id, $source) = @_;
     my $dir = File::Spec->catdir($target, '.config', 'omarchy', 'plugins', $id);
@@ -567,20 +581,22 @@ sub ensure_plugin {
 
     my $spaces = plugin_source('Spaces', 'https://github.com/tornikegomareli/omarchy-spaces.git');
     replace_plugin('tornikegomareli.spaces', $spaces);
-    my $glass = plugin_source('Widget-on-glass', 'https://github.com/KitsuneForgering/Widget-on-glass.git');
-    replace_plugin('kitsuneforgering.widget-on-glass', $glass);
+    my $glass = plugin_source('omarchy-glass', 'https://github.com/KitsuneForgering/omarchy-glass.git');
+    replace_plugin('kitsuneforgering.glass', $glass);
+    retire_plugin('kitsuneforgering.widget-on-glass');
 
     run_command('omarchy-shell', 'shell', 'rescanPlugins');
     run_command('omarchy', 'plugin', 'disable', 'omarchy.workspaces');
     run_command('omarchy', 'plugin', 'enable', 'tornikegomareli.spaces', 'left');
     run_command('omarchy', 'plugin', 'enable', 'io.github.kitsunesemcalda.feader-rss', 'right');
-    run_command('omarchy', 'plugin', 'enable', 'kitsuneforgering.widget-on-glass');
+    run_command('omarchy', 'plugin', 'enable', 'kitsuneforgering.glass');
+
     run_command('omarchy', 'restart', 'shell');
     unless ($dry_run) {
         my $catalog = decode_json(command_output('omarchy', 'plugin', 'list', '--json'));
         my %enabled = map { $_->{id} => $_->{enabled} } @$catalog;
         for my $id ('tornikegomareli.spaces', 'io.github.kitsunesemcalda.feader-rss',
-            'kitsuneforgering.widget-on-glass') {
+            'kitsuneforgering.glass') {
             die "Plugin was not enabled: $id\n" unless $enabled{$id};
         }
     }
@@ -724,7 +740,7 @@ Usage: perl omarchy.pl [options]
   --restore          restores the most recent backup without deleting the copy
   --apps             removes old items and installs the requested apps/web apps
   --fonts            installs Lexend and enables the font profile
-  --plugin, --plugins replaces/enables Feader RSS, Spaces and Widget on Glass
+  --plugin, --plugins replaces/enables Feader RSS, Spaces and Glass
   --omastore         installs/reinstalls OmaStore
   --reboot           reboots after successful installation and Hyprland validation
   --theme            installs/applies the Sword Art Omarchy theme
