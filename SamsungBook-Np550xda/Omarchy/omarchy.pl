@@ -4,7 +4,9 @@ use strict;
 use warnings;
 
 use Cwd qw(abs_path);
+use Digest::MD5 ();
 use Digest::SHA ();
+use Encode qw(encode);
 use JSON::PP qw(encode_json decode_json);
 use File::Basename qw(dirname);
 use File::Copy qw(copy move);
@@ -18,6 +20,7 @@ my $dry_run = 0;
 my $backup  = 0;
 my $restore = 0;
 my $apps    = 0;
+my $bookmarks = 0;
 my $fonts   = 0;
 my $plugin  = 0;
 my $omastore = 0;
@@ -33,6 +36,7 @@ GetOptions(
     'backup'   => \$backup,
     'restore'  => \$restore,
     'apps'     => \$apps,
+    'bookmarks' => \$bookmarks,
     'fonts'    => \$fonts,
     'plugin|plugins' => \$plugin,
     'omastore' => \$omastore,
@@ -47,9 +51,10 @@ GetOptions(
 usage(0) if $help;
 
 $apps = $fonts = $plugin = $theme = $openrgb = 1 if $all;
+$bookmarks = 1 if $all;
 $omastore = 1 if $all;
 
-if ($restore && ($backup || $apps || $fonts || $plugin || $theme || $openrgb || $omastore || $reboot)) {
+if ($restore && ($backup || $apps || $bookmarks || $fonts || $plugin || $theme || $openrgb || $omastore || $reboot)) {
     die "--restore cannot be combined with installation actions or --reboot\n";
 }
 
@@ -67,7 +72,7 @@ die "Missing source directory: $source_root\n" unless -d $source_root;
 die "Missing destination: $target\n" unless -d $target;
 
 my $home_root = abs_path($ENV{HOME} // '') // '';
-if (($apps || $fonts || $plugin || $theme || $openrgb || $omastore || $reboot) && $target ne $home_root) {
+if (($apps || $bookmarks || $fonts || $plugin || $theme || $openrgb || $omastore || $reboot) && $target ne $home_root) {
     die "Omarchy actions can only use the real HOME; use --target only to test file installation\n";
 }
 
@@ -209,6 +214,7 @@ if ($target eq $home_root) {
 }
 
 ensure_fonts()  if $fonts;
+ensure_chromium_bookmarks() if $apps || $bookmarks;
 ensure_apps()   if $apps;
 ensure_omastore() if $omastore;
 ensure_plugin() if $plugin;
@@ -476,6 +482,120 @@ sub ensure_apps {
     }
 }
 
+sub chromium_running {
+    open my $processes, '-|', 'pgrep', '-u', "$<", '-x', 'chromium'
+        or die "Could not check whether Chromium is running: $!\n";
+    local $/ = "\n";
+    my $pid = <$processes>;
+    close $processes;
+    return defined $pid;
+}
+
+sub bookmark_digest_node {
+    my ($md5, $sha256, $node) = @_;
+    my @fields = ($node->{id}, encode('UTF-16LE', $node->{name} // ''), $node->{type});
+    push @fields, $node->{url} if $node->{type} eq 'url';
+    $md5->add(@fields);
+    $sha256->add(@fields);
+    bookmark_digest_node($md5, $sha256, $_) for @{$node->{children} // []};
+}
+
+sub bookmark_checksums {
+    my ($data) = @_;
+    my $md5 = Digest::MD5->new;
+    my $sha256 = Digest::SHA->new(256);
+    bookmark_digest_node($md5, $sha256, $data->{roots}{$_})
+        for qw(bookmark_bar other synced);
+    return ($md5->hexdigest, $sha256->hexdigest);
+}
+
+sub bookmark_max_id {
+    my ($node) = @_;
+    my $max = $node->{id} // 0;
+    for my $child (@{$node->{children} // []}) {
+        my $id = bookmark_max_id($child);
+        $max = $id if $id > $max;
+    }
+    return $max;
+}
+
+sub new_bookmark_guid {
+    open my $uuid, '<', '/proc/sys/kernel/random/uuid'
+        or die "Could not generate a bookmark GUID: $!\n";
+    my $guid = <$uuid>;
+    close $uuid;
+    chomp $guid;
+    return $guid;
+}
+
+sub ensure_chromium_bookmarks {
+    my $path = File::Spec->catfile($target, '.config', 'chromium', 'Default', 'Bookmarks');
+    unless (-e $path || -l $path) {
+        say 'SKIP    Chromium bookmarks (open Chromium once, close it, then retry with --bookmarks)';
+        return;
+    }
+    die "Expected a regular Chromium Bookmarks file at $path\n" unless -f $path && !-l $path;
+
+    open my $input, '<:raw', $path or die "Cannot read $path: $!\n";
+    my $original = do { local $/; <$input> };
+    close $input;
+    my $data = decode_json($original);
+    die "Unexpected Chromium Bookmarks format in $path\n"
+        unless $data->{version} == 1 && ref($data->{roots}{bookmark_bar}{children}) eq 'ARRAY'
+            && $data->{roots}{other} && $data->{roots}{synced};
+
+    my ($old_md5, $old_sha256) = bookmark_checksums($data);
+    die "Chromium Bookmarks checksum mismatch in $path; refusing to edit it\n"
+        if ($data->{checksum} // '') ne $old_md5
+            || (exists $data->{checksum_sha256} && $data->{checksum_sha256} ne $old_sha256);
+
+    my $bar = $data->{roots}{bookmark_bar};
+    my @wanted = (
+        ['FrankMD', 'http://127.0.0.1:7591/'],
+        ['Pi-hole', 'http://127.0.0.1:8080/admin/'],
+        ['ai-memory', 'http://127.0.0.1:49374/web'],
+    );
+    my $next_id = 1 + (sort { $b <=> $a } map { bookmark_max_id($data->{roots}{$_}) }
+        qw(bookmark_bar other synced))[0];
+    my $date = '' . ((time + 11644473600) * 1_000_000);
+    my $changed = 0;
+    for my $item (@wanted) {
+        my ($name, $url) = @$item;
+        if (grep { $_->{type} eq 'url' && $_->{url} eq $url } @{$bar->{children}}) {
+            say "OK      Chromium bookmark $name";
+            next;
+        }
+        say(($dry_run ? 'BOOKMARK? ' : 'BOOKMARK  ') . "$name -> $url");
+        push @{$bar->{children}}, {
+            date_added => $date, date_last_used => '0', guid => new_bookmark_guid(),
+            id => '' . $next_id++, name => $name, type => 'url', url => $url,
+        };
+        $changed = 1;
+    }
+    return unless $changed && !$dry_run;
+    die "Close Chromium before updating its bookmarks, then retry with --bookmarks\n"
+        if chromium_running();
+
+    $bar->{date_modified} = $date;
+    my ($md5, $sha256) = bookmark_checksums($data);
+    $data->{checksum} = $md5;
+    $data->{checksum_sha256} = $sha256 if exists $data->{checksum_sha256};
+
+    my $backup_dir = reserve_backup_root(File::Spec->catdir(
+        $target, '.local', 'state', 'dotfiles', 'bookmark-backups'));
+    copy($path, File::Spec->catfile($backup_dir, 'Bookmarks'))
+        or die "Could not back up Chromium bookmarks: $!\n";
+    my $staged = "$path.dotfiles-tmp-$$";
+    open my $output, '>:raw', $staged or die "Cannot write $staged: $!\n";
+    print {$output} JSON::PP->new->utf8->pretty->canonical->encode($data);
+    close $output or die "Cannot close $staged: $!\n";
+    chmod((stat($path))[2] & 0777, $staged) or die "Cannot set permissions on $staged: $!\n";
+    die "Chromium opened while updating bookmarks; close it and retry\n"
+        if chromium_running();
+    rename($staged, $path) or die "Cannot replace $path: $!\n";
+    say "BACKUP  Chromium bookmarks -> $backup_dir";
+}
+
 sub ensure_skills {
     my $installer = File::Spec->catfile(
         $repo_root, File::Spec->updir, File::Spec->updir, 'Skill-Library', 'install.pl',
@@ -739,13 +859,14 @@ Usage: perl omarchy.pl [options]
   --backup           moves conflicts to ~/.local/state/dotfiles/backups/
   --restore          restores the most recent backup without deleting the copy
   --apps             removes old items and installs the requested apps/web apps
+  --bookmarks        adds FrankMD, Pi-hole and ai-memory to the Chromium bookmarks bar
   --fonts            installs Lexend and enables the font profile
   --plugin, --plugins replaces/enables Feader RSS, Spaces and Glass
   --omastore         installs/reinstalls OmaStore
   --reboot           reboots after successful installation and Hyprland validation
   --theme            installs/applies the Sword Art Omarchy theme
   --openrgb          installs the Dareu EK75 OpenRGB driver, udev rule and theme hook
-  --all              runs --apps --fonts --plugin --omastore --theme --openrgb
+  --all              runs --apps --bookmarks --fonts --plugin --omastore --theme --openrgb
   --target PATH      uses a different root directory only to test file installation
   --help             shows this help
 USAGE

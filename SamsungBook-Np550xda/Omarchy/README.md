@@ -140,10 +140,17 @@ the copies themselves, but only runs against the real HOME — it is skipped
 when `--target` points elsewhere for testing.
 
 The steps can also be run separately with `--fonts`, `--apps`,
-`--plugin`, `--omastore`, `--theme`, or `--openrgb`. `--apps` uses the official repositories for
+`--bookmarks`, `--plugin`, `--omastore`, `--theme`, or `--openrgb`. `--apps` uses the official repositories for
 PrismLauncher and the AUR packages for Bitwarden, AppFlowy, and CurseForge,
 installs the web apps listed above (skipping any already present), and
 removes HEY/Basecamp and 1Password if it finds them installed.
+`--apps` and `--bookmarks` add FrankMD, Pi-hole and ai-memory to the Chromium
+bookmarks bar, opening `http://127.0.0.1:7591/`,
+`http://127.0.0.1:8080/admin/` and `http://127.0.0.1:49374/web`
+in normal browser tabs. Existing bookmarks are preserved, duplicates are
+skipped, and a copy of the file is saved under
+`~/.local/state/dotfiles/bookmark-backups/` before changes. Close Chromium
+before running either option; the Default profile must already exist.
 
 To reinstall the complete profile, including apps, plugins, OmaStore, fonts,
 theme and OpenRGB, and reboot after successful installation:
@@ -177,7 +184,8 @@ they are reachable from trusted devices on the local network:
   self-hosted Markdown notes editor, port `7591`, stores files in
   `~/Documents/notes` (no database).
 - **[ai-memory](https://github.com/akitaonrails/ai-memory)** (`2.3.0`) —
-  persistent memory shared across AI agents, port `49374`. The
+  persistent memory shared across AI agents, port `49374`, with its built-in
+  web interface at `/web`. The
   `~/.local/bin/ai-memory` wrapper (`scripts/docker-stack.pl --agents`) is
   downloaded from the matching `v2.3.0` GitHub release and verified against a
   SHA-256 checksum pinned in `ensure_wrapper()`, not fetched at run time.

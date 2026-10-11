@@ -5,6 +5,7 @@ import pathlib
 import shutil
 import subprocess
 import tempfile
+from hashlib import md5
 
 installer = pathlib.Path(__file__).resolve().parents[1] / 'Omarchy/omarchy.pl'
 with tempfile.TemporaryDirectory() as tmp:
@@ -95,7 +96,7 @@ with tempfile.TemporaryDirectory() as tmp:
     fake_bin.mkdir()
     ids = {
         'Spaces': 'tornikegomareli.spaces',
-        'Widget-on-glass': 'kitsuneforgering.widget-on-glass',
+        'omarchy-glass': 'kitsuneforgering.glass',
     }
     for name in ['OmaStore', 'Feader-RSS', *ids]:
         directory = fixtures / name
@@ -126,13 +127,18 @@ if name == 'git' and args[0] == 'clone':
 elif name == 'hyprctl' and args[0] == 'configerrors':
     print(os.environ.get('CONFIG_ERRORS', ''), end='')
 elif name == 'omarchy' and args[:2] == ['plugin', 'list']:
-    ids = ['tornikegomareli.spaces', 'io.github.kitsunesemcalda.feader-rss', 'kitsuneforgering.widget-on-glass']
+    ids = ['tornikegomareli.spaces', 'io.github.kitsunesemcalda.feader-rss', 'kitsuneforgering.glass']
     print(json.dumps([{'id': x, 'enabled': True} for x in ids]))
 elif name == 'omarchy' and args[:2] == ['plugin', 'validate']:
     assert (pathlib.Path(args[2]) / 'manifest.json').is_file()
+elif name == 'pgrep':
+    if os.environ.get('CHROMIUM_PID'):
+        print(os.environ['CHROMIUM_PID'])
+    else:
+        sys.exit(1)
 ''')
     fake_tool.chmod(0o755)
-    for name in ['git', 'omarchy', 'omarchy-shell', 'hyprctl', 'systemctl']:
+    for name in ['git', 'omarchy', 'omarchy-shell', 'hyprctl', 'systemctl', 'pgrep']:
         (fake_bin / name).symlink_to(fake_tool)
     env = {**os.environ, 'HOME': str(target), 'PATH': f"{fake_bin}:{os.environ['PATH']}",
            'FIXTURES': str(fixtures), 'COMMAND_LOG': str(log), 'FAKE_BIN': str(fake_bin)}
@@ -164,7 +170,53 @@ elif name == 'omarchy' and args[:2] == ['plugin', 'validate']:
     before = log.read_bytes()
     preview = run_plugin('--all', '--reboot', '--dry-run')
     assert log.read_bytes() == before
+    assert 'SKIP    Chromium bookmarks' in preview.stdout
     assert "'systemctl' 'reboot'" in preview.stdout
+
+    # The bookmarks step merges into an existing Chromium profile and is idempotent.
+    def checksum(bookmarks):
+        digest = md5()
+        def add_node(node):
+            digest.update(node['id'].encode())
+            digest.update(node['name'].encode('utf-16-le'))
+            digest.update(node['type'].encode())
+            if node['type'] == 'url':
+                digest.update(node['url'].encode())
+            else:
+                for child in node['children']:
+                    add_node(child)
+        for key in ('bookmark_bar', 'other', 'synced'):
+            add_node(bookmarks['roots'][key])
+        return digest.hexdigest()
+
+    bookmark_file = target / '.config/chromium/Default/Bookmarks'
+    bookmark_file.parent.mkdir(parents=True)
+    bookmarks = {'version': 1, 'roots': {
+        'bookmark_bar': {'id': '1', 'name': 'Bookmarks bar', 'type': 'folder',
+                         'children': [{'id': '4', 'name': 'Existing', 'type': 'url',
+                                       'url': 'https://example.org/'}]},
+        'other': {'id': '2', 'name': 'Other bookmarks', 'type': 'folder', 'children': []},
+        'synced': {'id': '3', 'name': 'Mobile bookmarks', 'type': 'folder', 'children': []},
+    }}
+    bookmarks['checksum'] = checksum(bookmarks)
+    bookmark_file.write_text(json.dumps(bookmarks))
+    original_bookmarks = bookmark_file.read_bytes()
+    run_plugin('--bookmarks', success=False, extra_env={'CHROMIUM_PID': '123'})
+    assert bookmark_file.read_bytes() == original_bookmarks
+    run_plugin('--bookmarks')
+    updated = json.loads(bookmark_file.read_text())
+    assert [(item['name'], item['url']) for item in updated['roots']['bookmark_bar']['children']] == [
+        ('Existing', 'https://example.org/'),
+        ('FrankMD', 'http://127.0.0.1:7591/'),
+        ('Pi-hole', 'http://127.0.0.1:8080/admin/'),
+        ('ai-memory', 'http://127.0.0.1:49374/web'),
+    ]
+    assert updated['checksum'] == checksum(updated)
+    assert next((target / '.local/state/dotfiles/bookmark-backups').glob('*/Bookmarks')).read_bytes() == original_bookmarks
+    after_first_run = bookmark_file.read_bytes()
+    run_plugin('--bookmarks')
+    assert bookmark_file.read_bytes() == after_first_run
+
     log.write_text('')
     run_plugin('--plugin', '--reboot', success=False, extra_env={'FAIL_BACKEND': '1'})
     assert ['systemctl', 'reboot'] not in [json.loads(line) for line in log.read_text().splitlines()]
@@ -173,4 +225,4 @@ elif name == 'omarchy' and args[:2] == ['plugin', 'validate']:
     assert ['systemctl', 'reboot'] not in [json.loads(line) for line in log.read_text().splitlines()]
     run('--plugin', success=False)  # A test --target cannot request desktop actions.
     run_plugin('--restore', '--reboot', success=False)
-print('OK: copies, backup/restore, current plugin replacement, backend and reboot guards')
+print('OK: copies, backup/restore, plugins, Chromium bookmarks and reboot guards')
