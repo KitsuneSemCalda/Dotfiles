@@ -220,6 +220,10 @@ ensure_omastore() if $omastore;
 ensure_plugin() if $plugin;
 ensure_theme()  if $theme;
 ensure_openrgb() if $openrgb;
+if ($target eq $home_root && -x File::Spec->catfile($target, '.local', 'bin', 'obs-theme-slates')) {
+    ensure_repo_packages('python-pillow');
+    run_command(File::Spec->catfile($target, '.local', 'bin', 'obs-theme-slates'));
+}
 
 if ($plugin || $reboot) {
     run_command('hyprctl', 'reload');

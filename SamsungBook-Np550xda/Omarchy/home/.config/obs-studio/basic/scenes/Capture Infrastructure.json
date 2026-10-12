@@ -122,127 +122,36 @@
       "hotkeys": {}
     },
     {
-      "id": "color_source",
-      "name": "Slate Accent",
-      "uuid": "82b2927e-4e4b-5278-8559-7278529bd889",
+      "id": "image_source",
+      "name": "Starting Slate",
+      "uuid": "beaa83d8-5acc-53e2-b0ab-a2033738eb18",
       "settings": {
-        "color": 4290959172,
-        "width": 1100,
-        "height": 6
+        "file": "/home/kitsune/.local/state/obs-theme-slates/starting.png",
+        "unload": false
       },
       "mixers": 0,
       "volume": 1.0,
       "hotkeys": {}
     },
     {
-      "id": "text_ft2_source",
-      "name": "Starting Title",
-      "uuid": "20d191b5-282e-50e2-b597-75a895191184",
+      "id": "image_source",
+      "name": "BRB Slate",
+      "uuid": "cec22646-7faa-581e-88bc-8f06ad5651c2",
       "settings": {
-        "text": "INICIANDO EM INSTANTES",
-        "font": {
-          "face": "Lexend",
-          "size": 74,
-          "flags": 1,
-          "style": "Bold"
-        },
-        "color1": 4294967295,
-        "color2": 4294967295
+        "file": "/home/kitsune/.local/state/obs-theme-slates/brb.png",
+        "unload": false
       },
       "mixers": 0,
       "volume": 1.0,
       "hotkeys": {}
     },
     {
-      "id": "text_ft2_source",
-      "name": "Starting Subtitle",
-      "uuid": "4fe7b538-bc9a-57f6-9424-1adac4349ef1",
+      "id": "image_source",
+      "name": "Ending Slate",
+      "uuid": "78ce65c2-4ae3-5847-ae9e-2476328116a4",
       "settings": {
-        "text": "A transmiss\u00e3o come\u00e7ar\u00e1 em breve",
-        "font": {
-          "face": "Lexend",
-          "size": 38,
-          "flags": 1,
-          "style": "Bold"
-        },
-        "color1": 4294967295,
-        "color2": 4294967295
-      },
-      "mixers": 0,
-      "volume": 1.0,
-      "hotkeys": {}
-    },
-    {
-      "id": "text_ft2_source",
-      "name": "BRB Title",
-      "uuid": "51805e51-014d-51d8-b708-6ecddb2972db",
-      "settings": {
-        "text": "J\u00c1 VOLTO",
-        "font": {
-          "face": "Lexend",
-          "size": 74,
-          "flags": 1,
-          "style": "Bold"
-        },
-        "color1": 4294967295,
-        "color2": 4294967295
-      },
-      "mixers": 0,
-      "volume": 1.0,
-      "hotkeys": {}
-    },
-    {
-      "id": "text_ft2_source",
-      "name": "BRB Subtitle",
-      "uuid": "8e07d466-681c-5fb0-ab30-e7f39522929c",
-      "settings": {
-        "text": "A transmiss\u00e3o continua em instantes",
-        "font": {
-          "face": "Lexend",
-          "size": 38,
-          "flags": 1,
-          "style": "Bold"
-        },
-        "color1": 4294967295,
-        "color2": 4294967295
-      },
-      "mixers": 0,
-      "volume": 1.0,
-      "hotkeys": {}
-    },
-    {
-      "id": "text_ft2_source",
-      "name": "Ending Title",
-      "uuid": "978349d9-1b9c-5c4e-b319-6a4fefb7f999",
-      "settings": {
-        "text": "TRANSMISS\u00c3O ENCERRADA",
-        "font": {
-          "face": "Lexend",
-          "size": 74,
-          "flags": 1,
-          "style": "Bold"
-        },
-        "color1": 4294967295,
-        "color2": 4294967295
-      },
-      "mixers": 0,
-      "volume": 1.0,
-      "hotkeys": {}
-    },
-    {
-      "id": "text_ft2_source",
-      "name": "Ending Subtitle",
-      "uuid": "8bb979c1-b54b-5c38-9632-04f8559cd45e",
-      "settings": {
-        "text": "Obrigado por assistir",
-        "font": {
-          "face": "Lexend",
-          "size": 38,
-          "flags": 1,
-          "style": "Bold"
-        },
-        "color1": 4294967295,
-        "color2": 4294967295
+        "file": "/home/kitsune/.local/state/obs-theme-slates/ending.png",
+        "unload": false
       },
       "mixers": 0,
       "volume": 1.0,
@@ -736,28 +645,11 @@
       "name": "Starting",
       "uuid": "8d49e65f-618a-5106-b713-2cf9c8baa967",
       "settings": {
-        "id_counter": 6,
+        "id_counter": 3,
         "custom_size": false,
         "items": [
           {
             "id": 1,
-            "name": "Slate Background",
-            "source_uuid": "97b87aab-ee1a-5687-b458-1c2ccd4a60e8",
-            "visible": true,
-            "locked": false,
-            "pos": {
-              "x": 0,
-              "y": 0
-            },
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "align": 5,
-            "bounds_type": 0
-          },
-          {
-            "id": 2,
             "name": "Audio Buses",
             "source_uuid": "5ed334e9-09fc-575c-8965-24c3dbebdefc",
             "visible": true,
@@ -774,48 +666,14 @@
             "bounds_type": 0
           },
           {
-            "id": 3,
-            "name": "Slate Accent",
-            "source_uuid": "82b2927e-4e4b-5278-8559-7278529bd889",
+            "id": 2,
+            "name": "Starting Slate",
+            "source_uuid": "beaa83d8-5acc-53e2-b0ab-a2033738eb18",
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 250,
-              "y": 650
-            },
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "align": 5,
-            "bounds_type": 0
-          },
-          {
-            "id": 4,
-            "name": "Starting Subtitle",
-            "source_uuid": "4fe7b538-bc9a-57f6-9424-1adac4349ef1",
-            "visible": true,
-            "locked": false,
-            "pos": {
-              "x": 250,
-              "y": 555
-            },
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "align": 5,
-            "bounds_type": 0
-          },
-          {
-            "id": 5,
-            "name": "Starting Title",
-            "source_uuid": "20d191b5-282e-50e2-b597-75a895191184",
-            "visible": true,
-            "locked": false,
-            "pos": {
-              "x": 245,
-              "y": 435
+              "x": 0,
+              "y": 0
             },
             "scale": {
               "x": 1,
@@ -835,28 +693,11 @@
       "name": "BRB",
       "uuid": "dced8986-c1e7-53a5-803a-748055795f01",
       "settings": {
-        "id_counter": 6,
+        "id_counter": 3,
         "custom_size": false,
         "items": [
           {
             "id": 1,
-            "name": "Slate Background",
-            "source_uuid": "97b87aab-ee1a-5687-b458-1c2ccd4a60e8",
-            "visible": true,
-            "locked": false,
-            "pos": {
-              "x": 0,
-              "y": 0
-            },
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "align": 5,
-            "bounds_type": 0
-          },
-          {
-            "id": 2,
             "name": "Audio Buses",
             "source_uuid": "5ed334e9-09fc-575c-8965-24c3dbebdefc",
             "visible": true,
@@ -873,48 +714,14 @@
             "bounds_type": 0
           },
           {
-            "id": 3,
-            "name": "Slate Accent",
-            "source_uuid": "82b2927e-4e4b-5278-8559-7278529bd889",
+            "id": 2,
+            "name": "BRB Slate",
+            "source_uuid": "cec22646-7faa-581e-88bc-8f06ad5651c2",
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 250,
-              "y": 650
-            },
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "align": 5,
-            "bounds_type": 0
-          },
-          {
-            "id": 4,
-            "name": "BRB Subtitle",
-            "source_uuid": "8e07d466-681c-5fb0-ab30-e7f39522929c",
-            "visible": true,
-            "locked": false,
-            "pos": {
-              "x": 250,
-              "y": 555
-            },
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "align": 5,
-            "bounds_type": 0
-          },
-          {
-            "id": 5,
-            "name": "BRB Title",
-            "source_uuid": "51805e51-014d-51d8-b708-6ecddb2972db",
-            "visible": true,
-            "locked": false,
-            "pos": {
-              "x": 245,
-              "y": 435
+              "x": 0,
+              "y": 0
             },
             "scale": {
               "x": 1,
@@ -934,28 +741,11 @@
       "name": "Ending",
       "uuid": "b2ac84a0-f94b-57e4-bec8-b6a7c45bdd9a",
       "settings": {
-        "id_counter": 6,
+        "id_counter": 3,
         "custom_size": false,
         "items": [
           {
             "id": 1,
-            "name": "Slate Background",
-            "source_uuid": "97b87aab-ee1a-5687-b458-1c2ccd4a60e8",
-            "visible": true,
-            "locked": false,
-            "pos": {
-              "x": 0,
-              "y": 0
-            },
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "align": 5,
-            "bounds_type": 0
-          },
-          {
-            "id": 2,
             "name": "Audio Buses",
             "source_uuid": "5ed334e9-09fc-575c-8965-24c3dbebdefc",
             "visible": true,
@@ -972,48 +762,14 @@
             "bounds_type": 0
           },
           {
-            "id": 3,
-            "name": "Slate Accent",
-            "source_uuid": "82b2927e-4e4b-5278-8559-7278529bd889",
+            "id": 2,
+            "name": "Ending Slate",
+            "source_uuid": "78ce65c2-4ae3-5847-ae9e-2476328116a4",
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 250,
-              "y": 650
-            },
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "align": 5,
-            "bounds_type": 0
-          },
-          {
-            "id": 4,
-            "name": "Ending Subtitle",
-            "source_uuid": "8bb979c1-b54b-5c38-9632-04f8559cd45e",
-            "visible": true,
-            "locked": false,
-            "pos": {
-              "x": 250,
-              "y": 555
-            },
-            "scale": {
-              "x": 1,
-              "y": 1
-            },
-            "align": 5,
-            "bounds_type": 0
-          },
-          {
-            "id": 5,
-            "name": "Ending Title",
-            "source_uuid": "978349d9-1b9c-5c4e-b319-6a4fefb7f999",
-            "visible": true,
-            "locked": false,
-            "pos": {
-              "x": 245,
-              "y": 435
+              "x": 0,
+              "y": 0
             },
             "scale": {
               "x": 1,

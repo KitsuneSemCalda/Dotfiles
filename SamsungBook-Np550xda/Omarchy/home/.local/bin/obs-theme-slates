@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+"""Render OBS intermission scenes from the active Omarchy palette."""
+
+import os
+import pathlib
+import shutil
+import subprocess
+import time
+import tomllib
+
+from PIL import Image, ImageDraw, ImageFont
+
+
+HOME = pathlib.Path.home()
+CURRENT = HOME / '.local/state/omarchy/current'
+OUTPUT = HOME / '.local/state/obs-theme-slates'
+SIZE = (1920, 1080)
+SCENES = {
+    'starting': ('INICIANDO EM INSTANTES', 'A transmissão começará em breve'),
+    'brb': ('JÁ VOLTO', 'A transmissão continua em instantes'),
+    'ending': ('TRANSMISSÃO ENCERRADA', 'Obrigado por assistir'),
+}
+
+
+def font_path():
+    for family in ('Lexend', 'DejaVu Sans'):
+        result = subprocess.run(
+            ['fc-match', '-f', '%{file}', family], capture_output=True, text=True,
+            check=False,
+        )
+        path = pathlib.Path(result.stdout.strip())
+        if result.returncode == 0 and path.is_file():
+            return path
+    raise RuntimeError('Nenhuma fonte utilizável encontrada via fontconfig')
+
+
+def fit_font(path, text, initial_size, max_width):
+    size = initial_size
+    while size >= 24:
+        font = ImageFont.truetype(str(path), size)
+        if ImageDraw.Draw(Image.new('RGB', (1, 1))).textlength(text, font=font) <= max_width:
+            return font
+        size -= 2
+    return ImageFont.truetype(str(path), 24)
+
+
+def palette():
+    path = CURRENT / 'theme/colors.toml'
+    with path.open('rb') as stream:
+        colors = tomllib.load(stream)
+    for key in ('background', 'foreground', 'accent'):
+        value = colors[key]
+        if not isinstance(value, str) or len(value) != 7 or value[0] != '#':
+            raise ValueError(f'Cor inválida em {path}: {key}')
+        int(value[1:], 16)
+    return colors
+
+
+def render(name, heading, subtitle, colors, family, theme_name):
+    background = colors['background']
+    foreground = colors['foreground']
+    accent = colors['accent']
+    image = Image.new('RGB', SIZE, background)
+    draw = ImageDraw.Draw(image)
+
+    # Broad, simple geometry stays legible after OBS scales its preview.
+    draw.rectangle((0, 0, 18, SIZE[1]), fill=accent)
+    draw.rectangle((248, 382, 1672, 386), fill=accent)
+    draw.rectangle((248, 692, 1100, 698), fill=accent)
+    draw.rectangle((248, 798, 1672, 800), fill=colors.get('lighter_background', accent))
+
+    theme_font = fit_font(family, theme_name, 32, 1420)
+    title_font = fit_font(family, heading, 88, 1420)
+    subtitle_font = fit_font(family, subtitle, 42, 1420)
+    draw.text((250, 306), theme_name, font=theme_font, fill=accent)
+    draw.text((250, 426), heading, font=title_font, fill=foreground)
+    draw.text((254, 570), subtitle, font=subtitle_font, fill=foreground)
+
+    OUTPUT.mkdir(parents=True, exist_ok=True)
+    destination = OUTPUT / f'{name}.png'
+    if destination.exists():
+        previous = OUTPUT / 'previous'
+        previous.mkdir(exist_ok=True)
+        shutil.copy2(destination, previous / destination.name)
+    temporary = OUTPUT / f'.{name}.{os.getpid()}.png'
+    try:
+        image.save(temporary, 'PNG', optimize=True)
+        # OBS image sources poll whole-second mtimes while visible.
+        old_mtime = int(destination.stat().st_mtime) if destination.exists() else 0
+        stamp = max(int(time.time()), old_mtime + 1)
+        os.utime(temporary, (stamp, stamp))
+        temporary.replace(destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def main():
+    colors = palette()
+    family = font_path()
+    name_file = CURRENT / 'theme.name'
+    theme_name = name_file.read_text(encoding='utf-8').strip().replace('-', ' ').upper()
+    for name, (heading, subtitle) in SCENES.items():
+        render(name, heading, subtitle, colors, family, theme_name)
+
+
+if __name__ == '__main__':
+    main()

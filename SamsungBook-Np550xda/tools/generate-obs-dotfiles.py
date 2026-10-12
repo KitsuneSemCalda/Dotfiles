@@ -74,16 +74,25 @@ def collection(platform):
                              'color1': 0xffffffff, 'color2': 0xffffffff},
                 'mixers': 0, 'volume': 1.0, 'hotkeys': {}}
 
-    slates = [color('Slate Background', '101820', 1920, 1080),
-              color('Slate Accent', '44d7c2', 1100, 6)]
+    slates = [color('Slate Background', '101820', 1920, 1080)]
     slate_text = {
         'Starting': ('INICIANDO EM INSTANTES', 'A transmissão começará em breve'),
         'BRB': ('JÁ VOLTO', 'A transmissão continua em instantes'),
         'Ending': ('TRANSMISSÃO ENCERRADA', 'Obrigado por assistir'),
     }
-    for name, (heading, subtitle) in slate_text.items():
-        slates.extend((title(name + ' Title', heading, 74),
-                       title(name + ' Subtitle', subtitle, 38)))
+    if platform == 'linux':
+        for name in slate_text:
+            slates.append({'id': 'image_source', 'name': name + ' Slate',
+                           'uuid': uid(name + ' Slate'),
+                           'settings': {'file': str(pathlib.Path.home() / '.local/state/obs-theme-slates' /
+                                                    (name.lower() + '.png')),
+                                        'unload': False},
+                           'mixers': 0, 'volume': 1.0, 'hotkeys': {}})
+    else:
+        slates.append(color('Slate Accent', '44d7c2', 1100, 6))
+        for name, (heading, subtitle) in slate_text.items():
+            slates.extend((title(name + ' Title', heading, 74),
+                           title(name + ' Subtitle', subtitle, 38)))
 
     sources = [camera, monitor, window, *audio, *slates,
                scene('Capture Monitor', ('Monitor Device',)),
@@ -100,13 +109,15 @@ def collection(platform):
         'Camera Fullscreen': ('Slate Background', 'Camera Device', 'Audio Buses'),
     }
     for name in slate_text:
-        recipes[name] = ('Slate Background', 'Audio Buses', 'Slate Accent',
-                         name + ' Subtitle', name + ' Title')
+        recipes[name] = (('Audio Buses', name + ' Slate') if platform == 'linux'
+                         else ('Slate Background', 'Audio Buses', 'Slate Accent',
+                               name + ' Subtitle', name + ' Title'))
     transforms = {
         'Camera Fullscreen': {'Camera Device': (240, 0, 2.25)},
-        **{name: {name + ' Title': (245, 435, 1),
-                  name + ' Subtitle': (250, 555, 1),
-                  'Slate Accent': (250, 650, 1)} for name in slate_text},
+        **({name: {name + ' Title': (245, 435, 1),
+                   name + ' Subtitle': (250, 555, 1),
+                   'Slate Accent': (250, 650, 1)} for name in slate_text}
+           if platform == 'windows' else {}),
     }
     sources += [scene(name, recipes[name], transforms.get(name)) for name in SCENES]
     return {'name': 'Capture Infrastructure', 'version': 2,

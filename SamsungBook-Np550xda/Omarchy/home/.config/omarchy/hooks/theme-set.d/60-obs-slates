@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# OBS image sources reload these generated scenes after an Omarchy theme change.
+exec "$HOME/.local/bin/obs-theme-slates"

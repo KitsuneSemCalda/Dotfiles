@@ -88,7 +88,13 @@ neste Samsung Book (YUY2, 640x480 a 30 FPS). A PiP fica no canto inferior direit
 acima da captura principal. `Camera Fullscreen` amplia a imagem 4:3 até a
 altura do canvas 1080p, com barras laterais. No Windows, selecione a câmera
 local uma vez em `Camera Device`, pois o ID DirectShow varia entre máquinas.
-`Starting`, `BRB` e `Ending` incluem telas com título e fundo escuro. Se a
+`Starting`, `BRB` e `Ending` usam imagens geradas das cores `background`,
+`foreground` e `accent` do tema Omarchy ativo, incluindo o nome do tema. O
+instalador gera as imagens iniciais e o hook `theme-set.d/60-obs-slates` as
+atualiza quando o tema muda. O OBS recarrega a fonte de imagem visível sem
+precisar reiniciar. Para atualizar manualmente, execute `obs-theme-slates`.
+O gerador usa `python-pillow`, verificado e instalado pelo instalador quando
+necessário. No Windows, as telas mantêm a paleta estática da coleção. Se a
 câmera for trocada, selecione o novo nó em `Camera Device`; as duas cenas de
 câmera compartilham a mesma fonte.
 
