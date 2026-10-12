@@ -58,6 +58,146 @@
       "hotkeys": {}
     },
     {
+      "id": "color_source",
+      "name": "Slate Background",
+      "uuid": "97b87aab-ee1a-5687-b458-1c2ccd4a60e8",
+      "settings": {
+        "color": 4280293392,
+        "width": 1920,
+        "height": 1080
+      },
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "color_source",
+      "name": "Slate Accent",
+      "uuid": "82b2927e-4e4b-5278-8559-7278529bd889",
+      "settings": {
+        "color": 4290959172,
+        "width": 1100,
+        "height": 6
+      },
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "text_ft2_source",
+      "name": "Starting Title",
+      "uuid": "20d191b5-282e-50e2-b597-75a895191184",
+      "settings": {
+        "text": "INICIANDO EM INSTANTES",
+        "font": {
+          "face": "Arial",
+          "size": 74,
+          "flags": 1,
+          "style": "Bold"
+        },
+        "color1": 4294967295,
+        "color2": 4294967295
+      },
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "text_ft2_source",
+      "name": "Starting Subtitle",
+      "uuid": "4fe7b538-bc9a-57f6-9424-1adac4349ef1",
+      "settings": {
+        "text": "A transmiss\u00e3o come\u00e7ar\u00e1 em breve",
+        "font": {
+          "face": "Arial",
+          "size": 38,
+          "flags": 1,
+          "style": "Bold"
+        },
+        "color1": 4294967295,
+        "color2": 4294967295
+      },
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "text_ft2_source",
+      "name": "BRB Title",
+      "uuid": "51805e51-014d-51d8-b708-6ecddb2972db",
+      "settings": {
+        "text": "J\u00c1 VOLTO",
+        "font": {
+          "face": "Arial",
+          "size": 74,
+          "flags": 1,
+          "style": "Bold"
+        },
+        "color1": 4294967295,
+        "color2": 4294967295
+      },
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "text_ft2_source",
+      "name": "BRB Subtitle",
+      "uuid": "8e07d466-681c-5fb0-ab30-e7f39522929c",
+      "settings": {
+        "text": "A transmiss\u00e3o continua em instantes",
+        "font": {
+          "face": "Arial",
+          "size": 38,
+          "flags": 1,
+          "style": "Bold"
+        },
+        "color1": 4294967295,
+        "color2": 4294967295
+      },
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "text_ft2_source",
+      "name": "Ending Title",
+      "uuid": "978349d9-1b9c-5c4e-b319-6a4fefb7f999",
+      "settings": {
+        "text": "TRANSMISS\u00c3O ENCERRADA",
+        "font": {
+          "face": "Arial",
+          "size": 74,
+          "flags": 1,
+          "style": "Bold"
+        },
+        "color1": 4294967295,
+        "color2": 4294967295
+      },
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "text_ft2_source",
+      "name": "Ending Subtitle",
+      "uuid": "8bb979c1-b54b-5c38-9632-04f8559cd45e",
+      "settings": {
+        "text": "Obrigado por assistir",
+        "font": {
+          "face": "Arial",
+          "size": 38,
+          "flags": 1,
+          "style": "Bold"
+        },
+        "color1": 4294967295,
+        "color2": 4294967295
+      },
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
       "id": "scene",
       "name": "Capture Monitor",
       "uuid": "5675269c-28e7-511a-8c7f-7c02fef1c5d0",
@@ -72,12 +212,12 @@
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 0.0,
-              "y": 0.0
+              "x": 0,
+              "y": 0
             },
             "scale": {
-              "x": 1.0,
-              "y": 1.0
+              "x": 1,
+              "y": 1
             },
             "align": 5,
             "bounds_type": 0
@@ -103,12 +243,12 @@
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 0.0,
-              "y": 0.0
+              "x": 0,
+              "y": 0
             },
             "scale": {
-              "x": 1.0,
-              "y": 1.0
+              "x": 1,
+              "y": 1
             },
             "align": 5,
             "bounds_type": 0
@@ -134,8 +274,8 @@
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 1560.0,
-              "y": 800.0
+              "x": 1560,
+              "y": 800
             },
             "scale": {
               "x": 0.5,
@@ -178,12 +318,12 @@
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 0.0,
-              "y": 0.0
+              "x": 0,
+              "y": 0
             },
             "scale": {
-              "x": 1.0,
-              "y": 1.0
+              "x": 1,
+              "y": 1
             },
             "align": 5,
             "bounds_type": 0
@@ -195,12 +335,12 @@
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 0.0,
-              "y": 0.0
+              "x": 0,
+              "y": 0
             },
             "scale": {
-              "x": 1.0,
-              "y": 1.0
+              "x": 1,
+              "y": 1
             },
             "align": 5,
             "bounds_type": 0
@@ -212,12 +352,12 @@
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 0.0,
-              "y": 0.0
+              "x": 0,
+              "y": 0
             },
             "scale": {
-              "x": 1.0,
-              "y": 1.0
+              "x": 1,
+              "y": 1
             },
             "align": 5,
             "bounds_type": 0
@@ -243,12 +383,12 @@
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 0.0,
-              "y": 0.0
+              "x": 0,
+              "y": 0
             },
             "scale": {
-              "x": 1.0,
-              "y": 1.0
+              "x": 1,
+              "y": 1
             },
             "align": 5,
             "bounds_type": 0
@@ -260,12 +400,12 @@
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 0.0,
-              "y": 0.0
+              "x": 0,
+              "y": 0
             },
             "scale": {
-              "x": 1.0,
-              "y": 1.0
+              "x": 1,
+              "y": 1
             },
             "align": 5,
             "bounds_type": 0
@@ -291,12 +431,12 @@
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 0.0,
-              "y": 0.0
+              "x": 0,
+              "y": 0
             },
             "scale": {
-              "x": 1.0,
-              "y": 1.0
+              "x": 1,
+              "y": 1
             },
             "align": 5,
             "bounds_type": 0
@@ -308,12 +448,12 @@
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 0.0,
-              "y": 0.0
+              "x": 0,
+              "y": 0
             },
             "scale": {
-              "x": 1.0,
-              "y": 1.0
+              "x": 1,
+              "y": 1
             },
             "align": 5,
             "bounds_type": 0
@@ -325,12 +465,12 @@
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 0.0,
-              "y": 0.0
+              "x": 0,
+              "y": 0
             },
             "scale": {
-              "x": 1.0,
-              "y": 1.0
+              "x": 1,
+              "y": 1
             },
             "align": 5,
             "bounds_type": 0
@@ -356,12 +496,12 @@
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 0.0,
-              "y": 0.0
+              "x": 0,
+              "y": 0
             },
             "scale": {
-              "x": 1.0,
-              "y": 1.0
+              "x": 1,
+              "y": 1
             },
             "align": 5,
             "bounds_type": 0
@@ -373,12 +513,12 @@
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 0.0,
-              "y": 0.0
+              "x": 0,
+              "y": 0
             },
             "scale": {
-              "x": 1.0,
-              "y": 1.0
+              "x": 1,
+              "y": 1
             },
             "align": 5,
             "bounds_type": 0
@@ -390,12 +530,12 @@
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 0.0,
-              "y": 0.0
+              "x": 0,
+              "y": 0
             },
             "scale": {
-              "x": 1.0,
-              "y": 1.0
+              "x": 1,
+              "y": 1
             },
             "align": 5,
             "bounds_type": 0
@@ -411,39 +551,56 @@
       "name": "Camera Fullscreen",
       "uuid": "ff750b4f-9865-5040-b5db-4b9837d20f11",
       "settings": {
-        "id_counter": 3,
+        "id_counter": 4,
         "custom_size": false,
         "items": [
           {
             "id": 1,
-            "name": "Camera Device",
-            "source_uuid": "76a8f73c-4ef2-5735-85f9-c21c4c3f9288",
+            "name": "Slate Background",
+            "source_uuid": "97b87aab-ee1a-5687-b458-1c2ccd4a60e8",
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 0.0,
-              "y": 0.0
+              "x": 0,
+              "y": 0
             },
             "scale": {
-              "x": 1.0,
-              "y": 1.0
+              "x": 1,
+              "y": 1
             },
             "align": 5,
             "bounds_type": 0
           },
           {
             "id": 2,
+            "name": "Camera Device",
+            "source_uuid": "76a8f73c-4ef2-5735-85f9-c21c4c3f9288",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 240,
+              "y": 0
+            },
+            "scale": {
+              "x": 2.25,
+              "y": 2.25
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 3,
             "name": "Audio Buses",
             "source_uuid": "5ed334e9-09fc-575c-8965-24c3dbebdefc",
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 0.0,
-              "y": 0.0
+              "x": 0,
+              "y": 0
             },
             "scale": {
-              "x": 1.0,
-              "y": 1.0
+              "x": 1,
+              "y": 1
             },
             "align": 5,
             "bounds_type": 0
@@ -459,22 +616,90 @@
       "name": "Starting",
       "uuid": "8d49e65f-618a-5106-b713-2cf9c8baa967",
       "settings": {
-        "id_counter": 2,
+        "id_counter": 6,
         "custom_size": false,
         "items": [
           {
             "id": 1,
+            "name": "Slate Background",
+            "source_uuid": "97b87aab-ee1a-5687-b458-1c2ccd4a60e8",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0,
+              "y": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 2,
             "name": "Audio Buses",
             "source_uuid": "5ed334e9-09fc-575c-8965-24c3dbebdefc",
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 0.0,
-              "y": 0.0
+              "x": 0,
+              "y": 0
             },
             "scale": {
-              "x": 1.0,
-              "y": 1.0
+              "x": 1,
+              "y": 1
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 3,
+            "name": "Slate Accent",
+            "source_uuid": "82b2927e-4e4b-5278-8559-7278529bd889",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 250,
+              "y": 650
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 4,
+            "name": "Starting Subtitle",
+            "source_uuid": "4fe7b538-bc9a-57f6-9424-1adac4349ef1",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 250,
+              "y": 555
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 5,
+            "name": "Starting Title",
+            "source_uuid": "20d191b5-282e-50e2-b597-75a895191184",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 245,
+              "y": 435
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
             },
             "align": 5,
             "bounds_type": 0
@@ -490,22 +715,90 @@
       "name": "BRB",
       "uuid": "dced8986-c1e7-53a5-803a-748055795f01",
       "settings": {
-        "id_counter": 2,
+        "id_counter": 6,
         "custom_size": false,
         "items": [
           {
             "id": 1,
+            "name": "Slate Background",
+            "source_uuid": "97b87aab-ee1a-5687-b458-1c2ccd4a60e8",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0,
+              "y": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 2,
             "name": "Audio Buses",
             "source_uuid": "5ed334e9-09fc-575c-8965-24c3dbebdefc",
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 0.0,
-              "y": 0.0
+              "x": 0,
+              "y": 0
             },
             "scale": {
-              "x": 1.0,
-              "y": 1.0
+              "x": 1,
+              "y": 1
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 3,
+            "name": "Slate Accent",
+            "source_uuid": "82b2927e-4e4b-5278-8559-7278529bd889",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 250,
+              "y": 650
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 4,
+            "name": "BRB Subtitle",
+            "source_uuid": "8e07d466-681c-5fb0-ab30-e7f39522929c",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 250,
+              "y": 555
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 5,
+            "name": "BRB Title",
+            "source_uuid": "51805e51-014d-51d8-b708-6ecddb2972db",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 245,
+              "y": 435
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
             },
             "align": 5,
             "bounds_type": 0
@@ -521,22 +814,90 @@
       "name": "Ending",
       "uuid": "b2ac84a0-f94b-57e4-bec8-b6a7c45bdd9a",
       "settings": {
-        "id_counter": 2,
+        "id_counter": 6,
         "custom_size": false,
         "items": [
           {
             "id": 1,
+            "name": "Slate Background",
+            "source_uuid": "97b87aab-ee1a-5687-b458-1c2ccd4a60e8",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0,
+              "y": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 2,
             "name": "Audio Buses",
             "source_uuid": "5ed334e9-09fc-575c-8965-24c3dbebdefc",
             "visible": true,
             "locked": false,
             "pos": {
-              "x": 0.0,
-              "y": 0.0
+              "x": 0,
+              "y": 0
             },
             "scale": {
-              "x": 1.0,
-              "y": 1.0
+              "x": 1,
+              "y": 1
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 3,
+            "name": "Slate Accent",
+            "source_uuid": "82b2927e-4e4b-5278-8559-7278529bd889",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 250,
+              "y": 650
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 4,
+            "name": "Ending Subtitle",
+            "source_uuid": "8bb979c1-b54b-5c38-9632-04f8559cd45e",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 250,
+              "y": 555
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 5,
+            "name": "Ending Title",
+            "source_uuid": "978349d9-1b9c-5c4e-b319-6a4fefb7f999",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 245,
+              "y": 435
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
             },
             "align": 5,
             "bounds_type": 0

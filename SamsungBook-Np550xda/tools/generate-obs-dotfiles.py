@@ -13,17 +13,18 @@ def uid(name):
     return str(uuid.uuid5(uuid.NAMESPACE_URL, 'samsung-np550xda/obs/' + name))
 
 
-def scene(name, items=()):
+def scene(name, items=(), transforms=None):
+    transforms = transforms or {}
     return {
         'id': 'scene', 'name': name, 'uuid': uid(name),
         'settings': {'id_counter': len(items) + 1, 'custom_size': False,
                      'items': [
                          {'id': i, 'name': source, 'source_uuid': uid(source),
                           'visible': True, 'locked': False,
-                          'pos': {'x': 1560.0 if name == 'Camera PiP' else 0.0,
-                                  'y': 800.0 if name == 'Camera PiP' else 0.0},
-                          'scale': {'x': 0.5 if name == 'Camera PiP' else 1.0,
-                                    'y': 0.5 if name == 'Camera PiP' else 1.0},
+                          'pos': {'x': transforms.get(source, (0, 0, 1))[0],
+                                  'y': transforms.get(source, (0, 0, 1))[1]},
+                          'scale': {'x': transforms.get(source, (0, 0, 1))[2],
+                                    'y': transforms.get(source, (0, 0, 1))[2]},
                           'align': 5, 'bounds_type': 0}
                          for i, source in enumerate(items, 1)]},
         'mixers': 0, 'volume': 1.0, 'hotkeys': {},
@@ -31,11 +32,16 @@ def scene(name, items=()):
 
 
 def collection(platform):
-    # Portal screen selection and camera/audio device IDs are session/device
-    # specific. These reusable scenes are intentionally empty until paired in OBS.
+    # The portal screen selection is session-specific. The Linux camera node
+    # is the built-in webcam of this notebook; Windows needs its local ID.
     camera = {'id': 'pipewire-camera-source' if platform == 'linux' else 'dshow_input',
               'name': 'Camera Device', 'uuid': uid('Camera Device'),
-              'settings': {}, 'mixers': 0, 'volume': 1.0, 'hotkeys': {}}
+              'settings': {'device_id': 'v4l2_input.pci-0000_00_14.0-usb-0_7_1.0',
+                           'format': json.dumps({'encoded': False,
+                                                 'video_format': 4,  # SPA_VIDEO_FORMAT_YUY2
+                                                 'width': 640, 'height': 480})}
+              if platform == 'linux' else {},
+              'mixers': 0, 'volume': 1.0, 'hotkeys': {}}
     audio = []
     if platform == 'linux':
         for name, device, tracks in [
@@ -54,21 +60,55 @@ def collection(platform):
     window = {'id': 'pipewire-window-capture-source' if platform == 'linux' else 'window_capture',
               'name': 'Window Device', 'uuid': uid('Window Device'),
               'settings': {}, 'mixers': 0, 'volume': 1.0, 'hotkeys': {}}
-    sources = [camera, monitor, window, *audio,
+    def color(name, rgb, width, height):
+        return {'id': 'color_source', 'name': name, 'uuid': uid(name),
+                'settings': {'color': 0xff000000 | int(rgb[4:6] + rgb[2:4] + rgb[0:2], 16),
+                             'width': width, 'height': height},
+                'mixers': 0, 'volume': 1.0, 'hotkeys': {}}
+
+    def title(name, value, size):
+        return {'id': 'text_ft2_source', 'name': name, 'uuid': uid(name),
+                'settings': {'text': value,
+                             'font': {'face': 'Arial' if platform == 'windows' else 'Lexend',
+                                      'size': size, 'flags': 1, 'style': 'Bold'},
+                             'color1': 0xffffffff, 'color2': 0xffffffff},
+                'mixers': 0, 'volume': 1.0, 'hotkeys': {}}
+
+    slates = [color('Slate Background', '101820', 1920, 1080),
+              color('Slate Accent', '44d7c2', 1100, 6)]
+    slate_text = {
+        'Starting': ('INICIANDO EM INSTANTES', 'A transmissão começará em breve'),
+        'BRB': ('JÁ VOLTO', 'A transmissão continua em instantes'),
+        'Ending': ('TRANSMISSÃO ENCERRADA', 'Obrigado por assistir'),
+    }
+    for name, (heading, subtitle) in slate_text.items():
+        slates.extend((title(name + ' Title', heading, 74),
+                       title(name + ' Subtitle', subtitle, 38)))
+
+    sources = [camera, monitor, window, *audio, *slates,
                scene('Capture Monitor', ('Monitor Device',)),
                scene('Capture Window', ('Window Device',)),
-               scene('Camera PiP', ('Camera Device',)),
+               scene('Camera PiP', ('Camera Device',),
+                     {'Camera Device': (1560, 800, 0.5)}),
                scene('Audio Buses', tuple(source['name'] for source in audio))]
     recipes = {
+        # OBS stores scene items back-to-front; the last video item is on top.
         'Gameplay': ('Capture Monitor', 'Camera PiP', 'Audio Buses'),
         'Desktop': ('Capture Monitor', 'Audio Buses'),
         'Programming': ('Capture Window', 'Camera PiP', 'Audio Buses'),
         'Project Demo': ('Capture Window', 'Camera PiP', 'Audio Buses'),
-        'Camera Fullscreen': ('Camera Device', 'Audio Buses'),
-        'Starting': ('Audio Buses',), 'BRB': ('Audio Buses',),
-        'Ending': ('Audio Buses',),
+        'Camera Fullscreen': ('Slate Background', 'Camera Device', 'Audio Buses'),
     }
-    sources += [scene(name, recipes[name]) for name in SCENES]
+    for name in slate_text:
+        recipes[name] = ('Slate Background', 'Audio Buses', 'Slate Accent',
+                         name + ' Subtitle', name + ' Title')
+    transforms = {
+        'Camera Fullscreen': {'Camera Device': (240, 0, 2.25)},
+        **{name: {name + ' Title': (245, 435, 1),
+                  name + ' Subtitle': (250, 555, 1),
+                  'Slate Accent': (250, 650, 1)} for name in slate_text},
+    }
+    sources += [scene(name, recipes[name], transforms.get(name)) for name in SCENES]
     return {'name': 'Capture Infrastructure', 'version': 2,
             'current_scene': 'Desktop', 'current_program_scene': 'Desktop',
             'scene_order': [{'name': name} for name in SCENES],

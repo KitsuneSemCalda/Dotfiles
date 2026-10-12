@@ -83,11 +83,14 @@ Monitor`, `Capture Window` e `Camera PiP` reutilizáveis. Associe a fonte de
 portal em cada cena de captura na interface do OBS; a autorização do portal
 não pode ser gravada como dotfile portátil. As fontes de monitor e janela
 já existem nas cenas, mas a primeira seleção pode abrir o diálogo do portal.
-A fonte `Camera Device` deve ser
-associada à webcam do sistema. A PiP fica perto do canto inferior direito;
-ajuste escala/posição uma vez em `Camera PiP`. `Camera Fullscreen` usa a mesma
-fonte diretamente; use **Fit to Screen** nessa cena. `Starting`, `BRB` e
-`Ending` são bases vazias para conteúdo futuro.
+No Omarchy, `Camera Device` vem associado à webcam interna PipeWire detectada
+neste Samsung Book (YUY2, 640x480 a 30 FPS). A PiP fica no canto inferior direito,
+acima da captura principal. `Camera Fullscreen` amplia a imagem 4:3 até a
+altura do canvas 1080p, com barras laterais. No Windows, selecione a câmera
+local uma vez em `Camera Device`, pois o ID DirectShow varia entre máquinas.
+`Starting`, `BRB` e `Ending` incluem telas com título e fundo escuro. Se a
+câmera for trocada, selecione o novo nó em `Camera Device`; as duas cenas de
+câmera compartilham a mesma fonte.
 
 ## Roteamento de áudio Linux
 
