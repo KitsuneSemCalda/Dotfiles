@@ -1,0 +1,13 @@
+[Unit]
+Description=PipeWire recording buses and virtual microphone
+Requires=pipewire-pulse.service
+After=pipewire-pulse.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=%h/.local/bin/capture-audio start
+ExecStop=%h/.local/bin/capture-audio stop
+
+[Install]
+WantedBy=default.target

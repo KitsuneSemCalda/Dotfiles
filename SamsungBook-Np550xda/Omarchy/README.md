@@ -2,6 +2,8 @@
 
 See also the [architecture analysis and diagrams](../docs/architecture.md),
 covering the modifications to the base system and the installers' limitations.
+The [capture pipeline](../docs/capture.md) documents OBS profiles, PipeWire
+audio buses, scene setup, hardware limits and benchmark steps.
 
 Initial dotfiles baseline for the Samsung NP550XDA-KF2BR, running Omarchy with
 Hyprland. The full snapshot used to make these decisions is at

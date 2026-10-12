@@ -1,0 +1,12 @@
+{
+  "rate_control": "CQP",
+  "__ver": 2,
+  "cqp": 24,
+  "qpi": 24,
+  "qpp": 24,
+  "qpb": 24,
+  "target_usage": "TU7",
+  "profile": "high",
+  "keyint_sec": 2,
+  "bframes": 2
+}

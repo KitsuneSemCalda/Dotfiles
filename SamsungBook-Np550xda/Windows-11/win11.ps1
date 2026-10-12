@@ -129,6 +129,11 @@ function Get-FileMap {
         @{ Source = 'powershell\Microsoft.PowerShell_profile.ps1'; Destination = (Get-ProfileDestination) }
         @{ Source = 'rainmeter\AincradHUD'; Destination = (Join-Path $Target 'Documents\Rainmeter\Skins\AincradHUD') }
     )
+    $obsRoot = if ($Target -eq $RealHome) { $env:APPDATA } else { Join-Path $Target 'AppData\Roaming' }
+    Get-ChildItem -LiteralPath (Join-Path $SourceRoot 'obs-studio') -File -Recurse | ForEach-Object {
+        $relative = $_.FullName.Substring((Join-Path $SourceRoot 'obs-studio').Length).TrimStart('\')
+        @{ Source = (Join-Path 'obs-studio' $relative); Destination = (Join-Path (Join-Path $obsRoot 'obs-studio') $relative) }
+    }
 }
 
 function Test-PointsToSource {
@@ -576,6 +581,7 @@ function Install-Apps {
         'Microsoft.PowerToys',
         'Starship.Starship',
         'Rainmeter.Rainmeter',
+        'OBSProject.OBSStudio',
         'junegunn.fzf'
     )
 

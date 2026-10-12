@@ -2,6 +2,8 @@
 
 See also the [architecture analysis and diagrams](../docs/architecture.md),
 covering the modifications to the base system and the installers' limitations.
+The [capture pipeline](../docs/capture.md) documents the Windows OBS profiles,
+per-app audio capture, scene setup and benchmark steps.
 
 Initial dotfiles baseline for the same Samsung NP550XDA-KF2BR from the
 [Omarchy profile](../Omarchy/README.md), now booting Windows 11. Visual theme

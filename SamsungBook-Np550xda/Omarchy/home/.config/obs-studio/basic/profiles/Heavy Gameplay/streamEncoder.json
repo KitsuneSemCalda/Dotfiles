@@ -1,0 +1,9 @@
+{
+  "rate_control": "CBR",
+  "__ver": 2,
+  "bitrate": 4500,
+  "target_usage": "TU6",
+  "profile": "high",
+  "keyint_sec": 2,
+  "bframes": 2
+}

@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Pulse compatibility modules are hosted by pipewire-pulse, not PulseAudio.
+state="${XDG_RUNTIME_DIR:?}/capture-audio-modules"
+names=(capture_game capture_chat capture_music)
+
+case "${1:-status}" in
+  start)
+    if [[ -e "$state" ]]; then
+      echo "Capture buses already started; run capture-audio status"
+      exit 0
+    fi
+    : > "$state"
+    playback_sink=$(pactl get-default-sink)
+    for name in "${names[@]}"; do
+      id=$(pactl load-module module-null-sink "sink_name=$name" "sink_properties=device.description=$name")
+      printf '%s\n' "$id" >> "$state"
+      id=$(pactl load-module module-loopback "source=$name.monitor" \
+        "sink=$playback_sink" latency_msec=20)
+      printf '%s\n' "$id" >> "$state"
+    done
+    # A remapped input is available to OBS and conferencing apps. It is raw
+    # until an EasyEffects/other PipeWire processor is inserted and auditioned.
+    master=$(pactl get-default-source)
+    id=$(pactl load-module module-remap-source "master=$master" \
+      source_name=capture_microphone \
+      source_properties=device.description=Capture_Microphone)
+    printf '%s\n' "$id" >> "$state"
+    echo "Created capture buses, physical playback at $playback_sink, and capture_microphone."
+    ;;
+  stop)
+    if [[ -e "$state" ]]; then
+      mapfile -t ids < "$state"
+      for ((i=${#ids[@]}-1; i>=0; i--)); do pactl unload-module "${ids[i]}"; done
+      rm "$state"
+    fi
+    ;;
+  status)
+    pactl list short sinks | rg 'capture_(game|chat|music)' || true
+    pactl list short sources | rg 'capture_microphone|capture_(game|chat|music)\.monitor' || true
+    ;;
+  *) echo 'Usage: capture-audio start|stop|status' >&2; exit 2 ;;
+esac

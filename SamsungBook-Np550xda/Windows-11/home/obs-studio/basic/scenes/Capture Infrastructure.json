@@ -1,0 +1,561 @@
+{
+  "name": "Capture Infrastructure",
+  "version": 2,
+  "current_scene": "Desktop",
+  "current_program_scene": "Desktop",
+  "scene_order": [
+    {
+      "name": "Gameplay"
+    },
+    {
+      "name": "Desktop"
+    },
+    {
+      "name": "Programming"
+    },
+    {
+      "name": "Project Demo"
+    },
+    {
+      "name": "Camera Fullscreen"
+    },
+    {
+      "name": "Starting"
+    },
+    {
+      "name": "BRB"
+    },
+    {
+      "name": "Ending"
+    }
+  ],
+  "sources": [
+    {
+      "id": "dshow_input",
+      "name": "Camera Device",
+      "uuid": "76a8f73c-4ef2-5735-85f9-c21c4c3f9288",
+      "settings": {},
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "monitor_capture",
+      "name": "Monitor Device",
+      "uuid": "891cfbb3-7b89-5052-8fcc-74644585afc8",
+      "settings": {},
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "window_capture",
+      "name": "Window Device",
+      "uuid": "6d780b66-e55f-5240-8a88-99af41072e19",
+      "settings": {},
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "scene",
+      "name": "Capture Monitor",
+      "uuid": "5675269c-28e7-511a-8c7f-7c02fef1c5d0",
+      "settings": {
+        "id_counter": 2,
+        "custom_size": false,
+        "items": [
+          {
+            "id": 1,
+            "name": "Monitor Device",
+            "source_uuid": "891cfbb3-7b89-5052-8fcc-74644585afc8",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "align": 5,
+            "bounds_type": 0
+          }
+        ]
+      },
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "scene",
+      "name": "Capture Window",
+      "uuid": "2af95e29-a6e2-5641-8c8b-e492dcf409ab",
+      "settings": {
+        "id_counter": 2,
+        "custom_size": false,
+        "items": [
+          {
+            "id": 1,
+            "name": "Window Device",
+            "source_uuid": "6d780b66-e55f-5240-8a88-99af41072e19",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "align": 5,
+            "bounds_type": 0
+          }
+        ]
+      },
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "scene",
+      "name": "Camera PiP",
+      "uuid": "c5ee881a-0fd6-5431-8313-9f77c87633d3",
+      "settings": {
+        "id_counter": 2,
+        "custom_size": false,
+        "items": [
+          {
+            "id": 1,
+            "name": "Camera Device",
+            "source_uuid": "76a8f73c-4ef2-5735-85f9-c21c4c3f9288",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 1560.0,
+              "y": 800.0
+            },
+            "scale": {
+              "x": 0.5,
+              "y": 0.5
+            },
+            "align": 5,
+            "bounds_type": 0
+          }
+        ]
+      },
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "scene",
+      "name": "Audio Buses",
+      "uuid": "5ed334e9-09fc-575c-8965-24c3dbebdefc",
+      "settings": {
+        "id_counter": 1,
+        "custom_size": false,
+        "items": []
+      },
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "scene",
+      "name": "Gameplay",
+      "uuid": "2786b180-a7c2-592f-a5be-ec98dcda202e",
+      "settings": {
+        "id_counter": 4,
+        "custom_size": false,
+        "items": [
+          {
+            "id": 1,
+            "name": "Capture Monitor",
+            "source_uuid": "5675269c-28e7-511a-8c7f-7c02fef1c5d0",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 2,
+            "name": "Camera PiP",
+            "source_uuid": "c5ee881a-0fd6-5431-8313-9f77c87633d3",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 3,
+            "name": "Audio Buses",
+            "source_uuid": "5ed334e9-09fc-575c-8965-24c3dbebdefc",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "align": 5,
+            "bounds_type": 0
+          }
+        ]
+      },
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "scene",
+      "name": "Desktop",
+      "uuid": "1adb6b02-d6db-52fa-b1de-3f3a73defd96",
+      "settings": {
+        "id_counter": 3,
+        "custom_size": false,
+        "items": [
+          {
+            "id": 1,
+            "name": "Capture Monitor",
+            "source_uuid": "5675269c-28e7-511a-8c7f-7c02fef1c5d0",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 2,
+            "name": "Audio Buses",
+            "source_uuid": "5ed334e9-09fc-575c-8965-24c3dbebdefc",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "align": 5,
+            "bounds_type": 0
+          }
+        ]
+      },
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "scene",
+      "name": "Programming",
+      "uuid": "fc686de4-951c-517b-816d-15a747e03c68",
+      "settings": {
+        "id_counter": 4,
+        "custom_size": false,
+        "items": [
+          {
+            "id": 1,
+            "name": "Capture Window",
+            "source_uuid": "2af95e29-a6e2-5641-8c8b-e492dcf409ab",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 2,
+            "name": "Camera PiP",
+            "source_uuid": "c5ee881a-0fd6-5431-8313-9f77c87633d3",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 3,
+            "name": "Audio Buses",
+            "source_uuid": "5ed334e9-09fc-575c-8965-24c3dbebdefc",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "align": 5,
+            "bounds_type": 0
+          }
+        ]
+      },
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "scene",
+      "name": "Project Demo",
+      "uuid": "c6876007-e5e4-5013-b73f-f4938bf0b64e",
+      "settings": {
+        "id_counter": 4,
+        "custom_size": false,
+        "items": [
+          {
+            "id": 1,
+            "name": "Capture Window",
+            "source_uuid": "2af95e29-a6e2-5641-8c8b-e492dcf409ab",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 2,
+            "name": "Camera PiP",
+            "source_uuid": "c5ee881a-0fd6-5431-8313-9f77c87633d3",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 3,
+            "name": "Audio Buses",
+            "source_uuid": "5ed334e9-09fc-575c-8965-24c3dbebdefc",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "align": 5,
+            "bounds_type": 0
+          }
+        ]
+      },
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "scene",
+      "name": "Camera Fullscreen",
+      "uuid": "ff750b4f-9865-5040-b5db-4b9837d20f11",
+      "settings": {
+        "id_counter": 3,
+        "custom_size": false,
+        "items": [
+          {
+            "id": 1,
+            "name": "Camera Device",
+            "source_uuid": "76a8f73c-4ef2-5735-85f9-c21c4c3f9288",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 2,
+            "name": "Audio Buses",
+            "source_uuid": "5ed334e9-09fc-575c-8965-24c3dbebdefc",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "align": 5,
+            "bounds_type": 0
+          }
+        ]
+      },
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "scene",
+      "name": "Starting",
+      "uuid": "8d49e65f-618a-5106-b713-2cf9c8baa967",
+      "settings": {
+        "id_counter": 2,
+        "custom_size": false,
+        "items": [
+          {
+            "id": 1,
+            "name": "Audio Buses",
+            "source_uuid": "5ed334e9-09fc-575c-8965-24c3dbebdefc",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "align": 5,
+            "bounds_type": 0
+          }
+        ]
+      },
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "scene",
+      "name": "BRB",
+      "uuid": "dced8986-c1e7-53a5-803a-748055795f01",
+      "settings": {
+        "id_counter": 2,
+        "custom_size": false,
+        "items": [
+          {
+            "id": 1,
+            "name": "Audio Buses",
+            "source_uuid": "5ed334e9-09fc-575c-8965-24c3dbebdefc",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "align": 5,
+            "bounds_type": 0
+          }
+        ]
+      },
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "scene",
+      "name": "Ending",
+      "uuid": "b2ac84a0-f94b-57e4-bec8-b6a7c45bdd9a",
+      "settings": {
+        "id_counter": 2,
+        "custom_size": false,
+        "items": [
+          {
+            "id": 1,
+            "name": "Audio Buses",
+            "source_uuid": "5ed334e9-09fc-575c-8965-24c3dbebdefc",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "align": 5,
+            "bounds_type": 0
+          }
+        ]
+      },
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    }
+  ],
+  "groups": [],
+  "transitions": [],
+  "current_transition": "Fade",
+  "transition_duration": 300,
+  "quick_transitions": [],
+  "modules": {},
+  "resolution": {
+    "x": 1920,
+    "y": 1080
+  }
+}
