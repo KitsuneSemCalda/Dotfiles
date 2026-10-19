@@ -62,6 +62,9 @@ if ($all) {
     $$_ = 1 for values %installation_options;
 }
 my $installation_requested = grep { $$_ } values %installation_options;
+my $only_home_backup = $home_backup && !$all && !$reboot
+    && !($apps || $bookmarks || $fonts || $plugin || $omastore
+        || $theme || $openrgb || $ek75_knob);
 
 if ($restore && ($backup || $installation_requested || $reboot)) {
     die "--restore cannot be combined with installation actions or --reboot\n";
@@ -118,12 +121,24 @@ my $stamp       = strftime('%Y%m%d-%H%M%S', localtime);
 my $backup_root;
 my $plugin_backup_root;
 my @sources;
+my %home_backup_files = map { $_ => 1 } qw(
+    .config/home-dropbox-backup/excludes
+    .config/systemd/user/home-dropbox-backup.service
+    .config/systemd/user/home-dropbox-backup.timer
+    .config/systemd/user/home-dropbox-monthly.service
+    .config/systemd/user/home-dropbox-monthly.timer
+    .local/bin/home-dropbox-backup
+    .local/bin/home-dropbox-monthly
+);
 
 find(
     {
         no_chdir => 1,
         wanted   => sub {
-            push @sources, $File::Find::name if -f $File::Find::name;
+            return unless -f $File::Find::name;
+            my $relative = File::Spec->abs2rel($File::Find::name, $source_root);
+            push @sources, $File::Find::name
+                if !$only_home_backup || $home_backup_files{$relative};
         },
     },
     $source_root,
@@ -216,9 +231,9 @@ for my $item (@plan) {
     push @applied, "COPY $relative";
 }
 
-if ($target eq $home_root) {
+if ($target eq $home_root && !$only_home_backup) {
     ensure_skills();
-} else {
+} elsif ($target ne $home_root) {
     say 'SKIP    skill installation (using a test --target, not the real HOME)';
 }
 
@@ -231,7 +246,8 @@ ensure_theme()  if $theme;
 ensure_openrgb() if $openrgb;
 ensure_ek75_knob() if $ek75_knob;
 ensure_home_backup() if $home_backup;
-if ($target eq $home_root && -x File::Spec->catfile($target, '.local', 'bin', 'obs-theme-slates')) {
+if (!$only_home_backup && $target eq $home_root
+    && -x File::Spec->catfile($target, '.local', 'bin', 'obs-theme-slates')) {
     ensure_repo_packages('python-pillow');
     run_command(File::Spec->catfile($target, '.local', 'bin', 'obs-theme-slates'));
 }

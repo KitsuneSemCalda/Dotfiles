@@ -250,8 +250,17 @@ option that applies external changes.
 
 ## Home ↔ Dropbox synchronization
 
-`--home-backup` installs Unison and enables a user systemd timer that runs every
-15 minutes. It synchronizes the selected home files in both directions with
+Running `--home-backup` by itself copies only the seven backup files listed
+above, installs any missing backup packages, and enables the backup timers. It
+does not install other dotfiles, skills, OBS assets or applications, and it
+does not call the app removal path. Use `--dry-run` to review the exact file
+plan first. A changed backup configuration is rejected unless `--backup` is
+also supplied; then the previous copy is saved under
+`~/.local/state/dotfiles/backups/` before replacement. Combining the flag with
+other actions or `--all` still runs the full profile installer.
+
+The backup timer runs every 15 minutes. It synchronizes the selected home
+files in both directions with
 `~/Dropbox/Backups/SamsungBook-Np550xda/Omarchy/home/current/`. A file changed
 on either side updates the other side at the next run. Simultaneous edits are
 kept as conflicts for manual review; the service reports a skipped path rather
@@ -290,6 +299,7 @@ plain text, as requested; anyone with access to the Dropbox account can read
 them. The script refuses to start if the disk has less than 10 GiB free.
 
 ```bash
+perl ./omarchy.pl --home-backup --dry-run
 perl ./omarchy.pl --home-backup --backup
 home-dropbox-backup --dry-run
 home-dropbox-monthly --dry-run

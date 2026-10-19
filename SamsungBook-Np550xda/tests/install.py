@@ -250,4 +250,29 @@ elif name == 'pgrep':
     assert ['systemctl', 'reboot'] not in [json.loads(line) for line in log.read_text().splitlines()]
     run('--plugin', success=False)  # A test --target cannot request desktop actions.
     run_plugin('--restore', '--reboot', success=False)
-print('OK: copies, backup/restore, --all parity, plugins, Chromium bookmarks and reboot guards')
+    backup_source = repo / 'home/.local/bin/home-dropbox-backup'
+    backup_source.parent.mkdir(parents=True, exist_ok=True)
+    backup_source.write_text('#!/bin/sh\n')
+    dest.write_text('local edit outside backup\n')
+    log.write_text('')
+    preview = run_plugin('--home-backup', '--dry-run')
+    assert 'COPY?   tool ' not in preview.stdout
+    assert 'SKIP    skill installation' not in preview.stdout
+    run_plugin('--home-backup')
+    assert dest.read_text() == 'local edit outside backup\n'
+    assert (target / '.local/bin/home-dropbox-backup').read_text() == '#!/bin/sh\n'
+    backup_commands = [json.loads(line) for line in log.read_text().splitlines()]
+    assert not any(command[:3] in (["omarchy", "webapp", "remove"],
+                                   ["omarchy", "remove", "service"])
+                   for command in backup_commands)
+    installed_backup = target / '.local/bin/home-dropbox-backup'
+    installed_backup.write_text('local backup edit\n')
+    log.write_text('')
+    run_plugin('--home-backup', success=False)
+    assert installed_backup.read_text() == 'local backup edit\n'
+    assert not log.read_text()
+    run_plugin('--home-backup', '--backup')
+    assert installed_backup.read_text() == '#!/bin/sh\n'
+    assert any(path.read_text() == 'local backup edit\n'
+               for path in backups.glob('*/.local/bin/home-dropbox-backup'))
+print('OK: copies, backup/restore, isolated home backup, --all parity, plugins, Chromium bookmarks and reboot guards')
