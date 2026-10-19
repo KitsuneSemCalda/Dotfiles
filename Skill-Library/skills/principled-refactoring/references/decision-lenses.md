@@ -28,7 +28,7 @@ Use these questions where interfaces, inheritance, or polymorphism are actually 
 
 ## Algorithms and data structures
 
-Define the operation mix and input dimensions: size, read/write ratio, order requirements, mutation, concurrency, memory budget, and I/O. Compare existing and proposed structures on the operations the path performs, including maintenance and conversion costs. Derive time and space from the actual calls; distinguish theoretical growth from a measured bottleneck. A new index, cache, or data structure is useful when its benefit exceeds update, invalidation, and memory costs. For a dedicated read-only complexity audit, use `algorithmic-project-review` instead.
+Define the operation mix and input dimensions: size, read/write ratio, order requirements, mutation, concurrency, memory budget, and I/O. For a material algorithm or data-structure change, search current primary papers, official documentation, and maintained implementations for alternatives and their applicability; memory alone cannot establish the current best option. Compare existing and proposed structures on the operations the path performs, including maintenance and conversion costs. Derive time and space from the actual calls; distinguish theoretical growth from a measured bottleneck. Before adopting a promising replacement, check equivalent behavior on representative and adverse inputs and benchmark it against the baseline when feasible. Record workload, versions, environment, repeated measurements, and memory cost; label untested gains as projections. A new index, cache, or data structure is useful when its benefit exceeds update, invalidation, and memory costs. For a dedicated read-only complexity audit, use `algorithmic-project-review` instead.
 
 ## JPL Power of Ten
 

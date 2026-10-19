@@ -112,15 +112,17 @@ os módulos criados pelo script. O serviço `capture-audio.service` os cria
 no login e os remove no logout; após reiniciar PipeWire, reinicie o serviço.
 
 O microfone virtual inicial é **sem filtros**. O microfone interno estava
-mutado na inspeção e o microfone dinâmico externo ainda não foi identificado;
-ligar um filtro fixo ao dispositivo errado criaria silêncio. Quando o
-microfone externo estiver conectado, selecione-o como fonte padrão, recrie
-`capture_microphone` e valide o nível. Para processamento, use EasyEffects
+mutado na inspeção e o Fifine K688 USB ainda não estava conectado. Quando
+conectá-lo, execute `select-k688-microphone` e reinicie
+`capture-audio.service` para recriar `capture_microphone` usando o K688.
+Valide o nível antes de gravar. O painel de áudio personalizado do Omarchy
+oculta os buses virtuais da lista visual, mas o OBS e os aplicativos continuam
+podendo selecioná-los. Para processamento, use EasyEffects
 no grafo PipeWire com HPF 70–90 Hz, expander leve, EQ somente após ouvir,
 compressão moderada e limiter de segurança. Salve o preset só após medir
 ruído, ganho e clipping desse microfone. Evite gate duro. EasyEffects foi
 instalado depois da inspeção, mas ainda não há preset calibrado nem
-microfone externo para avaliar sua cadeia de entrada.
+uma captura do K688 para avaliar sua cadeia de entrada.
 
 ## Windows 11
 

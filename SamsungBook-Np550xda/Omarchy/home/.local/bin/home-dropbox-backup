@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: home-dropbox-backup [--dry-run]
+       home-dropbox-backup --review
+       home-dropbox-backup --restore [--apply] [--target DIRECTORY]
+
+Synchronize HOME with Dropbox/Backups/SamsungBook-Np550xda/Omarchy/home/current.
+Restore previews changes unless --apply is specified.
+EOF
+}
+
+dry_run=0
+restore=0
+apply=0
+review=0
+target="$HOME"
+while (($#)); do
+  case "$1" in
+    --dry-run) dry_run=1 ;;
+    --restore) restore=1 ;;
+    --review) review=1 ;;
+    --apply) apply=1 ;;
+    --target)
+      (($# >= 2)) || { usage >&2; exit 2; }
+      target=$2
+      shift
+      ;;
+    --help|-h) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+  shift
+done
+
+(( !apply || restore )) || { echo '--apply requires --restore' >&2; exit 2; }
+(( !restore || !dry_run )) || { echo '--restore already previews by default' >&2; exit 2; }
+(( !review || (!restore && !dry_run) )) || { echo '--review cannot be combined with preview or restore' >&2; exit 2; }
+[[ -d "$HOME" && -d "$target" ]] || { echo 'HOME or target directory is missing' >&2; exit 1; }
+
+dropbox_root="${HOME_BACKUP_DROPBOX_DIR:-$HOME/Dropbox}"
+[[ -d "$dropbox_root" && ! -L "$dropbox_root" ]] || {
+  echo "Dropbox directory is missing or is a symlink: $dropbox_root" >&2
+  exit 1
+}
+dropbox_root=$(realpath -e -- "$dropbox_root")
+home_root=$(realpath -e -- "$HOME")
+[[ "$dropbox_root" == "$home_root"/* ]] || {
+  echo 'Dropbox directory must be inside HOME so it can be excluded from synchronization' >&2
+  exit 1
+}
+dropbox_relative=${dropbox_root#"$home_root"/}
+destination="$dropbox_root/Backups/SamsungBook-Np550xda/Omarchy/home"
+current="$destination/current"
+excludes="${HOME_BACKUP_EXCLUDES_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/home-dropbox-backup/excludes}"
+[[ -f "$excludes" ]] || { echo "Missing exclusion file: $excludes" >&2; exit 1; }
+
+restore_excludes=()
+while IFS= read -r pattern || [[ -n "$pattern" ]]; do
+  case "$pattern" in
+    'Path '*) restore_excludes+=(--exclude="/${pattern#Path }") ;;
+    'Name '*) restore_excludes+=(--exclude="${pattern#Name }") ;;
+  esac
+done <"$excludes"
+restore_excludes+=(--exclude='*.sock' --exclude='*.socket' --exclude='*.pipe')
+
+if ((restore)); then
+  [[ -d "$current" ]] || { echo "No backup found at $current" >&2; exit 1; }
+  options=(-a --itemize-changes --no-owner --no-group)
+  if ((!apply)); then
+    options+=(--dry-run)
+    echo "Previewing restore into $target"
+  else
+    echo "Restoring into $target"
+  fi
+  rsync "${options[@]}" "${restore_excludes[@]}" -- "$current/" "$target/"
+  exit
+fi
+
+command -v unison >/dev/null || { echo 'unison is required' >&2; exit 1; }
+
+umask 077
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/home-dropbox-backup"
+mkdir -p -- "$state_dir"
+chmod 700 "$state_dir"
+exec 9>"$state_dir/lock"
+flock -n 9 || { echo 'Another home synchronization is running' >&2; exit 0; }
+
+available_kib=$(df -Pk -- "$dropbox_root" | awk 'NR == 2 { print $4 }')
+min_free_gib=${HOME_BACKUP_MIN_FREE_GIB:-10}
+[[ "$min_free_gib" =~ ^[0-9]+$ ]] || { echo 'HOME_BACKUP_MIN_FREE_GIB must be an integer' >&2; exit 2; }
+((available_kib >= min_free_gib * 1024 * 1024)) || {
+  echo "Less than $min_free_gib GiB is free; synchronization skipped" >&2
+  exit 1
+}
+
+mkdir -p -- "$current" "$destination/history/unison" "$state_dir/unison"
+chmod 700 "$destination" "$destination/history" "$destination/history/unison" "$state_dir/unison"
+chmod --reference="$home_root" "$current"
+options=(-ui text -auto -times -copyonconflict
+  -nodeletion "$home_root" -confirmbigdel
+  -backup 'Regex .*' -backuploc central -backupdir "$destination/history/unison"
+  -maxbackups 3 -ignore "BelowPath $dropbox_relative")
+if ((!review)); then options+=(-batch); fi
+if [[ "$state_dir" == "$home_root"/* ]]; then
+  options+=(-ignore "BelowPath ${state_dir#"$home_root"/}")
+fi
+
+while IFS= read -r pattern || [[ -n "$pattern" ]]; do
+  [[ -z "$pattern" || "$pattern" == \#* ]] && continue
+  options+=(-ignore "$pattern")
+done <"$excludes"
+
+if ((dry_run)); then
+  options+=(-noupdate "$home_root" -noupdate "$current"
+    -nocreation "$home_root" -nocreation "$current" -terse)
+  echo "Previewing both-way sync: $home_root <-> $current"
+else
+  if ((!review)); then options+=(-silent); fi
+  if [[ "${HOME_BACKUP_SEED_HOME:-0}" == 1 ]]; then
+    options+=(-prefer "$home_root")
+  fi
+  echo "Synchronizing both ways: $home_root <-> $current"
+fi
+
+export UNISON="$state_dir/unison"
+result=0
+unison "$home_root" "$current" "${options[@]}" || result=$?
+if ((dry_run)); then
+  ((result <= 1)) || exit "$result"
+  echo 'Preview complete; no files were copied'
+  exit 0
+fi
+case "$result" in
+  0)
+    if ((!dry_run)); then
+      date --iso-8601=seconds >"$state_dir/last-success"
+      rm -f -- "$state_dir/last-conflicts"
+      rm -f -- "$state_dir/last-partial"
+    fi
+    echo 'Synchronization complete'
+    ;;
+  1)
+    date --iso-8601=seconds >"$state_dir/last-conflicts"
+    echo 'Some paths were skipped; resolve conflicts before they can synchronize' >&2
+    ;;
+  2)
+    date --iso-8601=seconds >"$state_dir/last-partial"
+    echo 'Some live files changed during transfer; stable files synchronized and the next run will retry' >&2
+    result=0
+    ;;
+  *) echo "Unison failed with status $result" >&2 ;;
+esac
+exit "$result"

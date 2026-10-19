@@ -20,6 +20,7 @@ Check only for failures that matter to the requested outcome:
 - Cargo-cult layers, interfaces, services, caches, concurrency, dependencies, patterns, or framework changes without a known need and cost comparison.
 - Tests that merely mirror implementation, assert trivial behavior, skip boundaries and failure modes, or cannot detect the defect they claim to cover.
 - Performance claims based only on Big-O labels, imagined scale, invented benchmarks, or optimization of a non-dominant path.
+- Algorithm recommendations that overlook current alternatives or cite a paper's benchmark as proof of a gain on this workload. For material claims, search current primary sources and compare equivalent behavior and measured cost against the existing baseline when feasible; label untested gains as hypotheses.
 - Safety, security, reliability, or product-readiness claims without a credible threat or failure model and a way to verify them.
 - Long checklists, repeated caveats, and polished summaries that bury the decision or leave no actionable next step.
 

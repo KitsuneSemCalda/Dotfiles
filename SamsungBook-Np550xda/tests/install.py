@@ -2,6 +2,7 @@
 """Exercise installation with a disposable checkout and destination."""
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import tempfile
@@ -14,6 +15,9 @@ with tempfile.TemporaryDirectory() as tmp:
     (repo / 'home').mkdir(parents=True)
     target.mkdir()
     shutil.copy2(installer, repo / 'omarchy.pl')
+    knob_rule = repo / 'scripts/udev/61-ek75-knob.hwdb'
+    knob_rule.parent.mkdir(parents=True)
+    shutil.copy2(installer.parent / 'scripts/udev/61-ek75-knob.hwdb', knob_rule)
     # Freeze the disposable installer's clock so backup collisions are deterministic.
     script = repo / 'omarchy.pl'
     clock = "strftime('%Y%m%d-%H%M%S', localtime)"
@@ -22,6 +26,8 @@ with tempfile.TemporaryDirectory() as tmp:
     source = repo / 'home/tool'
     source.write_text('original\n')
     source.chmod(0o755)
+    audio_source = installer.parent / 'home/.config/omarchy/plugins/kitsuneforgering.audio'
+    shutil.copytree(audio_source, repo / 'home/.config/omarchy/plugins/kitsuneforgering.audio')
     dest = target / 'tool'
 
     def run(*args, success=True):
@@ -127,7 +133,7 @@ if name == 'git' and args[0] == 'clone':
 elif name == 'hyprctl' and args[0] == 'configerrors':
     print(os.environ.get('CONFIG_ERRORS', ''), end='')
 elif name == 'omarchy' and args[:2] == ['plugin', 'list']:
-    ids = ['tornikegomareli.spaces', 'io.github.kitsunesemcalda.feader-rss', 'kitsuneforgering.glass']
+    ids = ['tornikegomareli.spaces', 'io.github.kitsunesemcalda.feader-rss', 'kitsuneforgering.glass', 'kitsuneforgering.audio']
     print(json.dumps([{'id': x, 'enabled': True} for x in ids]))
 elif name == 'omarchy' and args[:2] == ['plugin', 'validate']:
     assert (pathlib.Path(args[2]) / 'manifest.json').is_file()
@@ -138,7 +144,7 @@ elif name == 'pgrep':
         sys.exit(1)
 ''')
     fake_tool.chmod(0o755)
-    for name in ['git', 'omarchy', 'omarchy-shell', 'hyprctl', 'systemctl', 'pgrep']:
+    for name in ['git', 'omarchy', 'omarchy-shell', 'hyprctl', 'systemctl', 'pgrep', 'sudo']:
         (fake_bin / name).symlink_to(fake_tool)
     env = {**os.environ, 'HOME': str(target), 'PATH': f"{fake_bin}:{os.environ['PATH']}",
            'FIXTURES': str(fixtures), 'COMMAND_LOG': str(log), 'FAKE_BIN': str(fake_bin)}
@@ -168,10 +174,29 @@ elif name == 'pgrep':
         assert list((target / '.local/state/dotfiles/plugin-backups').glob(f'*/{plugin_id}/obsolete.qml'))
     assert ['systemctl', 'reboot'] not in [json.loads(line) for line in log.read_text().splitlines()]
     before = log.read_bytes()
+    all_preview = run_plugin('--all', '--dry-run')
+    explicit_preview = run_plugin(
+        '--apps', '--bookmarks', '--fonts', '--plugin', '--omastore',
+        '--theme', '--openrgb', '--ek75-knob', '--home-backup', '--dry-run',
+    )
+    normalize_pid = lambda output: re.sub(r'\.dotfiles-tmp-\d+', '.dotfiles-tmp-PID', output)
+    assert normalize_pid(all_preview.stdout) == normalize_pid(explicit_preview.stdout)
+    assert "'systemctl' 'reboot'" not in all_preview.stdout
+    assert log.read_bytes() == before
     preview = run_plugin('--all', '--reboot', '--dry-run')
     assert log.read_bytes() == before
     assert 'SKIP    Chromium bookmarks' in preview.stdout
     assert "'systemctl' 'reboot'" in preview.stdout
+    assert "'sudo' 'install' '-m' '0644'" in preview.stdout
+    assert "'sudo' 'systemd-hwdb' '--strict' 'update'" in preview.stdout
+    assert "'systemctl' '--user' 'enable' '--now' 'home-dropbox-backup.timer'" in preview.stdout
+    log.write_text('')
+    run_plugin('--ek75-knob')
+    knob_commands = [json.loads(line) for line in log.read_text().splitlines()]
+    assert knob_commands == [
+        ['sudo', 'install', '-m', '0644', str(knob_rule), '/etc/udev/hwdb.d/61-ek75-knob.hwdb'],
+        ['sudo', 'systemd-hwdb', '--strict', 'update'],
+    ]
 
     # The bookmarks step merges into an existing Chromium profile and is idempotent.
     def checksum(bookmarks):
@@ -225,4 +250,4 @@ elif name == 'pgrep':
     assert ['systemctl', 'reboot'] not in [json.loads(line) for line in log.read_text().splitlines()]
     run('--plugin', success=False)  # A test --target cannot request desktop actions.
     run_plugin('--restore', '--reboot', success=False)
-print('OK: copies, backup/restore, plugins, Chromium bookmarks and reboot guards')
+print('OK: copies, backup/restore, --all parity, plugins, Chromium bookmarks and reboot guards')

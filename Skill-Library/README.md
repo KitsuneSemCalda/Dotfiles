@@ -63,6 +63,8 @@ Use [evaluation.md](evaluation.md) for routing and behavior probes when a skill 
 
 For GitHub work, `iss-audit` triages reports before `github-resolution` implements approved tickets. `pr-audit` reviews proposed changes before merge. `pr-bump` batches eligible Dependabot updates and sends suspicious ones to `pr-audit`. `release` runs only on an explicit release request.
 
+For price comparisons restricted to the shopping webapps in `SamsungBook-Np550xda/Omarchy/omarchy.pl`, use `price-research-webapps`.
+
 ## Adding a skill
 
 Create `skills/<slug>/SKILL.md` with frontmatter and instructions, then run

@@ -73,6 +73,22 @@ not encounter.
 
 ## Find improvements
 
+For a material algorithm or data-structure recommendation, search current primary sources online
+(papers, official documentation, or maintained implementations) for credible alternatives and
+their stated assumptions. Check publication or update dates, implementation maturity, and whether
+the claimed advantage applies to this workload. Record direct links and dates for the sources
+behind a recommendation. Use memory to form search terms, not as evidence that the known options
+are still the best ones. If online access is unavailable, mark the comparison
+provisional rather than implying the search happened.
+
+Test promising alternatives against the existing baseline when a bounded, read-only experiment is
+feasible. Use the same inputs and correctness oracle, include representative and adverse cases,
+measure the relevant end-to-end cost and resource use, and repeat noisy measurements. A small
+disposable prototype is acceptable; preserve the audit's no-project-edits boundary. Report the
+inputs, environment, command, results, and limitations. Published benchmarks motivate a local
+test but do not establish a gain here. If testing is infeasible, provide a concrete experiment and
+label the expected gain unverified.
+
 Consider changes in this order:
 
 1. eliminate unnecessary work, repeated scans, duplicate queries, conversions, copies, or

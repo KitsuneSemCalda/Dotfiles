@@ -1,0 +1,39 @@
+# Unison path patterns relative to HOME. Dropbox itself is ignored by the script.
+Path .cache
+Path .dropbox
+Path .dropbox-dist
+Path .cargo/registry
+Path .cabal/store
+Path .codex/.tmp
+Path .codex/models_cache.json
+Path .codex/packages
+Path .config/chromium/Safe Browsing
+Path .config/chromium/*/Cache
+Path .config/chromium/*/Network Action Predictor
+Path .config/chromium/*/WebStorage/QuotaManager
+Path .config/chromium/*/WebStorage/QuotaManager-journal
+Path .ghcup
+Path .npm/_cacache
+Path .rustup/toolchains
+Path .stack/programs
+Path .local/share/Steam
+Path .local/share/containers
+Path .local/share/mise
+Path .local/share/nvim
+Path .local/share/Trash
+Path .local/state/home-dropbox-backup
+Path .var/app/*/cache
+Path Projects/omastore-fork-backups
+Path go/pkg/mod
+Name node_modules
+Name .venv
+Name target
+Name build
+Name dist
+Name *.log
+Name *-shm
+Name *-wal
+Name *-journal
+Name *.lock
+Name *conflict_on_*
+Regex .*\.(sock|socket|pipe)

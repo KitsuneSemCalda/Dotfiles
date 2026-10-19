@@ -1,0 +1,11 @@
+[Unit]
+Description=Retry monthly home archive daily until this month is saved
+
+[Timer]
+OnCalendar=*-*-* 03:00
+Persistent=true
+RandomizedDelaySec=1h
+Unit=home-dropbox-monthly.service
+
+[Install]
+WantedBy=timers.target

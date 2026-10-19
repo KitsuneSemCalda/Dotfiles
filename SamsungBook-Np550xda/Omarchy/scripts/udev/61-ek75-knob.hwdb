@@ -1,0 +1,6 @@
+# DAREU EK75 wired (0045) and 2.4 GHz receiver (0042), HID input2 only.
+# Suppress the faulty knob's mute and rotation; leave other keys intact.
+evdev:input:b0003v260Dp004[25]e*-e0,1,2,3,4,11,14,k*
+ KEYBOARD_KEY_c00e2=reserved
+ KEYBOARD_KEY_c00e9=reserved
+ KEYBOARD_KEY_c00ea=reserved

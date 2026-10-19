@@ -1,0 +1,11 @@
+[Unit]
+Description=Export a monthly Btrfs root snapshot to Dropbox
+RequiresMountsFor=/home/kitsune /var/lib/home-dropbox-backup
+ConditionPathIsDirectory=/home/kitsune/Dropbox
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/btrfs-monthly-backup /home/kitsune
+Nice=15
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

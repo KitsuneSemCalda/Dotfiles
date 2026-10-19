@@ -1,0 +1,10 @@
+[Unit]
+Description=Synchronize home with Dropbox in both directions
+ConditionPathIsDirectory=%h/Dropbox
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/home-dropbox-backup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

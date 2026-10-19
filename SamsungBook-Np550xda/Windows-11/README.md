@@ -74,6 +74,8 @@ hardware/
 win11.ps1                              # installer and orchestrator
 scripts/hardware-profile.ps1             # updates the snapshot (no PII)
 scripts/debloat.ps1                      # conservative debloat + optimization
+scripts/clamshell.ps1                    # AC/battery lid actions and restore
+scripts/ek75-keyboard.ps1                # adds US-International keyboard layout
 ```
 
 Just like on Omarchy, the configuration files stay in each tool's
@@ -194,6 +196,58 @@ mode, `Super+Shift+X` exit GlazeWM) — all documented as comments in
 `home/glazewm/config.yaml` itself.
 
 ## Installation
+
+### EK75 and Fifine K688
+
+The notebook's built-in keyboard is ABNT2 and the EK75 is ANSI. Add the
+United States-International layout without removing existing layouts:
+
+```powershell
+pwsh ./win11.ps1 -Ek75 -Backup
+```
+
+Use `Win+Space` to select United States-International when typing on the EK75,
+and return to Portuguese (Brazil) ABNT2 when typing on the notebook. Windows
+does not assign these layouts to individual keyboards through this setup; the
+active layout applies to both. `-Ek75` is separate from `-All` because it adds
+a user keyboard layout. The EK75's RGB and macros can be configured with
+the [official DAREU EK75 Windows driver](https://dareu.com/pt/pages/driver).
+The Linux `--ek75-knob` rule does not apply on Windows; if the volume knob
+misfires here too, first check the keyboard firmware and driver before making
+system-wide media-key remaps.
+
+Connect the Fifine K688 by USB. In **Settings → System → Sound → Input**,
+select the `fifine Microphone` recording device, then check its level and the
+microphone's physical mute and gain controls. In OBS, select the same device
+for the microphone source. Leave the K688 playback device unselected unless
+headphones are plugged into the microphone for direct monitoring. The K688
+was not connected during this setup, so its Windows device ID and input level
+have not been measured.
+
+### Closed-lid use with an external monitor
+
+Connect an external monitor, keyboard and mouse, and keep the notebook on a
+hard, ventilated surface. To keep Windows running when the lid closes **on AC
+power**, while retaining sleep on battery, run:
+
+```powershell
+pwsh ./win11.ps1 -Clamshell -Backup
+```
+
+The `-Clamshell` action is separate from `-All`, because Windows' lid setting
+is per power source, not conditional on whether a monitor is attached. On AC,
+closing the lid will also keep the machine running if the monitor is unplugged.
+Lock or sleep it manually before packing it away. For an external-only desktop,
+select **Second screen only** with `Win+P`. To return to the old lid actions, run
+`pwsh ./scripts/clamshell.ps1 -Restore`. The original AC and battery values are
+saved under `%LOCALAPPDATA%\dotfiles\clamshell-power.json` for the active power
+scheme. The dotfile installer's `-Restore` concerns copied files and does not
+restore Windows power settings.
+
+Use `pwsh ./scripts/clamshell.ps1` to inspect the active scheme's lid actions.
+Some Windows installations require an elevated terminal to change power
+settings; if `powercfg` denies access, rerun the command as administrator.
+`-DryRun -Clamshell` prints the planned action without changing it.
 
 Installs independent copies of configuration files and the Rainmeter skin.
 Developer Mode is not required. Legacy links to this checkout are replaced

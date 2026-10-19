@@ -27,22 +27,30 @@ my $omastore = 0;
 my $reboot = 0;
 my $theme   = 0;
 my $openrgb = 0;
+my $ek75_knob = 0;
+my $home_backup = 0;
 my $all     = 0;
 my $help    = 0;
 my $target  = $ENV{HOME};
+
+my %installation_options = (
+    'apps'           => \$apps,
+    'bookmarks'      => \$bookmarks,
+    'fonts'          => \$fonts,
+    'plugin|plugins' => \$plugin,
+    'omastore'       => \$omastore,
+    'theme'          => \$theme,
+    'openrgb'        => \$openrgb,
+    'ek75-knob'      => \$ek75_knob,
+    'home-backup'    => \$home_backup,
+);
 
 GetOptions(
     'dry-run'  => \$dry_run,
     'backup'   => \$backup,
     'restore'  => \$restore,
-    'apps'     => \$apps,
-    'bookmarks' => \$bookmarks,
-    'fonts'    => \$fonts,
-    'plugin|plugins' => \$plugin,
-    'omastore' => \$omastore,
+    %installation_options,
     'reboot'   => \$reboot,
-    'theme'    => \$theme,
-    'openrgb'  => \$openrgb,
     'all'      => \$all,
     'target=s' => \$target,
     'help'     => \$help,
@@ -50,11 +58,12 @@ GetOptions(
 
 usage(0) if $help;
 
-$apps = $fonts = $plugin = $theme = $openrgb = 1 if $all;
-$bookmarks = 1 if $all;
-$omastore = 1 if $all;
+if ($all) {
+    $$_ = 1 for values %installation_options;
+}
+my $installation_requested = grep { $$_ } values %installation_options;
 
-if ($restore && ($backup || $apps || $bookmarks || $fonts || $plugin || $theme || $openrgb || $omastore || $reboot)) {
+if ($restore && ($backup || $installation_requested || $reboot)) {
     die "--restore cannot be combined with installation actions or --reboot\n";
 }
 
@@ -72,7 +81,7 @@ die "Missing source directory: $source_root\n" unless -d $source_root;
 die "Missing destination: $target\n" unless -d $target;
 
 my $home_root = abs_path($ENV{HOME} // '') // '';
-if (($apps || $bookmarks || $fonts || $plugin || $theme || $openrgb || $omastore || $reboot) && $target ne $home_root) {
+if (($installation_requested || $reboot) && $target ne $home_root) {
     die "Omarchy actions can only use the real HOME; use --target only to test file installation\n";
 }
 
@@ -220,6 +229,8 @@ ensure_omastore() if $omastore;
 ensure_plugin() if $plugin;
 ensure_theme()  if $theme;
 ensure_openrgb() if $openrgb;
+ensure_ek75_knob() if $ek75_knob;
+ensure_home_backup() if $home_backup;
 if ($target eq $home_root && -x File::Spec->catfile($target, '.local', 'bin', 'obs-theme-slates')) {
     ensure_repo_packages('python-pillow');
     run_command(File::Spec->catfile($target, '.local', 'bin', 'obs-theme-slates'));
@@ -447,6 +458,11 @@ sub ensure_apps {
     ensure_aur_packages('bitwarden-bin', 'appflowy-bin', 'curseforge');
 
     my @webapps = (
+        { name => 'Casas Bahia',      url => 'https://www.casasbahia.com.br/'},
+        { name => 'Ponto Frio',       url => 'https://www.pontofrio.com.br/'},
+        { name => 'Magazine Luiza',   url => 'https://www.magazineluiza.com.br/'},
+        { name => 'Aliexpress',       url => 'https://pt.aliexpress.com'},
+        { name => 'Bambulab',         url => 'https://bambulab.com/pt-br'},
         { name => 'Amazon Shopping',  url => 'https://www.amazon.com.br' },
         { name => 'Mercado Livre',    url => 'https://mercadolivre.com.br' },
         { name => 'Instagram',        url => 'https://www.instagram.com/' },
@@ -472,7 +488,8 @@ sub ensure_apps {
         { name => 'Gemini',           url => 'https://gemini.google.com/' },
         { name => 'Waz',              url => 'https://www.waz.com.br/'},
         { name => 'Pichau',           url => 'https://www.pichau.com.br/'},
-        { name => 'ChipArt',          url => 'https://www.chipart.com.br/?'}
+        { name => 'ChipArt',          url => 'https://www.chipart.com.br/'},
+        { name => 'MakerWorld',       url => 'https://makerworld.com/en'},
     );
 
     for my $app (@webapps) {
@@ -693,6 +710,12 @@ sub command_output {
 }
 
 sub ensure_plugin {
+    # This clone is shipped in home/ and copied by the normal dotfile pass.
+    # It has no separate GitHub repository to fetch.
+    my $audio = File::Spec->catdir($source_root, '.config', 'omarchy',
+        'plugins', 'kitsuneforgering.audio');
+    die "Missing local audio plugin: $audio\n" unless -f File::Spec->catfile($audio, 'manifest.json');
+    run_command('omarchy', 'plugin', 'validate', $audio);
     ensure_repo_packages('go');
     run_command('mkdir', '-p', File::Spec->catdir($target, '.config', 'omarchy', 'plugins'));
     my $feader = plugin_source('Feader-RSS', 'https://github.com/KitsuneForgering/Feader-RSS.git');
@@ -714,13 +737,14 @@ sub ensure_plugin {
     run_command('omarchy', 'plugin', 'enable', 'tornikegomareli.spaces', 'left');
     run_command('omarchy', 'plugin', 'enable', 'io.github.kitsunesemcalda.feader-rss', 'right');
     run_command('omarchy', 'plugin', 'enable', 'kitsuneforgering.glass');
+    run_command('omarchy', 'plugin', 'enable', 'kitsuneforgering.audio');
 
     run_command('omarchy', 'restart', 'shell');
     unless ($dry_run) {
         my $catalog = decode_json(command_output('omarchy', 'plugin', 'list', '--json'));
         my %enabled = map { $_->{id} => $_->{enabled} } @$catalog;
         for my $id ('tornikegomareli.spaces', 'io.github.kitsunesemcalda.feader-rss',
-            'kitsuneforgering.glass') {
+            'kitsuneforgering.glass', 'kitsuneforgering.audio') {
             die "Plugin was not enabled: $id\n" unless $enabled{$id};
         }
     }
@@ -741,6 +765,34 @@ sub ensure_openrgb {
     # Installs the udev rule (sudo), builds OpenRGB with the driver, and sets
     # up the launcher and the theme hook.
     run_command('bash', File::Spec->catfile($dir, 'install.sh'));
+}
+
+sub ensure_ek75_knob {
+    my $source = File::Spec->catfile($repo_root, 'scripts', 'udev', '61-ek75-knob.hwdb');
+    my $destination = '/etc/udev/hwdb.d/61-ek75-knob.hwdb';
+    die "Missing EK75 knob rule: $source\n" unless -f $source;
+
+    run_command('sudo', 'install', '-m', '0644', $source, $destination);
+    run_command('sudo', 'systemd-hwdb', '--strict', 'update');
+    say 'Reconnect the EK75 to activate the knob rule on an already connected keyboard.';
+}
+
+sub ensure_home_backup {
+    ensure_repo_packages('unison', 'zstd', 'btrfs-progs');
+    run_command('systemctl', '--user', 'daemon-reload');
+    run_command('systemctl', '--user', 'enable', '--now', 'home-dropbox-backup.timer');
+    run_command('systemctl', '--user', 'enable', '--now', 'home-dropbox-monthly.timer');
+    run_command('sudo', 'install', '-D', '-m', '0755',
+        File::Spec->catfile($repo_root, 'scripts', 'btrfs-monthly-backup'),
+        '/usr/local/libexec/btrfs-monthly-backup');
+    for my $unit (qw(home-btrfs-monthly.service home-btrfs-monthly.timer)) {
+        run_command('sudo', 'install', '-D', '-m', '0644',
+            File::Spec->catfile($repo_root, 'scripts', 'systemd', $unit),
+            File::Spec->catfile('/etc', 'systemd', 'system', $unit));
+    }
+    run_command('sudo', 'systemctl', 'daemon-reload');
+    run_command('sudo', 'systemctl', 'enable', '--now', 'home-btrfs-monthly.timer');
+    say 'Home sync, monthly home archive and monthly Btrfs export timers are enabled.';
 }
 
 sub ensure_theme {
@@ -870,7 +922,9 @@ Usage: perl omarchy.pl [options]
   --reboot           reboots after successful installation and Hyprland validation
   --theme            installs/applies the Sword Art Omarchy theme
   --openrgb          installs the Dareu EK75 OpenRGB driver, udev rule and theme hook
-  --all              runs --apps --bookmarks --fonts --plugin --omastore --theme --openrgb
+  --ek75-knob        blocks the faulty EK75 knob (mute and volume rotation)
+  --home-backup      installs Unison and enables home/Dropbox synchronization
+  --all              runs all optional installation actions, including --home-backup
   --target PATH      uses a different root directory only to test file installation
   --help             shows this help
 USAGE

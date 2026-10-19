@@ -1,0 +1,12 @@
+[Unit]
+Description=Archive the synchronized home in a monthly compressed chain
+ConditionPathIsDirectory=%h/Dropbox
+Wants=home-dropbox-backup.service
+After=home-dropbox-backup.service
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/home-dropbox-monthly
+Nice=15
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

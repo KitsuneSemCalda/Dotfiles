@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+[[ $EUID == 0 && $# == 1 ]] || { echo 'Usage (as root): btrfs-monthly-backup HOME' >&2; exit 2; }
+home=$(realpath -e -- "$1")
+[[ $home == /home/* && $(findmnt -n -o FSTYPE -T /) == btrfs ]] || {
+  echo 'Expected a /home user on Btrfs' >&2; exit 1;
+}
+owner=$(stat -c %U -- "$home")
+[[ $owner != root && $owner != UNKNOWN ]] || { echo 'Invalid home owner' >&2; exit 1; }
+dropbox="$home/Dropbox"
+[[ -d $dropbox && ! -L $dropbox ]] || { echo 'Dropbox directory missing or linked' >&2; exit 1; }
+dropbox=$(realpath -e -- "$dropbox")
+[[ $dropbox == "$home"/* && $(stat -c %U -- "$dropbox") == "$owner" ]] || {
+  echo 'Dropbox must belong to the home owner' >&2; exit 1;
+}
+
+month=$(date +%Y-%m)
+state=/var/lib/home-dropbox-backup
+snapshots="$state/snapshots"
+destination="$dropbox/Backups/SamsungBook-Np550xda/Omarchy/home/monthly/btrfs"
+runuser -u "$owner" -- mkdir -p -- "$destination"
+archive="$destination/$month.send.zst"
+if runuser -u "$owner" -- test -e "$archive"; then
+  echo "Btrfs archive already exists: $archive"
+  exit 0
+fi
+
+install -d -m 0700 -- "$snapshots"
+exec 9>"$state/lock"
+flock -w 3600 9 || { echo 'Timed out waiting for Btrfs export' >&2; exit 1; }
+snapshot="$snapshots/$month"
+if [[ ! -e $snapshot ]]; then
+  btrfs subvolume snapshot -r / "$snapshot"
+fi
+
+previous=''
+if [[ -f $state/latest ]]; then
+  read -r previous <"$state/latest"
+fi
+if [[ $previous =~ ^[0-9]{4}-(0[1-9]|1[0-2])$ && $previous < $month \
+      && -d $snapshots/$previous ]] \
+    && runuser -u "$owner" -- test -f "$destination/$previous.send.zst" \
+    && runuser -u "$owner" -- test -f "$destination/$previous.sha256" \
+    && (cd "$destination" && runuser -u "$owner" -- sha256sum -c -- "$previous.sha256"); then
+  parent=( -p "$snapshots/$previous" )
+  kind=incremental
+else
+  parent=()
+  previous=''
+  kind=full
+fi
+
+available_kib=$(df -Pk -- "$destination" | awk 'NR == 2 { print $4 }')
+source_kib=$(du -skx --exclude=/.snapshots --exclude=/var/lib/home-dropbox-backup / | awk '{ print $1 }')
+(( available_kib >= source_kib + 10 * 1024 * 1024 )) || {
+  echo 'Insufficient free space for Btrfs export with 10 GiB reserve' >&2
+  exit 1
+}
+
+temporary="$destination/.$month.$$.part"
+cleanup() { runuser -u "$owner" -- rm -f -- "$temporary"; }
+trap cleanup EXIT
+btrfs send "${parent[@]}" "$snapshot" | zstd -T0 -q | runuser -u "$owner" -- tee "$temporary" >/dev/null
+runuser -u "$owner" -- zstd -tq -- "$temporary"
+runuser -u "$owner" -- mv -- "$temporary" "$archive"
+(cd "$destination" && runuser -u "$owner" -- sha256sum "$month.send.zst") \
+  | runuser -u "$owner" -- tee "$destination/$month.sha256" >/dev/null
+printf 'format=btrfs-send\nkind=%s\nparent=%s\nsubvolume=/\n' \
+  "$kind" "${previous:-none}" | runuser -u "$owner" -- tee "$destination/$month.meta" >/dev/null
+printf '%s\n' "$month" >"$state/latest.tmp"
+mv -- "$state/latest.tmp" "$state/latest"
+
+# The export chain lives in Dropbox; only the newest local snapshot is needed
+# as the parent of next month's send stream.
+for old in "$snapshots"/????-??; do
+  [[ $old == "$snapshot" || ! -d $old ]] && continue
+  btrfs subvolume delete -- "$old"
+done
+echo "Created $kind Btrfs send archive: $archive"

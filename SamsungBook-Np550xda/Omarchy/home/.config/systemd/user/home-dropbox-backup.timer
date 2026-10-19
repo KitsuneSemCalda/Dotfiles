@@ -1,0 +1,12 @@
+[Unit]
+Description=Synchronize home with Dropbox every 15 minutes
+
+[Timer]
+OnStartupSec=10min
+OnCalendar=*:0/15
+Persistent=true
+RandomizedDelaySec=2min
+Unit=home-dropbox-backup.service
+
+[Install]
+WantedBy=timers.target

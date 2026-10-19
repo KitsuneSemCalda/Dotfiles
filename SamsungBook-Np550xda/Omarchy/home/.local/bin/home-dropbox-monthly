@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo 'Usage: home-dropbox-monthly [--dry-run] [--list]' >&2
+}
+
+dry_run=0
+list=0
+while (($#)); do
+  case $1 in
+    --dry-run) dry_run=1 ;;
+    --list) list=1 ;;
+    --help|-h) usage; exit 0 ;;
+    *) usage; exit 2 ;;
+  esac
+  shift
+done
+(( !dry_run || !list )) || { usage; exit 2; }
+
+home=$(realpath -e -- "$HOME")
+dropbox=$(realpath -e -- "${HOME_BACKUP_DROPBOX_DIR:-$HOME/Dropbox}")
+[[ "$dropbox" == "$home"/* ]] || { echo 'Dropbox must be inside HOME' >&2; exit 1; }
+root="$dropbox/Backups/SamsungBook-Np550xda/Omarchy/home"
+current="$root/current"
+monthly="$root/monthly/home"
+state="${XDG_STATE_HOME:-$HOME/.local/state}/home-dropbox-backup"
+[[ -d "$current" ]] || { echo "Missing synchronized home: $current" >&2; exit 1; }
+if ! command -v tar >/dev/null || ! command -v zstd >/dev/null \
+    || ! command -v sha256sum >/dev/null; then
+  echo 'tar, zstd and sha256sum are required' >&2; exit 1;
+fi
+
+if ((list)); then
+  [[ -d "$monthly" ]] && find "$monthly" -maxdepth 1 -type f -name '*.tar.zst' -printf '%f\n' | sort
+  exit 0
+fi
+
+umask 077
+mkdir -p -- "$state" "$monthly"
+exec 9>"$state/lock"
+flock -w 3600 9 || { echo 'Timed out waiting for home synchronization' >&2; exit 1; }
+
+month=${HOME_BACKUP_MONTH:-$(date +%Y-%m)}
+[[ $month =~ ^[0-9]{4}-(0[1-9]|1[0-2])$ ]] || { echo 'Invalid backup month' >&2; exit 2; }
+archive="$monthly/$month.tar.zst"
+[[ ! -e "$archive" ]] || { echo "Monthly archive already exists: $archive"; exit 0; }
+
+previous=''
+while IFS= read -r path; do
+  name=${path##*/}
+  candidate=${name%.tar.zst}
+  [[ $candidate < $month ]] && previous=$candidate
+done < <(find "$monthly" -maxdepth 1 -type f -name '????-??.tar.zst' | sort)
+
+if [[ -n $previous ]]; then
+  [[ -f "$monthly/$previous.snar" && -f "$monthly/$previous.sha256" ]] || {
+    echo "Incomplete previous archive: $previous" >&2; exit 1;
+  }
+  (cd "$monthly" && sha256sum -c -- "$previous.sha256") || exit 1
+  kind=incremental
+else
+  kind=full
+fi
+
+if ((dry_run)); then
+  echo "Would create $kind archive $archive from $current (parent: ${previous:-none})"
+  exit 0
+fi
+
+available_kib=$(df -Pk -- "$monthly" | awk 'NR == 2 { print $4 }')
+source_kib=$(du -sk -- "$current" | awk '{ print $1 }')
+reserve_gib=${HOME_BACKUP_MIN_FREE_GIB:-10}
+[[ $reserve_gib =~ ^[0-9]+$ ]] || { echo 'Invalid free-space reserve' >&2; exit 2; }
+(( available_kib >= source_kib + reserve_gib * 1024 * 1024 )) || {
+  echo "Insufficient free space for a monthly home archive with $reserve_gib GiB reserve" >&2
+  exit 1
+}
+
+work=$(mktemp -d -- "$monthly/.work.XXXXXXXX")
+trap 'rm -rf -- "$work"' EXIT
+if [[ -n $previous ]]; then
+  cp -- "$monthly/$previous.snar" "$work/state.snar"
+fi
+
+# The Unison lock keeps current/ stable from our own sync. Programs may still
+# write to Dropbox directly; tar reports changes and the archive is discarded.
+tar -C "$current" --one-file-system --listed-incremental="$work/state.snar" \
+  -cf - . | zstd -T0 -q -o "$work/$month.tar.zst"
+zstd -tq -- "$work/$month.tar.zst"
+(cd "$work" && sha256sum "$month.tar.zst" >"$month.sha256")
+printf 'format=gnu-tar-incremental\nkind=%s\nparent=%s\nsource=current\n' \
+  "$kind" "${previous:-none}" >"$work/$month.meta"
+mv -- "$work/state.snar" "$monthly/$month.snar"
+mv -- "$work/$month.sha256" "$work/$month.meta" "$monthly/"
+mv -- "$work/$month.tar.zst" "$archive"
+echo "Created $kind monthly archive: $archive"

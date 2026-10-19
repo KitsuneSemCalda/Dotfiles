@@ -62,7 +62,7 @@
           "id": "omarchy.network"
         },
         {
-          "id": "omarchy.audio"
+          "id": "kitsuneforgering.audio"
         },
         {
           "id": "omarchy.monitor"
@@ -74,7 +74,8 @@
       ]
     },
     "position": "top",
-    "transparent": true
+    "transparent": true,
+    "id": "kitsuneforgering.glass"
   },
   "idle": {
     "lock": 300,

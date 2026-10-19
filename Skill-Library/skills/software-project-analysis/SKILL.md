@@ -31,6 +31,15 @@ Read [references/conditional-lenses.md](references/conditional-lenses.md) for do
 
 ## Decide what to improve
 
+When an algorithm or data structure is a material recommendation, browse current primary sources
+for alternatives and their assumptions, including recent relevant work. Compare them with the
+project's workload and existing solution. Run a bounded, representative, read-only comparison
+against the baseline when feasible: verify equivalent outputs and relevant edge cases, then
+measure the cost that matters with enough repetitions to expose noise. Record direct source links,
+dates, versions, inputs, environment, and results. Do not treat a paper or third-party benchmark as a
+measured improvement in this project. If browsing or local testing is unavailable, state the gap
+and keep the recommendation provisional; do not edit the project merely to complete this analysis.
+
 For each significant recommendation answer: What observed problem or credible constraint does it address? Why is the current approach insufficient? What benefit is expected and at what workload? What complexity, risk, and migration cost does it add? What simpler alternative exists? How would success be checked? If these cannot be answered, leave it as a hypothesis or omit it.
 
 Seek whole-class improvements such as eliminating repeated work, improving an algorithm, batching I/O, strengthening an invariant, or removing an avoidable failure mode. Consider differentiated capabilities only when they create visible user or operator value. Preserve sound existing choices. Do not recommend fashionable technology, speculative abstractions, or a full rewrite to satisfy a pattern.

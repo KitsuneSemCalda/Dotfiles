@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# The K688 identifies itself as a Fifine USB microphone. Match the live audio
+# node instead of pinning a PipeWire object ID, which changes on every login.
+dump=$(pw-dump)
+mapfile -t ids < <(jq -r '
+  .[]
+  | select(.type == "PipeWire:Interface:Node")
+  | select(.info.props."media.class" == "Audio/Source")
+  | select([
+      .info.props."node.name" // "",
+      .info.props."node.description" // "",
+      .info.props."device.product.name" // ""
+    ] | join(" ") | test("fifine"; "i"))
+  | .id
+' <<< "$dump")
+
+if (( ${#ids[@]} != 1 )); then
+  printf 'Expected one Fifine microphone, found %d. Connect the K688 over USB and check wpctl status -n.\n' "${#ids[@]}" >&2
+  exit 1
+fi
+
+wpctl set-default "${ids[0]}"
+printf 'Selected Fifine USB microphone as the default input.\n'
+printf 'Restart capture-audio.service if it was started before connecting the microphone.\n'

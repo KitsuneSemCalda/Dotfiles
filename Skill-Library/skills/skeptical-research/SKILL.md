@@ -35,6 +35,8 @@ and competing explanations. Read the passages, methods, and results used; snippe
 are discovery aids. Follow pivotal claims to pertinent primary documents. Use foundational
 syntheses for orientation, and official documentation or source code for current technical behavior.
 Check retractions or superseding results when the status of pivotal evidence is in doubt.
+For an algorithmic choice, search for current competing methods, recent relevant papers, and
+maintained implementations; do not assume remembered options are complete or current.
 
 Record author or institution, direct URL, publication/update date, version or edition, passage
 location, access date, and access limits; mark unavailable metadata as unknown. Evaluate methods,
@@ -88,6 +90,10 @@ Separate model or implementation correctness from suitability for real condition
 does not establish effectiveness in practice. Missing data, access, equipment, or authorization
 means validation is pending: describe the decisive test without claiming it ran. Research alone
 does not authorize deployment, purchases, experiments on people, or production changes.
+For performance claims about a new algorithm, compare it with the existing baseline on equivalent
+outputs, representative and adverse inputs, and the relevant time and resource metrics. Repeat
+measurements enough to expose noise. A paper's benchmark is evidence about its own conditions,
+not a substitute for a local comparison when one is feasible.
 
 ## 6. Compare alternatives and revisit foundations
 

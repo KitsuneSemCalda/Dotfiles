@@ -52,9 +52,11 @@ Each skill teaches an agent something non-obvious about a real workflow. The
 current set:
 
 `algorithmic-project-review` · `anti-ai-mediocrity` · `blog-reader-panel` ·
-`github-project-health` · `humanizer` · `i-have-adhd` · `learn-from-work` ·
-`ponytail` · `preserve-my-english` · `product-readme` · `quantify-ambition` ·
-`skeptical-research` · `software-product-review` · `software-project-analysis`
+`github-project-health` · `github-resolution` · `humanizer` · `i-have-adhd` ·
+`iss-audit` · `learn-from-work` · `ponytail` · `pr-audit` · `pr-bump` ·
+`preserve-my-english` · `principled-refactoring` · `product-readme` ·
+`quantify-ambition` · `release` · `skeptical-research` ·
+`software-product-review` · `software-project-analysis`
 
 The format is the same `SKILL.md` convention Claude Code and Codex share, so a
 skill needs no per-agent adaptation. See the

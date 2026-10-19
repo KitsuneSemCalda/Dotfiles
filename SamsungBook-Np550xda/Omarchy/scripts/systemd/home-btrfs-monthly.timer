@@ -1,0 +1,11 @@
+[Unit]
+Description=Retry monthly Btrfs export daily until this month is saved
+
+[Timer]
+OnCalendar=*-*-* 04:00
+Persistent=true
+RandomizedDelaySec=2h
+Unit=home-btrfs-monthly.service
+
+[Install]
+WantedBy=timers.target

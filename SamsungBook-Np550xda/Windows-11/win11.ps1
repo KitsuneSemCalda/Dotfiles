@@ -16,6 +16,8 @@ Uso:
   pwsh ./win11.ps1 -Fonts               # instala Lexend + JetBrainsMono Nerd Font
   pwsh ./win11.ps1 -Theme               # aplica color scheme + wallpaper SAO
   pwsh ./win11.ps1 -Apps                # winget install das ferramentas usadas
+  pwsh ./win11.ps1 -Clamshell           # tampa: ligado na tomada, manter ativo; na bateria, suspender
+  pwsh ./win11.ps1 -Ek75                # adiciona layout US-International sem remover ABNT2
   pwsh ./win11.ps1 -All -Backup         # tudo de uma vez
 
 #>
@@ -27,6 +29,8 @@ param(
     [switch]$Fonts,
     [switch]$Theme,
     [switch]$Apps,
+    [switch]$Clamshell,
+    [switch]$Ek75,
     [switch]$All,
     [string]$Target = $env:USERPROFILE
 )
@@ -39,13 +43,13 @@ if ($All) {
     $Apps = $true
 }
 
-if ($Restore -and ($Backup -or $Fonts -or $Theme -or $Apps)) {
-    throw '-Restore nao pode ser combinado com -Backup, -Fonts, -Theme, -Apps ou -All'
+if ($Restore -and ($Backup -or $Fonts -or $Theme -or $Apps -or $Clamshell -or $Ek75)) {
+    throw '-Restore nao pode ser combinado com -Backup, -Fonts, -Theme, -Apps, -Clamshell, -Ek75 ou -All'
 }
 
 $RealHome = $env:USERPROFILE
-if (($Fonts -or $Theme -or $Apps) -and $Target -ne $RealHome) {
-    throw '-Fonts, -Theme e -Apps so podem usar o HOME real; use -Target apenas para testar copias'
+if (($Fonts -or $Theme -or $Apps -or $Clamshell -or $Ek75) -and $Target -ne $RealHome) {
+    throw '-Fonts, -Theme, -Apps, -Clamshell e -Ek75 so podem usar o HOME real; use -Target apenas para testar copias'
 }
 
 $RepoRoot = $PSScriptRoot
@@ -666,6 +670,19 @@ if ($Theme) {
     Set-WindowsTerminalTheme
     Set-Wallpaper
     Set-RainmeterHud
+}
+if ($Clamshell) {
+    $clamshellScript = Join-Path $RepoRoot 'scripts\clamshell.ps1'
+    Write-Action (Get-Tag 'RUN?' 'RUN') "clamshell.ps1 -Apply"
+    if (-not $DryRun) { & $clamshellScript -Apply }
+}
+if ($Ek75) {
+    $keyboardScript = Join-Path $RepoRoot 'scripts\ek75-keyboard.ps1'
+    Write-Action (Get-Tag 'RUN?' 'RUN') 'ek75-keyboard.ps1 -Apply'
+    if (-not $DryRun) {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $keyboardScript -Apply
+        if ($LASTEXITCODE -ne 0) { throw "EK75 keyboard setup failed ($LASTEXITCODE)" }
+    }
 }
 
 if ($script:BackupManifest.Count -gt 0) {
