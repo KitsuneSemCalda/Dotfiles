@@ -1,0 +1,4 @@
+claude-desktop_amd64.deb
+*.pkg.tar.*
+src/
+pkg/
