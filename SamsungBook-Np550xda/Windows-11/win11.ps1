@@ -261,7 +261,14 @@ function Restore-Backups {
         if (-not (Test-Path -LiteralPath $candidateManifest)) { continue }
         try {
             $entries = @(Get-Content -LiteralPath $candidateManifest -Raw | ConvertFrom-Json)
-            if ($entries.Count -eq 0) { continue }
+            $valid = $entries.Count -gt 0
+            foreach ($entry in $entries) {
+                if (-not $entry -or -not $entry.Destination -or -not $entry.RelativePath) {
+                    $valid = $false
+                    break
+                }
+            }
+            if (-not $valid) { continue }
             $snapshot = $candidate
             $manifest = $entries
             break
