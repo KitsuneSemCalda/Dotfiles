@@ -268,10 +268,14 @@ Install while preserving existing files in
 pwsh ./win11.ps1 -Backup
 ```
 
-Restore the most recent backup. Each backed-up item's real destination and a
+Restore the most recent backup with a readable, nonempty manifest. Backup
+directories have unique names even when two installations start within the
+same second. Each backed-up item's real destination and a
 post-install content hash are recorded in that backup's `manifest.json`, so
 restore writes to the same paths `-Backup` originally moved them from and
 aborts with no changes if any destination was modified after installation.
+An interrupted installation may leave a partial backup; its recorded items
+remain available for restore. Empty backup directories are skipped.
 See the [restore details](../docs/architecture.md#installation-conflicts-and-restore-scope)
 for the full mapping:
 

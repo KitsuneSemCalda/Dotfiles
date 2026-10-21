@@ -53,8 +53,8 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
 if ($Apply -and -not $isAdmin) {
     Write-Output 'Elevando para administrador (necessario para desativar tarefas agendadas do sistema)...'
     $scriptPath = $MyInvocation.MyCommand.Path
-    Start-Process -FilePath 'powershell.exe' -ArgumentList @('-ExecutionPolicy', 'Bypass', '-File', "`"$scriptPath`"", '-Apply') -Verb RunAs -Wait
-    exit 0
+    $process = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-ExecutionPolicy', 'Bypass', '-File', "`"$scriptPath`"", '-Apply') -Verb RunAs -Wait -PassThru -ErrorAction Stop
+    exit $process.ExitCode
 }
 
 # Lista construida a partir do "Get-AppxPackage" real desta maquina (nao e'

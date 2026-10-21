@@ -8,6 +8,14 @@ try {
     New-Item -ItemType Directory -Path $target -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot '..\Windows-11') -Destination $repo -Recurse
     $installer = Join-Path $repo 'win11.ps1'
+    # Force identical timestamps so separate backup runs exercise unique names.
+    $script = Get-Content -LiteralPath $installer -Raw
+    $script = $script.Replace("Get-Date -Format 'yyyyMMdd-HHmmss-fffffff'", "'20261020-120000-0000000'")
+    Set-Content -LiteralPath $installer -Value $script
+    . (Join-Path $repo 'scripts\jsonc.ps1')
+    $parsed = ConvertFrom-Jsonc '{"url":"https://example.org/a//b",/* block */"items":[1,2,],}// line'
+    Assert ($parsed.url -eq 'https://example.org/a//b' -and $parsed.items.Count -eq 2) 'JSONC comments or trailing commas failed'
+    Assert ((ConvertFrom-Jsonc '{"name":"a\"b"}').name -eq 'a"b') 'JSONC escaped quote failed'
     & $installer -Target $target -DryRun
     Assert (-not (Test-Path (Join-Path $target '.config\starship.toml'))) 'Dry-run wrote files'
     & $installer -Target $target
@@ -25,14 +33,20 @@ try {
     try { & $installer -Target $target } catch { $failed = $true }
     Assert $failed 'Overwrote local edits'
     & $installer -Target $target -Backup
+    $backupBase = Join-Path $target '.local\state\dotfiles\backups'
+    $firstSnapshot = Get-ChildItem -LiteralPath $backupBase -Directory | Where-Object { Test-Path (Join-Path $_.FullName 'manifest.json') }
+    Assert (@($firstSnapshot).Count -eq 1) 'First backup has no manifest'
+    $incomplete = Join-Path $backupBase '20990101-000000-0000000-00000000000000000000000000000000'
+    New-Item -ItemType Directory -Path $incomplete | Out-Null
+    Set-Content -LiteralPath (Join-Path $incomplete 'manifest.json') -Value '[]'
     & $installer -Target $target -Restore
     Assert ((Get-Content $dest -Raw).Trim() -eq 'local edit') 'Restore lost local edits'
-
-    $backupBase = Join-Path $target '.local\state\dotfiles\backups'
+    Remove-Item -LiteralPath $incomplete -Recurse -Force
 
     Set-Content -LiteralPath $dest -Value 'edit before missing-backup test'
     & $installer -Target $target -Backup
-    $snapshot = Get-ChildItem -LiteralPath $backupBase -Directory | Sort-Object Name | Select-Object -Last 1
+    Assert (@(Get-ChildItem -LiteralPath $backupBase -Directory).Count -eq 2) 'Backups with the same timestamp collided'
+    $snapshot = Get-ChildItem -LiteralPath $backupBase -Directory | Sort-Object CreationTimeUtc | Select-Object -Last 1
     Remove-Item -LiteralPath (Join-Path $snapshot.FullName 'starship.toml') -Force
     $beforeMissing = Get-Content $dest -Raw
     $failed = $false
@@ -42,7 +56,7 @@ try {
 
     Set-Content -LiteralPath $dest -Value 'edit before locked-backup test'
     & $installer -Target $target -Backup
-    $snapshot = Get-ChildItem -LiteralPath $backupBase -Directory | Sort-Object Name | Select-Object -Last 1
+    $snapshot = Get-ChildItem -LiteralPath $backupBase -Directory | Sort-Object CreationTimeUtc | Select-Object -Last 1
     $lockedFile = Join-Path $snapshot.FullName 'starship.toml'
     $stream = [System.IO.File]::Open($lockedFile, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::None)
     $beforeLocked = Get-Content $dest -Raw

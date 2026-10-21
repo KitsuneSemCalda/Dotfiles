@@ -234,11 +234,11 @@ Sources: [Compose](../Omarchy/docker/docker-compose.yml),
 
 ```mermaid
 flowchart LR
-  U["Host and trusted LAN clients"] -->|"host:5432"| PG["Postgres 17-alpine"]
-  U -->|"host:6379"| RE["Redis 7-alpine"]
-  U -->|"host:7591"| FM["FrankMD :80"]
+  U["Host"] -->|"127.0.0.1:5432"| PG["Postgres 17-alpine"]
+  U -->|"127.0.0.1:6379"| RE["Redis 7-alpine"]
+  U -->|"127.0.0.1:7591"| FM["FrankMD :80"]
   AG["Detected CLIs"] --> WR["ai-memory wrapper + MCP/hooks"]
-  WR -->|"local service :49374"| AI["ai-memory"]
+  WR -->|"127.0.0.1:49374"| AI["ai-memory"]
   DNS["Host DNS after --dns"] -->|"127.0.0.1:53 TCP/UDP"| PH["Pi-hole"]
   LAN["Trusted LAN clients"] -->|"LAN_IP:53 TCP/UDP"| PH
   DNS -.->|"Configured fallback server"| CF["1.1.1.1"]
@@ -253,9 +253,10 @@ flowchart LR
 There is no declared link between FrankMD or ai-memory and Postgres/Redis: they are
 independent services in the Compose file, with no `depends_on`. All use
 `restart: unless-stopped`. Images use explicit version tags, although exact
-reproducibility is not pinned by digest. Published ports listen on all host
-interfaces, including the local network; this does not isolate the containers
-from each other.
+reproducibility is not pinned by digest. Postgres, Redis, FrankMD, and ai-memory
+publish only to host loopback. Pi-hole DNS binds to loopback and the configured
+LAN address; its web UI on port 8080 remains available on host interfaces.
+These host bindings do not isolate the containers from each other.
 
 - `--up`: creates the notes folder; creates `.env` only if absent, with random
   secrets and `0600` permissions; refreshes `LAN_IP`; runs `docker compose up -d`.

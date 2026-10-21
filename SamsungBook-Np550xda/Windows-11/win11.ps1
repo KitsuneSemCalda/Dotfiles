@@ -54,9 +54,10 @@ if (($Fonts -or $Theme -or $Apps -or $Clamshell -or $Ek75) -and $Target -ne $Rea
 
 $RepoRoot = $PSScriptRoot
 $SourceRoot = Join-Path $RepoRoot 'home'
+. (Join-Path $RepoRoot 'scripts/jsonc.ps1')
 $BackupBase = Join-Path $Target '.local\state\dotfiles\backups'
-$Stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$BackupRoot = Join-Path $BackupBase $Stamp
+$Stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fffffff'
+$BackupRoot = Join-Path $BackupBase "$Stamp-$([guid]::NewGuid().ToString('N'))"
 
 $StatePath = Join-Path $Target '.local\state\dotfiles\installed-windows.json'
 $Installed = @{}
@@ -250,18 +251,27 @@ function Restore-Backups {
     if (-not (Test-Path -LiteralPath $BackupBase)) {
         throw "Diretorio de backups ausente: $BackupBase"
     }
-    $snapshot = Get-ChildItem -LiteralPath $BackupBase -Directory |
-        Where-Object { $_.Name -match '^\d{8}-\d{6}$' } |
-        Sort-Object Name | Select-Object -Last 1
+    $snapshots = Get-ChildItem -LiteralPath $BackupBase -Directory |
+        Where-Object { $_.Name -match '^\d{8}-\d{6}$' -or $_.Name -match '^\d{8}-\d{6}-\d{7}-[0-9a-f]{32}$' } |
+        Sort-Object CreationTimeUtc, Name -Descending
+    $snapshot = $null
+    $manifest = $null
+    foreach ($candidate in $snapshots) {
+        $candidateManifest = Join-Path $candidate.FullName 'manifest.json'
+        if (-not (Test-Path -LiteralPath $candidateManifest)) { continue }
+        try {
+            $entries = @(Get-Content -LiteralPath $candidateManifest -Raw | ConvertFrom-Json)
+            if ($entries.Count -eq 0) { continue }
+            $snapshot = $candidate
+            $manifest = $entries
+            break
+        } catch {
+            Write-Warning "Ignorando manifesto ilegivel em $candidateManifest : $_"
+        }
+    }
     if (-not $snapshot) {
-        throw "Nenhum backup encontrado em $BackupBase"
+        throw "Nenhum backup com manifesto valido encontrado em $BackupBase"
     }
-
-    $manifestPath = Join-Path $snapshot.FullName 'manifest.json'
-    if (-not (Test-Path -LiteralPath $manifestPath)) {
-        throw "Manifesto de restauracao ausente em $manifestPath (backup incompativel ou corrompido)"
-    }
-    $manifest = @(Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json)
 
     Write-Action 'BACKUP' $snapshot.Name
 
@@ -344,9 +354,7 @@ function Set-WindowsTerminalTheme {
     $schemeSource = Join-Path $SourceRoot 'windows-terminal\sword-art-online.scheme.json'
     $scheme = Get-Content -LiteralPath $schemeSource -Raw | ConvertFrom-Json
 
-    $rawLines = Get-Content -LiteralPath $settingsPath
-    $cleanJson = ($rawLines | Where-Object { $_.Trim() -notmatch '^//' }) -join "`n"
-    $settings = $cleanJson | ConvertFrom-Json
+    $settings = ConvertFrom-Jsonc (Get-Content -LiteralPath $settingsPath -Raw)
 
     if (-not $settings.schemes) {
         $settings | Add-Member -NotePropertyName schemes -NotePropertyValue @() -Force
