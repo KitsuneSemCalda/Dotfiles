@@ -30,7 +30,6 @@ Path .local/share/nvim
 Path .local/share/Trash
 Path .local/state/home-dropbox-backup
 Path .var/app/*/cache
-Path Projects/omastore-fork-backups
 Path go/pkg/mod
 Name node_modules
 Name .venv
@@ -41,6 +40,5 @@ Name *.log
 Name *-shm
 Name *-wal
 Name *-journal
-Name *.lock
 Name *conflict_on_*
 Regex .*\.(sock|socket|pipe)

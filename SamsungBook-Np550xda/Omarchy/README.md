@@ -304,8 +304,9 @@ The script stores its Unison archive, lock and last-success marker in
 `${XDG_CONFIG_HOME:-~/.config}/home-dropbox-backup/excludes`. The XDG user
 directories, active projects, configuration, and credentials are included.
 The exclusion file skips the Dropbox folder itself, caches, Steam and container
-data, reinstallable toolchains and build outputs, and the existing 64 GB
-`~/Projects/omastore-fork-backups` directory. Edit it before the first run if
+data, reinstallable toolchains and build outputs. The source files under
+`~/Projects/omastore-fork-backups` and project dependency lockfiles are included;
+its large `target/` build directory is excluded. Edit the rules before the first run if
 you need those items. The synchronized copy includes credentials such as `~/.ssh` in
 plain text, as requested; anyone with access to the Dropbox account can read
 them. The script refuses to start if the disk has less than 10 GiB free.
