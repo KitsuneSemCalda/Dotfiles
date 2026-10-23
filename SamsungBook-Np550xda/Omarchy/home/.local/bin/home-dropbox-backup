@@ -67,7 +67,7 @@ restore_excludes+=(--exclude='*.sock' --exclude='*.socket' --exclude='*.pipe')
 
 if ((restore)); then
   [[ -d "$current" ]] || { echo "No backup found at $current" >&2; exit 1; }
-  options=(-a --itemize-changes --no-owner --no-group)
+  options=(-a --update --itemize-changes --no-owner --no-group)
   if ((!apply)); then
     options+=(--dry-run)
     echo "Previewing restore into $target"

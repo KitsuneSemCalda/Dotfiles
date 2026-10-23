@@ -29,6 +29,7 @@ Also check for the opposite error: a terse answer that omits an essential invari
 ## Apply independent engineering lenses
 
 For meaningful implementation or architectural decisions, review the artifact through several independent engineering lenses. These are principles associated with publicly documented engineering work, not impersonations. Never invent quotes or claim that a named programmer would personally approve or reject the code.
+Use [references/engineering-lenses.md](references/engineering-lenses.md) for the expanded checks and tradeoffs.
 
 ### John Carmack lens
 
@@ -186,5 +187,6 @@ Scheduled mode does not expand authorization. If the ordinary skill is read-only
 ## Completion
 
 If the user asks for a critique, provide a short ranked list of substantive issues and a concrete revision path. If the user asks to fix the artifact, make the corrections within the authorized scope and verify the result. Do not create work just to make the artifact look more comprehensive. Stop when the promised outcome is demonstrably met or when the remaining uncertainty is stated plainly.
+For a substantial review, use [references/reporting.md](references/reporting.md) and scale the report to the decision.
 
 For scheduled mode, one iteration is complete when the current scope has been reviewed, the result and revision have been persisted, logs are closed, and the process exits cleanly.

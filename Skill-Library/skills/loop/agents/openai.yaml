@@ -1,0 +1,6 @@
+interface:
+  display_name: "Loop"
+  short_description: "Schedule a recurring agent task"
+  default_prompt: "Use $loop to schedule or manage this recurring task."
+policy:
+  allow_implicit_invocation: false

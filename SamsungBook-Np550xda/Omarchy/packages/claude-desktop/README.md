@@ -12,22 +12,23 @@ Execute a partir desta pasta:
 ```bash
 cp ~/Downloads/claude-desktop_amd64.deb .
 sha256sum -c <(printf '%s  %s\n' d39e1d9a570f1e517f158479f5a1d903b9a74d1ef3f279362002dcad375e33cf claude-desktop_amd64.deb)
-makepkg -si
+makepkg
+pkexec pacman -U -- ./claude-desktop-*.pkg.tar.zst
 claude-desktop
 ```
 
-O `makepkg -si` instala as dependências pelos repositórios Arch e pede a
-senha do `sudo` para instalar o pacote final. Também é possível abrir Claude
+O `pacman -U` instala o pacote final e resolve as dependências pelos
+repositórios Arch após a autorização do `pkexec`. Também é possível abrir Claude
 pelo menu de aplicativos. O pacote extraído já traz o lançador `.desktop`.
 
 Para remover:
 
 ```bash
-sudo pacman -Rns claude-desktop
+pkexec pacman -Rns claude-desktop
 ```
 
 Para uma versão futura, baixe o novo `.deb`, atualize `pkgver` e
-`sha256sums` no `PKGBUILD`, depois execute `makepkg -si` novamente. Uma
+`sha256sums` no `PKGBUILD`, depois execute `makepkg` e `pkexec pacman -U` novamente. Uma
 instalação feita com este arquivo local não recebe atualizações automáticas.
 
 O suporte oficial da Anthropic para Linux ainda cobre Debian e Ubuntu. No

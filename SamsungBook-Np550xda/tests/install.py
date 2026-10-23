@@ -15,6 +15,9 @@ with tempfile.TemporaryDirectory() as tmp:
     (repo / 'home').mkdir(parents=True)
     target.mkdir()
     shutil.copy2(installer, repo / 'omarchy.pl')
+    system_installer = repo / 'scripts/install-system.sh'
+    system_installer.parent.mkdir(parents=True)
+    shutil.copy2(installer.parent / 'scripts/install-system.sh', system_installer)
     knob_rule = repo / 'scripts/udev/61-ek75-knob.hwdb'
     knob_rule.parent.mkdir(parents=True)
     shutil.copy2(installer.parent / 'scripts/udev/61-ek75-knob.hwdb', knob_rule)
@@ -119,6 +122,10 @@ with tempfile.TemporaryDirectory() as tmp:
         '#!/bin/sh\nset -eu\n[ -z "${FAIL_BACKEND:-}" ] || exit 1\n'
         'p="$HOME/.config/omarchy/plugins/io.github.kitsunesemcalda.feader-rss"\n'
         'mkdir -p "$p"\necho rebuilt-backend > "$p/feader-rss-fetch"\nchmod +x "$p/feader-rss-fetch"\n')
+    openrgb_tools = fixtures / 'dareu-ek75-openrgb/tools'
+    openrgb_tools.mkdir(parents=True)
+    for step in ('build.sh', 'install-launcher.sh', 'install-hook.sh'):
+        (openrgb_tools / step).write_text(f'#!/bin/sh\necho {step} >> "$HOME/openrgb-steps"\n')
     fake_tool = fake_bin / 'tool'
     fake_tool.write_text(r'''#!/usr/bin/env python3
 import json, os, pathlib, shutil, sys
@@ -144,7 +151,7 @@ elif name == 'pgrep':
         sys.exit(1)
 ''')
     fake_tool.chmod(0o755)
-    for name in ['git', 'omarchy', 'omarchy-shell', 'hyprctl', 'systemctl', 'pgrep', 'sudo']:
+    for name in ['git', 'omarchy', 'omarchy-shell', 'hyprctl', 'systemctl', 'pgrep', 'pkexec']:
         (fake_bin / name).symlink_to(fake_tool)
     env = {**os.environ, 'HOME': str(target), 'PATH': f"{fake_bin}:{os.environ['PATH']}",
            'FIXTURES': str(fixtures), 'COMMAND_LOG': str(log), 'FAKE_BIN': str(fake_bin)}
@@ -187,15 +194,25 @@ elif name == 'pgrep':
     assert log.read_bytes() == before
     assert 'SKIP    Chromium bookmarks' in preview.stdout
     assert "'systemctl' 'reboot'" in preview.stdout
-    assert "'sudo' 'install' '-m' '0644'" in preview.stdout
-    assert "'sudo' 'systemd-hwdb' '--strict' 'update'" in preview.stdout
+    assert preview.stdout.count("'pkexec' '/usr/bin/bash'") == 1
+    assert "'--openrgb'" in preview.stdout
+    assert "'--ek75-knob' '--home-backup'" in preview.stdout
     assert "'systemctl' '--user' 'enable' '--now' 'home-dropbox-backup.timer'" in preview.stdout
     log.write_text('')
     run_plugin('--ek75-knob')
     knob_commands = [json.loads(line) for line in log.read_text().splitlines()]
     assert knob_commands == [
-        ['sudo', 'install', '-m', '0644', str(knob_rule), '/etc/udev/hwdb.d/61-ek75-knob.hwdb'],
-        ['sudo', 'systemd-hwdb', '--strict', 'update'],
+        ['pkexec', '/usr/bin/bash', str(system_installer), '--ek75-knob'],
+    ]
+    log.write_text('')
+    run_plugin('--openrgb', '--ek75-knob', '--home-backup')
+    combined_commands = [json.loads(line) for line in log.read_text().splitlines()]
+    assert [command for command in combined_commands if command[0] == 'pkexec'] == [
+        ['pkexec', '/usr/bin/bash', str(system_installer), '--openrgb',
+         str(target / '.local/share/dareu-ek75-openrgb'), '--ek75-knob', '--home-backup'],
+    ]
+    assert (target / 'openrgb-steps').read_text().splitlines() == [
+        'build.sh', 'install-launcher.sh', 'install-hook.sh',
     ]
 
     # The bookmarks step merges into an existing Chromium profile and is idempotent.

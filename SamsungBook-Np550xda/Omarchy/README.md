@@ -75,6 +75,7 @@ this copy.
 
 ```text
 home/
+├── .aliasrc                 # Bash aliases for Codex and Claude via ai-memory
 ├── .config/
 │   ├── alacritty/alacritty.toml
 │   ├── btop/btop.conf
@@ -156,9 +157,9 @@ The keyboard's RGB lighting needs the
 [Dareu EK75 OpenRGB driver](https://github.com/KitsuneSemCalda/Dareu-EK75-OpenRGB-Compat),
 because the packaged `openrgb` has no support for it. `--openrgb` clones it to
 `~/.local/share/dareu-ek75-openrgb`, or updates an existing clone, then runs its
-`install.sh`: the udev
-rule (asks for sudo), an OpenRGB build with the driver, the launcher, and a hook
-that colours the keyboard with each Omarchy theme's accent. It needs the Qt 6
+installer steps: an OpenRGB build with the driver, the launcher, and a hook
+that colours the keyboard with each Omarchy theme's accent. The udev rule is
+installed in the installer's single `pkexec` call. It needs the Qt 6
 build dependencies of OpenRGB and takes a while on the first run.
 
 The EK75 knob on this machine sends repeated mute events even when untouched.
@@ -168,9 +169,9 @@ the EK75's secondary input interface in wired and 2.4 GHz modes; it disables
 its mute and volume events while leaving ordinary typing available. Other
 EK75 media shortcuts that send those same events may also be affected.
 The option is included in `--all`. Reconnect the keyboard after installation
-to apply the rule to an already connected device. It requires `sudo`, and
+to apply the rule to an already connected device. It uses `pkexec`, and
 `--restore` does not remove system rules. After repairing the knob, remove
-`/etc/udev/hwdb.d/61-ek75-knob.hwdb`, run `sudo systemd-hwdb --strict update`,
+`/etc/udev/hwdb.d/61-ek75-knob.hwdb`, run `pkexec systemd-hwdb --strict update`,
 and reconnect the keyboard to restore its original behavior.
 
 ```bash
@@ -240,8 +241,14 @@ invalid Hyprland configuration prevents the reboot. `--all` without `--reboot`
 does not reboot; `--dry-run` never executes either installation commands or reboot.
 Run the real installation inside the Omarchy desktop session, with a terminal
 available for package-manager and HyprGlass administrator prompts.
+The OpenRGB udev rule, EK75 knob rule and system backup timer share one
+`pkexec` authorization when selected together.
 
 The installer copies the files under `home/`, preserving executable permissions.
+The Codex and Claude aliases in `home/.aliasrc` use `ai-memory run --yolo`,
+which starts both agents with their native permission prompts disabled. Bash must
+source `~/.aliasrc` from `~/.bashrc` for them to be active. The current machine
+already does this. A new terminal loads changes to the alias file.
 Legacy links to this checkout are replaced automatically. You can remove the
 checkout after installation; pull or clone it again and rerun the installer
 to update. Locally edited files require `--backup` before replacement. No
@@ -275,12 +282,17 @@ Two additional timers run daily and create at most one archive for each calendar
 month, retrying after a failed run. The user timer writes a GNU tar incremental
 chain compressed with zstd under `home/monthly/home/YYYY-MM.tar.zst`; each month
 also has a `.snar` state file, `.sha256` checksum and `.meta` parent record.
+It waits for a completed home sync and retries the next day if the most recent
+sync skipped changing files or conflicts.
 The first archive is full; later archives require every ancestor back to that
 full archive. The system timer creates a read-only Btrfs snapshot of `/` and
 exports a compressed `btrfs send` stream under `home/monthly/btrfs/`. The first
 stream is full, later streams use the previous month's snapshot as parent when
 its archive is intact. It keeps only the newest local snapshot under
 `/var/lib/home-dropbox-backup/snapshots/`; exported streams stay in Dropbox.
+An existing stream is skipped only after its checksum and metadata validate.
+Incomplete or corrupt monthly exports are moved to a dated `.incomplete-*`
+directory beside the streams before the timer retries that month.
 This captures the root subvolume at monthly dates. The separate `@home`,
 `@pkg` and `@log` subvolumes are not part of the root stream; the selected home
 files are covered by the home archive and live replica. Existing Snapper
@@ -297,6 +309,12 @@ data, reinstallable toolchains and build outputs, and the existing 64 GB
 you need those items. The synchronized copy includes credentials such as `~/.ssh` in
 plain text, as requested; anyone with access to the Dropbox account can read
 them. The script refuses to start if the disk has less than 10 GiB free.
+Chromium bookmarks remain included, but live cookies, history, favicons,
+preferences and session files are excluded because they repeatedly changed
+during transfer. Close Chromium and use a separate profile export if those
+parts of the browser profile must be recovered.
+Older copies of excluded Chromium files may remain under `current/`; restore
+also skips them, and the exclusion rules do not delete existing backup data.
 
 ```bash
 perl ./omarchy.pl --home-backup --dry-run
@@ -318,8 +336,10 @@ home-dropbox-backup --restore
 home-dropbox-backup --restore --apply
 ```
 
-Restoration copies files from `current/` into the home without deleting newer
-local files. Older versions in `history/` can be copied manually as needed.
+Restoration copies files from `current/` into the home without overwriting
+local files whose modification time is newer than the backup copy. Preview
+the changes first; rsync uses modification times to decide which copy is newer.
+Older versions in `history/` can be copied manually as needed.
 For a monthly recovery, verify all `.sha256` files with `sha256sum -c`, then
 extract the full home archive followed by each incremental archive in date
 order into a new, empty directory. For example, with archive names `2026-10`
@@ -341,8 +361,8 @@ recreates the dated root snapshots. For example, from `monthly/btrfs/`:
 
 ```bash
 sha256sum -c 2026-10.sha256 2026-11.sha256
-zstd -dc 2026-10.send.zst | sudo btrfs receive /mnt/recovery
-zstd -dc 2026-11.send.zst | sudo btrfs receive /mnt/recovery
+zstd -dc 2026-10.send.zst | pkexec btrfs receive /mnt/recovery
+zstd -dc 2026-11.send.zst | pkexec btrfs receive /mnt/recovery
 ```
 
 Use each `.meta` file to find its parent; if a month is `kind=full`, start a
@@ -363,8 +383,9 @@ upload.
 
 ## Docker stack
 
-`docker/docker-compose.yml` brings up five services published on the host so
-they are reachable from trusted devices on the local network:
+`docker/docker-compose.yml` brings up five services. Postgres, Redis, FrankMD
+and ai-memory bind to `127.0.0.1`, so they are reachable only from this
+machine. Pi-hole's DNS and web UI are also reachable from the local network:
 
 - **postgres** (`17-alpine`) and **redis** (`7-alpine`) — general-purpose
   database and cache for local projects, ports `5432` and `6379`.

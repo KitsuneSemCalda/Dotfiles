@@ -46,6 +46,18 @@ month=${HOME_BACKUP_MONTH:-$(date +%Y-%m)}
 archive="$monthly/$month.tar.zst"
 [[ ! -e "$archive" ]] || { echo "Monthly archive already exists: $archive"; exit 0; }
 
+# A partial or conflicted Unison run leaves current/ behind the live home.
+for marker in last-partial last-conflicts; do
+  if [[ -f "$state/$marker" ]]; then
+    echo "Home synchronization is incomplete ($marker); monthly archive will retry tomorrow" >&2
+    exit 1
+  fi
+done
+[[ -f "$state/last-success" ]] || {
+  echo 'No completed home synchronization; monthly archive will retry tomorrow' >&2
+  exit 1
+}
+
 previous=''
 while IFS= read -r path; do
   name=${path##*/}

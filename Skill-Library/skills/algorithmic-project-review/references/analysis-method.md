@@ -56,6 +56,40 @@ Inspect factors that can dominate practical behavior:
 
 These costs complement asymptotic analysis; they do not justify unsupported performance claims.
 
+## Execution and cost graph
+
+Use nodes for meaningful work: functions, pipeline stages, queries, codecs, tasks, kernels, or
+filesystem operations. Mark edges as dependencies, data transfers, synchronization, or queueing.
+Record ownership and producer/consumer relationships where they explain copying or waiting. Avoid
+inventing a fine-grained graph when the profiler only supports coarse stages.
+
+For each measurable node, collect only relevant available metrics:
+
+- wall, CPU, exclusive and inclusive time; queue, filesystem, and synchronization wait;
+- CPU and per-thread utilization, context switches, migrations, and hardware counters when useful;
+- current and peak RSS, allocations, page faults, memory bandwidth or cache misses when useful;
+- bytes and operations read, written, or transferred, with latency and throughput;
+- GPU execution and queue time, utilization, VRAM, occupancy, and host/device transfer where GPU work exists.
+
+Name the workload and measurement tool. Use `unknown` for unavailable measurements. Distinguish
+resource consumption from contribution to end-to-end latency. High utilization may indicate useful
+parallel work while a low-utilization stage on the critical path controls completion.
+
+Find the longest dependency path. Sequential costs add; concurrent branches contribute their maximum
+elapsed time at a join. A timeline is useful when overlap, idle gaps, or waiting cannot be understood
+from the graph alone. Keep total work, critical-path latency, and peak in-flight memory separate.
+
+Trace data volume across edges and look for repeated copies, conversions, serialization, cache fills,
+and CPU/GPU round trips. Distinguish memory capacity, bandwidth, cache locality, and allocation
+overhead: they call for different changes. For GPU proposals, account for arithmetic intensity,
+residency, transfer, launch, and synchronization costs before recommending a move.
+
+Classify a node as `HOT_CPU`, `MEMORY_BOUND`, `CACHE_BOUND`, `GPU_BOUND`, `IO_BOUND`,
+`SYNC_BOUND`, `LOCK_CONTENTION`, `ALLOCATION_HEAVY`, `TRANSFER_BOUND`,
+`SERIALIZATION_BOTTLENECK`, `UNDERUTILIZED_PARALLELISM`, `SCHEDULER_BOUND`,
+`LATENCY_BOUND`, or `BANDWIDTH_BOUND` only with supporting measurements. Otherwise use `UNKNOWN`.
+Give a confidence level: high, medium, low, or speculative.
+
 ## Evidence hierarchy
 
 Prefer, in order:

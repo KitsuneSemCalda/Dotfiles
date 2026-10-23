@@ -21,15 +21,43 @@ snapshots="$state/snapshots"
 destination="$dropbox/Backups/SamsungBook-Np550xda/Omarchy/home/monthly/btrfs"
 runuser -u "$owner" -- mkdir -p -- "$destination"
 archive="$destination/$month.send.zst"
-if runuser -u "$owner" -- test -e "$archive"; then
-  echo "Btrfs archive already exists: $archive"
-  exit 0
-fi
-
 install -d -m 0700 -- "$snapshots"
 exec 9>"$state/lock"
 flock -w 3600 9 || { echo 'Timed out waiting for Btrfs export' >&2; exit 1; }
 snapshot="$snapshots/$month"
+
+archive_complete() {
+  runuser -u "$owner" -- test -f "$archive" \
+    && runuser -u "$owner" -- test -f "$destination/$month.sha256" \
+    && runuser -u "$owner" -- test -f "$destination/$month.meta" \
+    && grep -qx 'format=btrfs-send' "$destination/$month.meta" \
+    && grep -Eq '^kind=(full|incremental)$' "$destination/$month.meta" \
+    && grep -Eq '^parent=(none|[0-9]{4}-(0[1-9]|1[0-2]))$' "$destination/$month.meta" \
+    && grep -qx 'subvolume=/' "$destination/$month.meta" \
+    && (cd "$destination" && runuser -u "$owner" -- sha256sum --status -c -- "$month.sha256")
+}
+
+if archive_complete; then
+  # A crash after publishing the archive may have preceded the state update.
+  if [[ -d $snapshot ]]; then
+    printf '%s\n' "$month" >"$state/latest.tmp"
+    mv -- "$state/latest.tmp" "$state/latest"
+  fi
+  echo "Btrfs archive already verified: $archive"
+  exit 0
+fi
+
+# Keep an incomplete or corrupt set for inspection, then retry this month.
+if [[ -e $archive || -e $destination/$month.sha256 || -e $destination/$month.meta ]]; then
+  incomplete=$(runuser -u "$owner" -- mktemp -d -- "$destination/.incomplete-$month.XXXXXXXX")
+  for file in "$archive" "$destination/$month.sha256" "$destination/$month.meta"; do
+    if [[ -e $file || -L $file ]]; then
+      runuser -u "$owner" -- mv -- "$file" "$incomplete/"
+    fi
+  done
+  echo "Preserved incomplete Btrfs export in $incomplete; retrying $month" >&2
+fi
+
 if [[ ! -e $snapshot ]]; then
   btrfs subvolume snapshot -r / "$snapshot"
 fi
@@ -59,15 +87,20 @@ source_kib=$(du -skx --exclude=/.snapshots --exclude=/var/lib/home-dropbox-backu
 }
 
 temporary="$destination/.$month.$$.part"
-cleanup() { runuser -u "$owner" -- rm -f -- "$temporary"; }
+temporary_checksum="$destination/.$month.$$.sha256.part"
+temporary_meta="$destination/.$month.$$.meta.part"
+cleanup() { runuser -u "$owner" -- rm -f -- "$temporary" "$temporary_checksum" "$temporary_meta"; }
 trap cleanup EXIT
 btrfs send "${parent[@]}" "$snapshot" | zstd -T0 -q | runuser -u "$owner" -- tee "$temporary" >/dev/null
 runuser -u "$owner" -- zstd -tq -- "$temporary"
-runuser -u "$owner" -- mv -- "$temporary" "$archive"
-(cd "$destination" && runuser -u "$owner" -- sha256sum "$month.send.zst") \
-  | runuser -u "$owner" -- tee "$destination/$month.sha256" >/dev/null
+checksum=$(runuser -u "$owner" -- sha256sum -- "$temporary")
+printf '%s  %s\n' "${checksum%% *}" "$month.send.zst" \
+  | runuser -u "$owner" -- tee "$temporary_checksum" >/dev/null
 printf 'format=btrfs-send\nkind=%s\nparent=%s\nsubvolume=/\n' \
-  "$kind" "${previous:-none}" | runuser -u "$owner" -- tee "$destination/$month.meta" >/dev/null
+  "$kind" "${previous:-none}" | runuser -u "$owner" -- tee "$temporary_meta" >/dev/null
+runuser -u "$owner" -- mv -- "$temporary_checksum" "$destination/$month.sha256"
+runuser -u "$owner" -- mv -- "$temporary_meta" "$destination/$month.meta"
+runuser -u "$owner" -- mv -- "$temporary" "$archive"
 printf '%s\n' "$month" >"$state/latest.tmp"
 mv -- "$state/latest.tmp" "$state/latest"
 

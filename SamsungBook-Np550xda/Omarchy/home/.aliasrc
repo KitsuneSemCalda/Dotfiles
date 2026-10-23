@@ -1,0 +1,4 @@
+alias cat="bat --plain --color=always"
+alias tree="exa --icons --tree --color=always"
+alias codex='ai-memory run --yolo codex'
+alias claude='ai-memory run --yolo claude'

@@ -9,7 +9,14 @@ Path .codex/models_cache.json
 Path .codex/packages
 Path .config/chromium/Safe Browsing
 Path .config/chromium/*/Cache
+Path .config/chromium/*/Cookies
+Path .config/chromium/*/Favicons
+Path .config/chromium/*/History
 Path .config/chromium/*/Network Action Predictor
+Path .config/chromium/*/Preferences
+Path .config/chromium/*/Reporting and NEL
+Path .config/chromium/*/Sessions
+Path .config/chromium/*/TransportSecurity
 Path .config/chromium/*/WebStorage/QuotaManager
 Path .config/chromium/*/WebStorage/QuotaManager-journal
 Path .ghcup

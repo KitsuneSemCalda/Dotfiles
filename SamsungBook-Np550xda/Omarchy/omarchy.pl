@@ -260,6 +260,17 @@ if ($plugin || $reboot) {
     }
 }
 
+if ($openrgb || $ek75_knob || $home_backup) {
+    my @actions;
+    push @actions, ('--openrgb', File::Spec->catdir($target, '.local', 'share', 'dareu-ek75-openrgb')) if $openrgb;
+    push @actions, '--ek75-knob' if $ek75_knob;
+    push @actions, '--home-backup' if $home_backup;
+    run_command('pkexec', '/usr/bin/bash',
+        File::Spec->catfile($repo_root, 'scripts', 'install-system.sh'), @actions);
+    say 'Reconnect the EK75 to activate the knob rule on an already connected keyboard.' if $ek75_knob;
+    say 'Home sync, monthly home archive and monthly Btrfs export timers are enabled.' if $home_backup;
+}
+
 say $dry_run ? 'Dry-run finished.' : 'Dotfiles installed.';
 run_command('systemctl', 'reboot') if $reboot;
 exit 0;
@@ -778,19 +789,15 @@ sub ensure_openrgb {
         run_command('git', 'clone', $url, $dir);
     }
 
-    # Installs the udev rule (sudo), builds OpenRGB with the driver, and sets
-    # up the launcher and the theme hook.
-    run_command('bash', File::Spec->catfile($dir, 'install.sh'));
+    # The udev rule is installed with the other system changes in one pkexec.
+    for my $step (qw(build.sh install-launcher.sh install-hook.sh)) {
+        run_command('bash', File::Spec->catfile($dir, 'tools', $step));
+    }
 }
 
 sub ensure_ek75_knob {
     my $source = File::Spec->catfile($repo_root, 'scripts', 'udev', '61-ek75-knob.hwdb');
-    my $destination = '/etc/udev/hwdb.d/61-ek75-knob.hwdb';
     die "Missing EK75 knob rule: $source\n" unless -f $source;
-
-    run_command('sudo', 'install', '-m', '0644', $source, $destination);
-    run_command('sudo', 'systemd-hwdb', '--strict', 'update');
-    say 'Reconnect the EK75 to activate the knob rule on an already connected keyboard.';
 }
 
 sub ensure_home_backup {
@@ -798,17 +805,6 @@ sub ensure_home_backup {
     run_command('systemctl', '--user', 'daemon-reload');
     run_command('systemctl', '--user', 'enable', '--now', 'home-dropbox-backup.timer');
     run_command('systemctl', '--user', 'enable', '--now', 'home-dropbox-monthly.timer');
-    run_command('sudo', 'install', '-D', '-m', '0755',
-        File::Spec->catfile($repo_root, 'scripts', 'btrfs-monthly-backup'),
-        '/usr/local/libexec/btrfs-monthly-backup');
-    for my $unit (qw(home-btrfs-monthly.service home-btrfs-monthly.timer)) {
-        run_command('sudo', 'install', '-D', '-m', '0644',
-            File::Spec->catfile($repo_root, 'scripts', 'systemd', $unit),
-            File::Spec->catfile('/etc', 'systemd', 'system', $unit));
-    }
-    run_command('sudo', 'systemctl', 'daemon-reload');
-    run_command('sudo', 'systemctl', 'enable', '--now', 'home-btrfs-monthly.timer');
-    say 'Home sync, monthly home archive and monthly Btrfs export timers are enabled.';
 }
 
 sub ensure_theme {

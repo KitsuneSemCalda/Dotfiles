@@ -111,7 +111,7 @@ The [installer](../Omarchy/omarchy.pl) always processes the copies before the op
 | `--apps` | Removes HEY/Basecamp and the 1Password service when detected; installs PrismLauncher, Bitwarden, AppFlowy, and CurseForge; registers Amazon Shopping, Mercado Livre, Pinterest, Z Ai, WebMotors, Panini Brasil, GitHub, GitLab, Codeberg, Copilot, Claude, ChatGPT, Grok, and Gemini |
 | `--plugin` | Reinstalls Feader RSS, Spaces, and Glass, then enables them; backs up replaced plugin directories |
 | `--theme` | Installs Sword Art Omarchy if absent and applies it; preserves any broken theme link |
-| `--openrgb` | Clones or updates the Dareu EK75 OpenRGB driver into `~/.local/share/dareu-ek75-openrgb` and runs its installer (udev rule with sudo, OpenRGB build, launcher, theme hook) |
+| `--openrgb` | Clones or updates the Dareu EK75 OpenRGB driver into `~/.local/share/dareu-ek75-openrgb`, builds it, installs its launcher and theme hook, and includes its udev rule in one shared `pkexec` call |
 | `--ek75-knob` | Installs a systemd hwdb rule that suppresses mute and volume events from the EK75's secondary input interface; reconnecting the keyboard applies it |
 | `--all` | All installation options: fonts → Chromium bookmarks → apps → OmaStore → plugin → theme → OpenRGB → EK75 knob rule, after the file copies and skill installation; no Docker/Pi-hole setup or reboot |
 
