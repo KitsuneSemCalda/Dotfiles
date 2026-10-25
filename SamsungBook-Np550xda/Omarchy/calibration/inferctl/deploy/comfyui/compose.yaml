@@ -1,0 +1,28 @@
+name: inferctl-comfyui
+services:
+  comfyui:
+    image: ${COMFY_IMAGE:?Set COMFY_IMAGE to the full local sha256 image ID}
+    pull_policy: never
+    user: "${COMFY_UID:?Set COMFY_UID}:${COMFY_GID:?Set COMFY_GID}"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:8188:8188"
+    mem_limit: ${COMFY_MEMORY_LIMIT:-10g}
+    memswap_limit: ${COMFY_MEMORY_SWAP_LIMIT:-24g}
+    cpu_shares: 1024
+    environment:
+      OMP_NUM_THREADS: "4"
+      MKL_NUM_THREADS: "4"
+    command: ["--cpu", "--cache-none", "--listen", "0.0.0.0", "--port", "8188", "--offline", "--extra-model-paths-config", "/extra_model_paths.yaml", "--temp-directory", "/app/ComfyUI/temp"]
+    volumes:
+      - ./extra_model_paths.yaml:/extra_model_paths.yaml:ro
+      - ${LMSTUDIO_MODELS:?Set LMSTUDIO_MODELS}:/external/lmstudio:ro
+      - ${COMFY_DATA:?Set COMFY_DATA}/models:/app/ComfyUI/models
+      - ${COMFY_DATA}/custom_nodes:/app/ComfyUI/custom_nodes
+      - ${COMFY_DATA}/input:/app/ComfyUI/input
+      - ${COMFY_DATA}/output:/app/ComfyUI/output
+      - ${COMFY_DATA}/user:/app/ComfyUI/user
+      - ${COMFY_DATA}/workflows:/app/ComfyUI/workflows
+      - ${COMFY_DATA}/temp:/app/ComfyUI/temp

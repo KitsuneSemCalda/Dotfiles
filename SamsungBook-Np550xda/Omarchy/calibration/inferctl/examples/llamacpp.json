@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "backend": "llamacpp",
+  "url": "http://127.0.0.1:8080",
+  "model": "/absolute/path/main.gguf",
+  "workload": "fixed-4k",
+  "prompt": "Explain how virtual memory works, in detail, with examples.",
+  "seed": 42,
+  "tokens": 256,
+  "repetitions": 3,
+  "warmup": 1,
+  "min_seconds": 120,
+  "timeout_seconds": 1800,
+  "policy": {
+    "mode": "interactive",
+    "cpu_reserve_percent": 15,
+    "ram_reserve_percent": 20,
+    "vram_reserve_bytes": 0,
+    "required_ram_bytes": 4294967296,
+    "required_vram_bytes": 0,
+    "exclusive": true,
+    "soft_temperature_c": 82
+  },
+  "quality": {
+    "min_performance_ratio": 0.9,
+    "max_ttft_seconds": 30,
+    "max_host_swap_bytes": 268435456,
+    "hard_temperature_c": 92,
+    "max_scheduler_jitter_ms": 50,
+    "max_baseline_drift_ratio": 0.1
+  },
+  "candidates": [
+    {
+      "name": "baseline",
+      "limits": {
+        "cpu_weight": 100,
+        "io_weight": 100,
+        "nice": 0,
+        "memory_high_bytes": 8589934592,
+        "memory_max_bytes": 10737418240,
+        "swap_max_bytes": 268435456
+      }
+    }
+  ],
+  "command": [
+    "llama-server",
+    "--model",
+    "/absolute/path/main.gguf",
+    "--ctx-size",
+    "4096",
+    "--parallel",
+    "1",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8080"
+  ]
+}

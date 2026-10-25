@@ -1,0 +1,5 @@
+# The external mount is read-only. Register diffusion weights only; LLM GGUFs
+# are not diffusion checkpoints or interchangeable with Wan's text encoder.
+lmstudio_wan:
+  base_path: /external/lmstudio
+  diffusion_models: NSFW-API/NSFW_Wan_14b

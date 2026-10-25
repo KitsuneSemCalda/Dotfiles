@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "backend": "comfyui",
+  "url": "http://127.0.0.1:8188",
+  "model": "workflow-model-identity",
+  "workload": "fixed-workflow",
+  "prompt": "Explain how virtual memory works, in detail, with examples.",
+  "seed": 42,
+  "tokens": 256,
+  "repetitions": 3,
+  "warmup": 1,
+  "min_seconds": 120,
+  "timeout_seconds": 1800,
+  "policy": {
+    "mode": "interactive",
+    "cpu_reserve_percent": 15,
+    "ram_reserve_percent": 20,
+    "vram_reserve_bytes": 0,
+    "required_ram_bytes": 4294967296,
+    "required_vram_bytes": 0,
+    "exclusive": true,
+    "soft_temperature_c": 82
+  },
+  "quality": {
+    "min_performance_ratio": 0.9,
+    "max_ttft_seconds": 30,
+    "max_host_swap_bytes": 268435456,
+    "hard_temperature_c": 92,
+    "max_scheduler_jitter_ms": 50,
+    "max_baseline_drift_ratio": 0.1
+  },
+  "candidates": [
+    {
+      "name": "baseline",
+      "limits": {
+        "cpu_weight": 100,
+        "io_weight": 100,
+        "nice": 0
+      }
+    }
+  ],
+  "workflow": "/absolute/path/workflow_api.json",
+  "seed_nodes": [
+    "3.seed"
+  ],
+  "images_per_run": 1,
+  "container": {
+    "image": "REPLACE_WITH_LOCAL_IMAGE@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "data_root": "/absolute/path/comfy-data",
+    "app_path": "/app/ComfyUI",
+    "python": "python",
+    "gpu": "cpu",
+    "memory_bytes": 10737418240
+  }
+}

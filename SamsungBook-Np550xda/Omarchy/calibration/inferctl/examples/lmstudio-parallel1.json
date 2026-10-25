@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "backend": "lmstudio",
+  "url": "http://127.0.0.1:1234",
+  "model": "qwen3-0.6b",
+  "workload": "control-qwen3-0.6b-q8-4k-parallel1",
+  "prompt": "Explain how virtual memory works, in detail, with examples.",
+  "seed": 42,
+  "tokens": 256,
+  "repetitions": 3,
+  "warmup": 1,
+  "min_seconds": 120,
+  "timeout_seconds": 600,
+  "policy": {
+    "mode": "interactive",
+    "cpu_reserve_percent": 15,
+    "ram_reserve_percent": 20,
+    "vram_reserve_bytes": 0,
+    "required_ram_bytes": 2147483648,
+    "required_vram_bytes": 0,
+    "exclusive": true,
+    "soft_temperature_c": 82
+  },
+  "quality": {
+    "min_performance_ratio": 0.9,
+    "max_ttft_seconds": 30,
+    "max_host_swap_bytes": 268435456,
+    "hard_temperature_c": 92,
+    "max_scheduler_jitter_ms": 50,
+    "max_baseline_drift_ratio": 0.1,
+    "swap_accounting": "additional"
+  },
+  "candidates": [
+    {
+      "name": "baseline",
+      "load": {
+        "context_length": 4096,
+        "eval_batch_size": 256,
+        "parallel": 1
+      },
+      "limits": {
+        "cpu_weight": 100,
+        "io_weight": 100,
+        "nice": 0
+      }
+    },
+    {
+      "name": "batch-128",
+      "load": {
+        "context_length": 4096,
+        "eval_batch_size": 128,
+        "parallel": 1
+      },
+      "limits": {
+        "cpu_weight": 100,
+        "io_weight": 100,
+        "nice": 0
+      }
+    }
+  ],
+  "model_revision": "Q8_0; publisher=lmstudio-community; api_size_bytes=804753568"
+}
