@@ -3,6 +3,7 @@ services:
   comfyui:
     image: ${COMFY_IMAGE:?Set COMFY_IMAGE to the full local sha256 image ID}
     pull_policy: never
+    restart: unless-stopped
     user: "${COMFY_UID:?Set COMFY_UID}:${COMFY_GID:?Set COMFY_GID}"
     init: true
     security_opt:

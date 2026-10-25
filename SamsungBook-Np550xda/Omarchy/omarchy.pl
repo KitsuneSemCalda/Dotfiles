@@ -240,7 +240,6 @@ if ($target eq $home_root && !$only_home_backup) {
     }
     if ($needs_memory) {
         ensure_repo_packages('curl', 'docker', 'docker-compose', 'openssl', 'iproute2');
-        run_command('pkexec', 'systemctl', 'enable', '--now', 'docker.socket');
         run_command('perl', File::Spec->catfile($repo_root, 'scripts', 'docker-stack.pl'),
             '--memory', '--agents');
     }

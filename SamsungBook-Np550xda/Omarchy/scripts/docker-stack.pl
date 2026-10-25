@@ -66,6 +66,10 @@ my $env_file   = File::Spec->catfile($docker_dir, '.env');
 
 die "Missing docker/ directory at $docker_dir\n" unless -d $docker_dir;
 
+if ($up || $memory) {
+    run_command('pkexec', 'systemctl', 'enable', '--now', 'docker.service');
+}
+
 if ($up) {
     my $notes_abs = File::Spec->rel2abs($notes_dir);
     ensure_notes_dir($notes_abs);

@@ -15,7 +15,10 @@ jobs:
       - name: Check hardware setup rollback
         run: python3 SamsungBook-Np550xda/Omarchy/tests/calibrate_devices.py
       - name: Check clamshell recovery and reload limits
-        run: python3 SamsungBook-Np550xda/Omarchy/tests/clamshell_recover.py
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y lua5.4
+          python3 SamsungBook-Np550xda/Omarchy/tests/clamshell_recover.py
       - name: Check maintenance policy and resume safety
         run: python3 SamsungBook-Np550xda/Omarchy/tests/maintenance.py
       - name: Test installation, backups and restore

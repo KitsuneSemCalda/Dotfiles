@@ -186,6 +186,7 @@ elif name == 'pgrep':
     )
     assert stack_result.returncode == 0, stack_result.stdout + stack_result.stderr
     stack_commands = [json.loads(line) for line in log.read_text().splitlines()]
+    assert ['pkexec', 'systemctl', 'enable', '--now', 'docker.service'] in stack_commands
     compose_commands = [cmd for cmd in stack_commands if cmd[:2] == ['docker', 'compose']]
     assert len(compose_commands) == 1
     assert compose_commands[0][-3:] == ['up', '-d', 'ai-memory']

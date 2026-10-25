@@ -67,7 +67,13 @@ The installer reloads logind to apply settings. Check effective settings with
 `systemd-analyze cat-config systemd/logind.conf`.
 
 `--clamshell` also enables the user timer `dotfiles-clamshell-recover.timer`.
-One second after session activation, then every five seconds, it invokes Omarchy's own clamshell reconciliation under the
+The last module loaded by `hyprland.lua`, `hypr.clamshell`, reads the lid and
+physical DRM connections while Hyprland parses its configuration. With the lid
+closed and an external monitor connected, it disables `eDP-1` after hardware
+overrides and saved toggles. This covers initial session configuration and
+reloads; it does not control firmware, the bootloader or the login screen.
+Without that lid/external condition, it leaves the normal monitor rules alone.
+One second after session activation, then every five seconds, the timer invokes Omarchy's own clamshell reconciliation under the
 same lock as the stock monitor watcher, waiting up to ten seconds for it. The
 installer also runs recovery immediately. With the lid closed and an external
 display active, it checks the actual Hyprland outputs and explicitly disables
@@ -552,7 +558,7 @@ The main installer includes both integrations in `--all`. Run them separately wi
 perl ./omarchy.pl --ai-memory --ai-jail --backup
 ```
 
-`--ai-memory` installs Docker dependencies, enables `docker.socket`, starts only
+`--ai-memory` installs Docker dependencies, enables `docker.service` at boot, starts only
 the ai-memory Compose service, installs the verified wrapper, and applies MCP
 and hooks to detected agents. Docker must already be accessible to the current
 user; the installer does not change group membership. Existing `docker/.env`

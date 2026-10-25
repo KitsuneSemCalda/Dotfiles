@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise recovery without touching real displays."""
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
@@ -10,6 +11,32 @@ HELPER = Path(__file__).resolve().parents[1] / 'home/.local/bin/clamshell-recove
 
 
 class Recovery(unittest.TestCase):
+    def test_initial_configuration_applies_after_all_overrides(self):
+        lua = shutil.which('lua') or shutil.which('lua5.4')
+        if not lua:
+            self.skipTest('Lua interpreter unavailable')
+        config = HELPER.parents[2] / '.config/hypr'
+        self.assertTrue((config / 'hyprland.lua').read_text().rstrip().endswith("require('hypr.clamshell')"))
+        # Combined lid/DRM result, including Lua 5.1 and 5.4 return conventions.
+        for result, count in (('true', 1), ('0', 1), ('false', 0), ('nil', 0)):
+            code = f'''
+local calls = 0
+os.execute = function(command)
+  assert(command == 'omarchy-hw-clamshell >/dev/null 2>&1')
+  return {result}
+end
+hl = {{monitor = function(rule)
+  assert(rule.output == 'eDP-1' and rule.disabled == true)
+  calls = calls + 1
+end}}
+dofile(arg[1])
+assert(calls == {count})
+'''
+            with tempfile.TemporaryDirectory() as directory:
+                test = Path(directory) / 'startup.lua'
+                test.write_text(code)
+                subprocess.run([lua, str(test), str(config / 'clamshell.lua')], check=True)
+
     def test_recovery_and_reload_limits(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

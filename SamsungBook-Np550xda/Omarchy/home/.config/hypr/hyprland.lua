@@ -26,3 +26,6 @@ require('default.hypr.toggles')
 local kc_path = os.getenv("HOME") .. "/.config/omarchy/plugins/felixzsh.key-visualizer/key-visualizer.lua"
 local kc_file = io.open(kc_path, "r")
 if kc_file then kc_file:close(); dofile(kc_path) end
+
+-- Keep the closed-lid policy last so saved output rules cannot re-enable eDP-1.
+require('hypr.clamshell')

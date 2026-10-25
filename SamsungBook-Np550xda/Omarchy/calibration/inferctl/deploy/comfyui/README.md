@@ -32,6 +32,11 @@ usam quatro threads e o cache intermediário está desativado para reduzir reten
 de pesos em CPU. A execução de vídeo é lenta e deve ser verificada por modelo.
 Não aplica quota rígida de CPU.
 A API só é publicada no loopback. Os sete diretórios persistem após remoção.
+O serviço persistente usa `restart: unless-stopped`: o Docker reinicia o
+container após a saída do processo e quando o daemon volta. Uma parada manual
+permanece respeitada. Habilite `docker.service` no boot da máquina; os
+containers temporários do calibrador continuam sem reinício automático para
+não invalidar benchmarks ou ressuscitar workloads encerrados.
 Custom nodes exigem instalação explícita, como o helper ComfyUI-GGUF no comando
 acima. Não há gerenciador de custom nodes nem download automático de modelos.
 Os limites de memória, as quatro threads e o cache desativado são escolhas deste
