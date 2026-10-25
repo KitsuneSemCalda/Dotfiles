@@ -4,6 +4,7 @@ use strict;
 use warnings;
 
 use Cwd qw(abs_path);
+use Digest::SHA qw(sha256_hex);
 use File::Basename qw(dirname);
 use File::Path qw(make_path);
 use File::Spec;
@@ -17,6 +18,7 @@ my $dns         = 0;
 my $dns_revert  = 0;
 my $dns_hook    = 0;
 my $agents      = 0;
+my $memory      = 0;
 my $dry_run     = 0;
 my $notes_dir   = File::Spec->catdir($ENV{HOME} // '', 'Documents', 'notes');
 my $help        = 0;
@@ -29,6 +31,7 @@ GetOptions(
     'dns-revert'  => \$dns_revert,
     'dns-hook'    => \$dns_hook,
     'agents'      => \$agents,
+    'memory'      => \$memory,
     'notes-dir=s' => \$notes_dir,
     'dry-run'     => \$dry_run,
     'help'        => \$help,
@@ -40,7 +43,7 @@ if ($dns && $dns_revert) {
     die "--dns cannot be combined with --dns-revert\n";
 }
 
-unless ($up || $down || $status || $dns || $dns_revert || $dns_hook || $agents) {
+unless ($up || $down || $status || $dns || $dns_revert || $dns_hook || $agents || $memory) {
     usage(1);
 }
 
@@ -69,6 +72,14 @@ if ($up) {
     ensure_env($notes_abs, local_ip());
     compose('up', '-d');
     ensure_dns_hook();
+}
+
+if ($memory && !$up) {
+    die "Docker is unavailable to this user; configure Docker access and rerun --ai-memory\n"
+        unless $dry_run || system('docker', 'info', '--format', '{{.ServerVersion}}') == 0;
+    # Only ai-memory is selected: other services and DNS remain independent.
+    ensure_env(File::Spec->rel2abs($notes_dir), '127.0.0.1') unless -e $env_file;
+    compose('up', '-d', 'ai-memory');
 }
 
 compose('down')  if $down;
@@ -171,6 +182,9 @@ sub compose {
 
 sub cmd_agents {
     my $wrapper = ensure_wrapper();
+    # Fetch and verify the native launch client on the host before the jail
+    # hides the host cache and limits outbound release downloads.
+    run_command($wrapper, 'run', '--help');
     my @detected = grep { binary_present($_) } sort keys %client_of_binary;
 
     unless (@detected) {
@@ -188,7 +202,10 @@ sub cmd_agents {
 
 sub ensure_wrapper {
     my $wrapper = File::Spec->catfile($ENV{HOME}, '.local', 'bin', 'ai-memory');
-    return $wrapper if -x $wrapper;
+    if (-x $wrapper) {
+        pin_wrapper_defaults($wrapper);
+        return $wrapper;
+    }
 
     if ($dry_run) {
         say "WRAPPER? $wrapper would be downloaded and installed";
@@ -212,14 +229,43 @@ sub ensure_wrapper {
     die "ai-memory wrapper checksum mismatch (expected $expected, got $actual)\n"
         unless $expected eq $actual;
 
+    pin_wrapper_defaults("$tmp/ai-memory-wrapper");
     run_command('install', '-m', '0755', "$tmp/ai-memory-wrapper", $wrapper);
     say "WRAPPER $wrapper installed";
     return $wrapper;
 }
 
+sub pin_wrapper_defaults {
+    my ($path) = @_;
+    open my $input, '<:raw', $path or die "Cannot read $path: $!\n";
+    local $/;
+    my $content = <$input>;
+    close $input;
+    # Only adapt the verified upstream wrapper; preserve custom launchers.
+    return unless sha256_hex($content) eq
+        '2906cdae7e405d7b64c3023cb0812311590b63223bd60b7f216cd898c89c9509';
+    say(($dry_run ? 'PIN?    ' : 'PIN     ') . "$path defaults -> v2.3.0");
+    return if $dry_run;
+    $content =~ s{ai-memory:latest}{ai-memory:2.3.0}g;
+    $content =~ s{/releases/latest/download/}{/releases/download/v2.3.0/}g;
+    open my $output, '>:raw', "$path.tmp" or die "Cannot write $path.tmp: $!\n";
+    print {$output} $content;
+    close $output or die "Cannot close $path.tmp: $!\n";
+    chmod((stat($path))[2] & 0777, "$path.tmp") or die "Cannot preserve permissions: $!\n";
+    rename "$path.tmp", $path or die "Cannot replace $path: $!\n";
+}
+
 sub binary_present {
     my ($name) = @_;
-    return system('command -v ' . shell_quote($name) . ' >/dev/null 2>&1') == 0;
+    # A stale mise shim is executable even when its tool is not installed.
+    for my $dir (split /:/, ($ENV{PATH} // '')) {
+        next unless -x File::Spec->catfile($dir, $name);
+        if ($dir =~ m{/mise/shims/?$}) {
+            return system('mise which ' . shell_quote($name) . ' >/dev/null 2>&1') == 0;
+        }
+        return 1;
+    }
+    return 0;
 }
 
 sub cmd_dns {
@@ -336,6 +382,7 @@ Usage: perl scripts/docker-stack.pl [options]
                       and resume-from-suspend)
   --down             tears down the stack's containers
   --status           shows the containers' state (docker compose ps)
+  --memory           starts only the ai-memory service (no other services or DNS)
   --agents           installs the ai-memory wrapper and wires up each AI CLI
                       detected on PATH (claude, codex, gemini, cursor-agent,
                       opencode, grok) via install-mcp/install-hooks

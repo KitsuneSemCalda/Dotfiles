@@ -1,4 +1,7 @@
 alias cat="bat --plain --color=always"
 alias tree="exa --icons --tree --color=always"
-alias codex='ai-memory run --yolo codex'
-alias claude='ai-memory run --yolo claude'
+# Keep the launcher and harness inside the jail; relay the local memory service.
+alias locked-codex='ai-jail --rw-map "$HOME/.cache/ai-memory" --rw-map "$HOME/.local/share/ai-memory" --github --forward-port 49374 ai-memory run --yolo codex'
+alias locked-claude='ai-jail --rw-map "$HOME/.cache/ai-memory" --rw-map "$HOME/.local/share/ai-memory" --github --forward-port 49374 ai-memory run --yolo claude'
+alias unlocked-codex='ai-memory run --yolo codex'
+alias unlocked-claude='ai-memory run --yolo claude'

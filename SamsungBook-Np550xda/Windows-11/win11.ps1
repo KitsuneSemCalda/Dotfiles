@@ -18,6 +18,7 @@ Uso:
   pwsh ./win11.ps1 -Apps                # winget install das ferramentas usadas
   pwsh ./win11.ps1 -Clamshell           # tampa: ligado na tomada, manter ativo; na bateria, suspender
   pwsh ./win11.ps1 -Ek75                # adiciona layout US-International sem remover ABNT2
+  pwsh ./win11.ps1 -Maintenance         # diagnostico diario e manutencao semanal automatica
   pwsh ./win11.ps1 -All -Backup         # tudo de uma vez
 
 #>
@@ -31,6 +32,7 @@ param(
     [switch]$Apps,
     [switch]$Clamshell,
     [switch]$Ek75,
+    [switch]$Maintenance,
     [switch]$All,
     [string]$Target = $env:USERPROFILE
 )
@@ -41,15 +43,16 @@ if ($All) {
     $Fonts = $true
     $Theme = $true
     $Apps = $true
+    $Maintenance = $true
 }
 
-if ($Restore -and ($Backup -or $Fonts -or $Theme -or $Apps -or $Clamshell -or $Ek75)) {
-    throw '-Restore nao pode ser combinado com -Backup, -Fonts, -Theme, -Apps, -Clamshell, -Ek75 ou -All'
+if ($Restore -and ($Backup -or $Fonts -or $Theme -or $Apps -or $Clamshell -or $Ek75 -or $Maintenance)) {
+    throw '-Restore nao pode ser combinado com -Backup, -Fonts, -Theme, -Apps, -Clamshell, -Ek75, -Maintenance ou -All'
 }
 
 $RealHome = $env:USERPROFILE
-if (($Fonts -or $Theme -or $Apps -or $Clamshell -or $Ek75) -and $Target -ne $RealHome) {
-    throw '-Fonts, -Theme, -Apps, -Clamshell e -Ek75 so podem usar o HOME real; use -Target apenas para testar copias'
+if (($Fonts -or $Theme -or $Apps -or $Clamshell -or $Ek75 -or $Maintenance) -and $Target -ne $RealHome) {
+    throw '-Fonts, -Theme, -Apps, -Clamshell, -Ek75 e -Maintenance so podem usar o HOME real; use -Target apenas para testar copias'
 }
 
 $RepoRoot = $PSScriptRoot
@@ -698,6 +701,11 @@ if ($Ek75) {
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $keyboardScript -Apply
         if ($LASTEXITCODE -ne 0) { throw "EK75 keyboard setup failed ($LASTEXITCODE)" }
     }
+}
+
+if ($Maintenance) {
+    Write-Action (Get-Tag 'RUN?' 'RUN') 'maintenance.ps1 -Mode Install'
+    & (Join-Path $RepoRoot 'scripts\maintenance\maintenance.ps1') -Mode Install -DryRun:$DryRun
 }
 
 if ($script:BackupManifest.Count -gt 0) {

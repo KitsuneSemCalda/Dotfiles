@@ -1,5 +1,5 @@
 [Unit]
-Description=Synchronize home with Dropbox in both directions
+Description=Update the local home backup working copy
 ConditionPathIsDirectory=%h/Dropbox
 
 [Service]

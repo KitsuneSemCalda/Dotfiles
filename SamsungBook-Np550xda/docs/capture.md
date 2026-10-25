@@ -33,6 +33,54 @@ que renderiza sem atraso na carga real. Evite filtros e scaling em fontes.
 
 ## Perfis OBS
 
+### OmaTuber no Omarchy
+
+Com o OBS fechado, execute:
+
+```bash
+perl SamsungBook-Np550xda/Omarchy/omarchy.pl --omatuber --backup
+```
+
+O instalador usa o [OmaTuber](https://github.com/KitsuneForgering/OmaTuber),
+branch `dev`, fixado no commit `7a51920e8a6148ddf628f7ca1f35cab6be4682da`.
+A `main` ainda contém apenas README e licença. Compila somente o binário
+`omatuber`, com `Cargo.lock` e dois jobs, e instala o lançador no menu. O
+binário fica em `${CARGO_HOME:-~/.cargo}/bin`; esse diretório precisa estar no
+PATH da sessão, como no perfil Bash versionado. Não é necessário compilar a
+feature opcional `sound`: o avatar usa os medidores de áudio do OBS.
+
+Também instala `obs-studio` e `obs-studio-plugin-browser`, do repositório
+oficial Arch. A coleção ganha a cena **OmaTuber Live**, com o avatar em 512×512
+a 75% no canto inferior direito, sobre `Capture Monitor`, e o mesmo `Audio
+Buses`. As cenas anteriores continuam disponíveis. A fonte de navegador usa
+`http://127.0.0.1:39017/`, com desligamento ao ocultar e recarga ao ativar
+desabilitados; mantenha o OmaTuber aberto durante a captura.
+
+O WebSocket é habilitado com autenticação em
+`~/.config/obs-studio/plugin_config/obs-websocket/config.json`, com permissão
+0600. Uma senha existente é preservada; na ausência, uma senha aleatória é
+gerada localmente. Nenhuma senha entra no repositório. A porta existente é
+preservada (padrão 4455) e alinhada nas preferências do OmaTuber. Preferências
+existentes de avatar, cena e microfone são preservadas; na primeira instalação
+o microfone é associado ao UUID de `Microphone` desta coleção.
+
+Primeiro uso na sessão gráfica:
+
+1. Abra o OBS na coleção `Capture Infrastructure`, cena **OmaTuber Live**.
+2. Abra **OmaTuber** pelo menu e escolha **Usar exemplo** ou suas imagens.
+3. Em OBS → Ferramentas → Configurações do servidor WebSocket → informações
+   de conexão, copie a senha para o OmaTuber e conecte. **Lembrar senha** usa
+   o chaveiro da sessão, não as preferências JSON.
+4. Confirme o microfone `Microphone`, ajuste o limiar com a calibração do app
+   e selecione a captura de monitor pelo portal do OBS.
+5. Grave um trecho curto para conferir transparência, movimento da boca e
+   áudio. As duas imagens do exemplo são de 512×512; avatares de outro tamanho
+   podem exigir ajustar as dimensões da fonte no OBS.
+
+A instalação e os arquivos são testados em ambiente temporário. Compilação
+real, chaveiro, conexão e renderização com OBS/CEF na sessão gráfica continuam
+pendentes de validação na máquina.
+
 Os perfis ficam em `basic/profiles/` e a coleção em `basic/scenes/`. O
 instalador de cada sistema copia os arquivos individualmente e protege
 edições locais com backup. Feche OBS antes de instalar. Em Linux, execute

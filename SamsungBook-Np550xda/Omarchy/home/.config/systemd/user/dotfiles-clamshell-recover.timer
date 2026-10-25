@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodically recover Omarchy clamshell state
+PartOf=graphical-session.target
+
+[Timer]
+OnActiveSec=5
+OnUnitInactiveSec=5
+AccuracySec=1
+Unit=dotfiles-clamshell-recover.service
+
+[Install]
+WantedBy=graphical-session.target

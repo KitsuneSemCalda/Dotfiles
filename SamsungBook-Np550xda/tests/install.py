@@ -131,9 +131,14 @@ with tempfile.TemporaryDirectory() as tmp:
 import json, os, pathlib, shutil, sys
 name = pathlib.Path(sys.argv[0]).name
 args = sys.argv[1:]
-with open(os.environ['COMMAND_LOG'], 'a') as f:
-    f.write(json.dumps([name, *args]) + '\n')
-if name == 'git' and args[0] == 'clone':
+if name == 'omarchy' and 'ai-jail-bin' in args and os.environ.get('FAIL_AI_PACKAGE'):
+    sys.exit(1)
+if name != 'pacman':
+    with open(os.environ['COMMAND_LOG'], 'a') as f:
+        f.write(json.dumps([name, *args]) + '\n')
+if name == 'pacman':
+    sys.exit(1)  # A fresh machine starts without optional packages.
+elif name == 'git' and args[0] == 'clone':
     dest = pathlib.Path(args[-1])
     shutil.copytree(pathlib.Path(os.environ['FIXTURES']) / dest.name, dest)
     (dest / '.git').mkdir()
@@ -145,16 +150,51 @@ elif name == 'omarchy' and args[:2] == ['plugin', 'list']:
 elif name == 'omarchy' and args[:2] == ['plugin', 'validate']:
     assert (pathlib.Path(args[2]) / 'manifest.json').is_file()
 elif name == 'pgrep':
-    if os.environ.get('CHROMIUM_PID'):
+    if args[-1] == 'obs':
+        if os.environ.get('OBS_RUNNING'):
+            print('12345')
+        else:
+            sys.exit(1)
+    elif os.environ.get('CHROMIUM_PID'):
         print(os.environ['CHROMIUM_PID'])
     else:
         sys.exit(1)
 ''')
     fake_tool.chmod(0o755)
-    for name in ['git', 'omarchy', 'omarchy-shell', 'hyprctl', 'systemctl', 'pgrep', 'pkexec']:
+    for name in ['git', 'omarchy', 'omarchy-shell', 'hyprctl', 'systemctl', 'pgrep', 'pkexec', 'omarchy-hyprland-monitor-clamshell',
+                 'omarchy-hyprland-monitor-watch', 'omarchy-system-lid-close', 'pacman']:
         (fake_bin / name).symlink_to(fake_tool)
     env = {**os.environ, 'HOME': str(target), 'PATH': f"{fake_bin}:{os.environ['PATH']}",
            'FIXTURES': str(fixtures), 'COMMAND_LOG': str(log), 'FAKE_BIN': str(fake_bin)}
+
+    # The main install delegates to the existing MCP/hooks installer. Exercise
+    # that path with a disposable Compose directory and fake Docker/agents.
+    stack_script = repo / 'scripts/docker-stack.pl'
+    shutil.copy2(installer.parent / 'scripts/docker-stack.pl', stack_script)
+    (repo / 'docker').mkdir()
+    stack_env = repo / 'docker/.env'
+    stack_env.write_text('LAN_IP=192.0.2.12\nPOSTGRES_PASSWORD=keep-existing\n')
+    original_env = stack_env.read_bytes()
+    for name in ('docker', 'codex', 'claude'):
+        (fake_bin / name).symlink_to(fake_tool)
+    wrapper = target / '.local/bin/ai-memory'
+    wrapper.parent.mkdir(parents=True, exist_ok=True)
+    wrapper.symlink_to(fake_tool)
+    stack_result = subprocess.run(
+        ['perl', str(stack_script), '--memory', '--agents'],
+        capture_output=True, text=True, env=env,
+    )
+    assert stack_result.returncode == 0, stack_result.stdout + stack_result.stderr
+    stack_commands = [json.loads(line) for line in log.read_text().splitlines()]
+    compose_commands = [cmd for cmd in stack_commands if cmd[:2] == ['docker', 'compose']]
+    assert len(compose_commands) == 1
+    assert compose_commands[0][-3:] == ['up', '-d', 'ai-memory']
+    for client in ('codex', 'claude-code'):
+        assert ['ai-memory', 'install-mcp', '--client', client, '--apply'] in stack_commands
+        assert ['ai-memory', 'install-hooks', '--agent', client, '--apply'] in stack_commands
+    assert not any(cmd[:3] == ['omarchy', 'dns', 'Custom'] for cmd in stack_commands)
+    assert stack_env.read_bytes() == original_env
+    log.write_text('')
 
     def run_plugin(*args, success=True, extra_env=None):
         result = subprocess.run(['perl', str(repo / 'omarchy.pl'), *args],
@@ -184,20 +224,35 @@ elif name == 'pgrep':
     all_preview = run_plugin('--all', '--dry-run')
     explicit_preview = run_plugin(
         '--apps', '--bookmarks', '--fonts', '--plugin', '--omastore',
-        '--theme', '--openrgb', '--ek75-knob', '--home-backup', '--dry-run',
+        '--theme', '--openrgb', '--ek75-knob', '--home-backup', '--clamshell', '--calibrate',
+        '--maintenance', '--ai-memory', '--ai-jail', '--omatuber', '--dry-run',
     )
     normalize_pid = lambda output: re.sub(r'\.dotfiles-tmp-\d+', '.dotfiles-tmp-PID', output)
     assert normalize_pid(all_preview.stdout) == normalize_pid(explicit_preview.stdout)
     assert "'systemctl' 'reboot'" not in all_preview.stdout
+    assert "'omarchy' 'pkg' 'aur' 'add' 'ai-jail-bin'" in all_preview.stdout
+    assert "'omarchy' 'pkg' 'add' 'bubblewrap'" in all_preview.stdout
+    assert "'--memory' '--agents'" in all_preview.stdout
+    assert '/scripts/install-ai-desktops.sh' in all_preview.stdout
+    assert "'webapp' 'install' 'ChatGPT'" not in all_preview.stdout
+    assert "'webapp' 'install' 'Claude'" not in all_preview.stdout
     assert log.read_bytes() == before
+    before_obs_check = dest.read_bytes()
+    running_obs = run_plugin('--omatuber', success=False, extra_env={'OBS_RUNNING': '1'})
+    assert 'Close OBS Studio' in running_obs.stderr
+    assert dest.read_bytes() == before_obs_check
+    before = log.read_bytes()
     preview = run_plugin('--all', '--reboot', '--dry-run')
     assert log.read_bytes() == before
     assert 'SKIP    Chromium bookmarks' in preview.stdout
     assert "'systemctl' 'reboot'" in preview.stdout
     assert preview.stdout.count("'pkexec' '/usr/bin/bash'") == 1
     assert "'--openrgb'" in preview.stdout
-    assert "'--ek75-knob' '--home-backup'" in preview.stdout
+    assert "'--maintenance'" in preview.stdout
+    assert "'/usr/local/bin/dotfiles-maintenance' 'enable'" in preview.stdout
+    assert "'--ek75-knob' '--clamshell' '--home-backup'" in preview.stdout
     assert "'systemctl' '--user' 'enable' '--now' 'home-dropbox-backup.timer'" in preview.stdout
+    assert "'systemctl' '--user' 'enable' '--now' 'dotfiles-clamshell-recover.timer'" in preview.stdout
     log.write_text('')
     run_plugin('--ek75-knob')
     knob_commands = [json.loads(line) for line in log.read_text().splitlines()]
@@ -211,6 +266,13 @@ elif name == 'pgrep':
         ['pkexec', '/usr/bin/bash', str(system_installer), '--openrgb',
          str(target / '.local/share/dareu-ek75-openrgb'), '--ek75-knob', '--home-backup'],
     ]
+    commands = [json.loads(line) for line in log.read_text().splitlines()]
+    dependency_install = next(i for i, cmd in enumerate(commands)
+                              if cmd[:3] == ['omarchy', 'pkg', 'add'] and 'openrgb' in cmd)
+    first_rgb_step = next(i for i, cmd in enumerate(commands)
+                         if cmd[:2] == ['git', 'clone'] and cmd[-1].endswith('/dareu-ek75-openrgb'))
+    assert dependency_install < first_rgb_step
+    assert 'mbedtls3' in commands[dependency_install]
     assert (target / 'openrgb-steps').read_text().splitlines() == [
         'build.sh', 'install-launcher.sh', 'install-hook.sh',
     ]
@@ -292,4 +354,11 @@ elif name == 'pgrep':
     assert installed_backup.read_text() == '#!/bin/sh\n'
     assert any(path.read_text() == 'local backup edit\n'
                for path in backups.glob('*/.local/bin/home-dropbox-backup'))
+    # Failed prerequisite installation must not publish any dotfiles.
+    original_tool = dest.read_bytes()
+    source.write_text('must not be copied before dependencies\n')
+    failed = run_plugin('--ai-jail', '--backup', success=False,
+                        extra_env={'FAIL_AI_PACKAGE': '1'})
+    assert dest.read_bytes() == original_tool
+    assert 'COPY    ' not in failed.stdout
 print('OK: copies, backup/restore, isolated home backup, --all parity, plugins, Chromium bookmarks and reboot guards')

@@ -14,6 +14,11 @@ require('hypr.looknfeel')
 require('hypr.autostart')
 require('hypr.windows')
 
+-- Local hardware adjustments survive dotfile updates and precede display toggles.
+local hardware_path = os.getenv("HOME") .. "/.config/dotfiles-hardware/devices.lua"
+local hardware_file = io.open(hardware_path, "r")
+if hardware_file then hardware_file:close(); dofile(hardware_path) end
+
 require('default.hypr.toggles')
 
 

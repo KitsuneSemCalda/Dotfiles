@@ -8,7 +8,7 @@ license=('custom')
 options=('!strip' '!debug')
 depends=('at-spi2-core' 'glibc' 'gtk3' 'libdrm' 'libnotify' 'libsecret' 'libxtst' 'mesa' 'nss' 'pipewire' 'util-linux' 'xdg-desktop-portal' 'xdg-utils')
 optdepends=('xdg-desktop-portal-gtk: desktop integration under Hyprland' 'gnome-keyring: secret storage' 'qemu-system-x86: Cowork virtualization' 'edk2-ovmf: Cowork UEFI firmware')
-source=('claude-desktop_amd64.deb')
+source=("claude-desktop_amd64.deb::https://downloads.claude.ai/claude-desktop/apt/stable/pool/main/c/claude-desktop/claude-desktop_${pkgver}_amd64.deb")
 noextract=('claude-desktop_amd64.deb')
 sha256sums=('d39e1d9a570f1e517f158479f5a1d903b9a74d1ef3f279362002dcad375e33cf')
 

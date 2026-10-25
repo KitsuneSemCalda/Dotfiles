@@ -1,0 +1,11 @@
+[Unit]
+Description=Check daily diagnosis and weekly maintenance eligibility
+
+[Timer]
+OnStartupSec=10min
+OnCalendar=*:0/15
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

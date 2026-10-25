@@ -1,5 +1,15 @@
 # TODO — Dotfiles
 
+## Solicitação de 2026-10-24: OmaTuber e OBS Studio
+
+- [x] Identificar o repositório: https://github.com/KitsuneForgering/OmaTuber
+      (implementação na branch `dev`, commit `7a51920`).
+- [x] Incluir a instalação do OmaTuber e do OBS Studio no fluxo Omarchy
+      (`--omatuber`, incluído em `--all`; instalação simulada em testes).
+- [x] Integrar o OmaTuber à coleção OBS `Capture Infrastructure`, preservando
+      as cenas, os perfis e a captura de áudio existentes.
+- [ ] Verificar instalação, captura e transparência na sessão gráfica real.
+
 Backlog das correções identificadas na auditoria de 2026-09-17. As tarefas
 estão ordenadas por risco e dependência. Cada tarefa deve ser implementada e
 verificada separadamente.

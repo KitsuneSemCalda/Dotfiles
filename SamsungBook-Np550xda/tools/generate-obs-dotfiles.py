@@ -108,21 +108,32 @@ def collection(platform):
         'Project Demo': ('Capture Window', 'Camera PiP', 'Audio Buses'),
         'Camera Fullscreen': ('Slate Background', 'Camera Device', 'Audio Buses'),
     }
+    scene_names = list(SCENES)
+    if platform == 'linux':
+        sources.extend([
+            {'id': 'browser_source', 'name': 'OmaTuber', 'uuid': uid('OmaTuber'),
+             'settings': {'url': 'http://127.0.0.1:39017/', 'width': 512, 'height': 512,
+                          'shutdown': False, 'restart_when_active': False, 'fps': 30},
+             'mixers': 0, 'volume': 0.0, 'hotkeys': {}},
+        ])
+        recipes['OmaTuber Live'] = ('Capture Monitor', 'OmaTuber', 'Audio Buses')
+        scene_names.append('OmaTuber Live')
     for name in slate_text:
         recipes[name] = (('Audio Buses', name + ' Slate') if platform == 'linux'
                          else ('Slate Background', 'Audio Buses', 'Slate Accent',
                                name + ' Subtitle', name + ' Title'))
     transforms = {
+        'OmaTuber Live': {'OmaTuber': (1504, 664, 0.75)},
         'Camera Fullscreen': {'Camera Device': (240, 0, 2.25)},
         **({name: {name + ' Title': (245, 435, 1),
                    name + ' Subtitle': (250, 555, 1),
                    'Slate Accent': (250, 650, 1)} for name in slate_text}
            if platform == 'windows' else {}),
     }
-    sources += [scene(name, recipes[name], transforms.get(name)) for name in SCENES]
+    sources += [scene(name, recipes[name], transforms.get(name)) for name in scene_names]
     return {'name': 'Capture Infrastructure', 'version': 2,
             'current_scene': 'Desktop', 'current_program_scene': 'Desktop',
-            'scene_order': [{'name': name} for name in SCENES],
+            'scene_order': [{'name': name} for name in scene_names],
             'sources': sources, 'groups': [], 'transitions': [],
             'current_transition': 'Fade', 'transition_duration': 300,
             'quick_transitions': [], 'modules': {},
@@ -210,5 +221,6 @@ SceneCollectionFile=Capture Infrastructure.json
 ''', encoding='utf-8')
 
 
-write(ROOT / 'Omarchy/home/.config/obs-studio', 'linux')
-write(ROOT / 'Windows-11/home/obs-studio', 'windows')
+if __name__ == '__main__':
+    write(ROOT / 'Omarchy/home/.config/obs-studio', 'linux')
+    write(ROOT / 'Windows-11/home/obs-studio', 'windows')

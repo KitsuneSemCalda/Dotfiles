@@ -33,12 +33,6 @@ Path .var/app/*/cache
 Path go/pkg/mod
 Name node_modules
 Name .venv
-Name target
-Name build
-Name dist
 Name *.log
-Name *-shm
-Name *-wal
-Name *-journal
 Name *conflict_on_*
 Regex .*\.(sock|socket|pipe)

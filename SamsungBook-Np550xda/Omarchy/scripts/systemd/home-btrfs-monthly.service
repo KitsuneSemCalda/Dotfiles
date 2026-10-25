@@ -1,7 +1,6 @@
 [Unit]
-Description=Export a monthly Btrfs root snapshot to Dropbox
+Description=Save a local full monthly Btrfs ZIP and consolidate completed years
 RequiresMountsFor=/home/kitsune /var/lib/home-dropbox-backup
-ConditionPathIsDirectory=/home/kitsune/Dropbox
 
 [Service]
 Type=oneshot

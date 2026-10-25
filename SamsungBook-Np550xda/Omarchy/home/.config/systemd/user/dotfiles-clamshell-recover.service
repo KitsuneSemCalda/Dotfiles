@@ -1,0 +1,10 @@
+[Unit]
+Description=Reconcile Omarchy clamshell state after missed display or lid events
+PartOf=graphical-session.target
+After=graphical-session.target
+ConditionEnvironment=HYPRLAND_INSTANCE_SIGNATURE
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/flock --nonblock --conflict-exit-code 0 %t/omarchy-monitor-clamshell.lock %h/.local/bin/clamshell-recover
+TimeoutStartSec=20

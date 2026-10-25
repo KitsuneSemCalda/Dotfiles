@@ -18,6 +18,14 @@ try {
     Assert ((ConvertFrom-Jsonc '{"name":"a\"b"}').name -eq 'a"b') 'JSONC escaped quote failed'
     & $installer -Target $target -DryRun
     Assert (-not (Test-Path (Join-Path $target '.config\starship.toml'))) 'Dry-run wrote files'
+    foreach ($name in @('Maintenance', 'All')) {
+        $option = @{ $name = $true }
+        $failed = $false
+        $message = ''
+        try { & $installer -Target $target -DryRun @option } catch { $failed = $true; $message = $_.Exception.Message }
+        Assert $failed 'Maintenance/All accepted a foreign target'
+        Assert ($message -match 'HOME real') 'Foreign-target rejection came from an unrelated failure'
+    }
     & $installer -Target $target
     $dest = Join-Path $target '.config\starship.toml'
     $skin = Join-Path $target 'Documents\Rainmeter\Skins\AincradHUD\HUD.ini'

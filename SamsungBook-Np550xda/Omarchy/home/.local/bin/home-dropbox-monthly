@@ -1,109 +1,72 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-usage() {
-  echo 'Usage: home-dropbox-monthly [--dry-run] [--list]' >&2
-}
-
 dry_run=0
 list=0
-while (($#)); do
-  case $1 in
-    --dry-run) dry_run=1 ;;
-    --list) list=1 ;;
-    --help|-h) usage; exit 0 ;;
-    *) usage; exit 2 ;;
-  esac
-  shift
-done
-(( !dry_run || !list )) || { usage; exit 2; }
+case ${1:-} in
+  --dry-run) dry_run=1 ;;
+  --list) list=1 ;;
+  '') ;;
+  *) echo 'Usage: home-dropbox-monthly [--dry-run|--list]' >&2; exit 2 ;;
+esac
+(( $# <= 1 )) || exit 2
 
 home=$(realpath -e -- "$HOME")
 dropbox=$(realpath -e -- "${HOME_BACKUP_DROPBOX_DIR:-$HOME/Dropbox}")
-[[ "$dropbox" == "$home"/* ]] || { echo 'Dropbox must be inside HOME' >&2; exit 1; }
-root="$dropbox/Backups/SamsungBook-Np550xda/Omarchy/home"
-current="$root/current"
-monthly="$root/monthly/home"
+[[ $dropbox == "$home"/* ]] || { echo 'Dropbox must be inside HOME' >&2; exit 1; }
 state="${XDG_STATE_HOME:-$HOME/.local/state}/home-dropbox-backup"
-[[ -d "$current" ]] || { echo "Missing synchronized home: $current" >&2; exit 1; }
-if ! command -v tar >/dev/null || ! command -v zstd >/dev/null \
-    || ! command -v sha256sum >/dev/null; then
-  echo 'tar, zstd and sha256sum are required' >&2; exit 1;
-fi
+state=$(realpath -m -- "$state")
+[[ $state != "$dropbox" && $state != "$dropbox"/* ]] || { echo 'Backup state must be outside Dropbox' >&2; exit 1; }
+root="$state/archives/home"
+current="$state/current"
+cloud_root="$dropbox/Backups/SamsungBook-Np550xda/Omarchy"
+includes="${HOME_BACKUP_CLOUD_INCLUDES_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/home-dropbox-backup/cloud-includes}"
+helper="$(dirname -- "$0")/backup-zip"
+date=${HOME_BACKUP_DATE:-${HOME_BACKUP_MONTH:+$HOME_BACKUP_MONTH-01}}
+date=${date:-$(date +%F)}
+[[ $date =~ ^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$ ]] \
+  && [[ $(date -d "$date" +%F) == "$date" ]] || { echo 'Invalid backup date' >&2; exit 2; }
+year=${date:0:4}
+month=${date:0:7}
 
 if ((list)); then
-  [[ -d "$monthly" ]] && find "$monthly" -maxdepth 1 -type f -name '*.tar.zst' -printf '%f\n' | sort
+  [[ ! -d $root ]] || find "$root" -maxdepth 2 -type f -name '*.zip' -printf '%P\n' | sort
   exit 0
 fi
-
+[[ -d $current ]] || { echo 'Run home-dropbox-backup before creating a monthly ZIP' >&2; exit 1; }
 umask 077
-mkdir -p -- "$state" "$monthly"
+mkdir -p -- "$state/work"
+export TMPDIR="$state/work"
 exec 9>"$state/lock"
-flock -w 3600 9 || { echo 'Timed out waiting for home synchronization' >&2; exit 1; }
-
-month=${HOME_BACKUP_MONTH:-$(date +%Y-%m)}
-[[ $month =~ ^[0-9]{4}-(0[1-9]|1[0-2])$ ]] || { echo 'Invalid backup month' >&2; exit 2; }
-archive="$monthly/$month.tar.zst"
-[[ ! -e "$archive" ]] || { echo "Monthly archive already exists: $archive"; exit 0; }
-
-# A partial or conflicted Unison run leaves current/ behind the live home.
-for marker in last-partial last-conflicts; do
-  if [[ -f "$state/$marker" ]]; then
-    echo "Home synchronization is incomplete ($marker); monthly archive will retry tomorrow" >&2
-    exit 1
-  fi
-done
-[[ -f "$state/last-success" ]] || {
-  echo 'No completed home synchronization; monthly archive will retry tomorrow' >&2
-  exit 1
-}
-
-previous=''
-while IFS= read -r path; do
-  name=${path##*/}
-  candidate=${name%.tar.zst}
-  [[ $candidate < $month ]] && previous=$candidate
-done < <(find "$monthly" -maxdepth 1 -type f -name '????-??.tar.zst' | sort)
-
-if [[ -n $previous ]]; then
-  [[ -f "$monthly/$previous.snar" && -f "$monthly/$previous.sha256" ]] || {
-    echo "Incomplete previous archive: $previous" >&2; exit 1;
-  }
-  (cd "$monthly" && sha256sum -c -- "$previous.sha256") || exit 1
-  kind=incremental
-else
-  kind=full
-fi
+flock -w 3600 9 || { echo 'Timed out waiting for local home synchronization' >&2; exit 1; }
 
 if ((dry_run)); then
-  echo "Would create $kind archive $archive from $current (parent: ${previous:-none})"
+  echo "Would migrate old cloud ZIPs locally, archive $root/$year/$date.zip and publish essentials within the total Dropbox budget"
   exit 0
 fi
-
-available_kib=$(df -Pk -- "$monthly" | awk 'NR == 2 { print $4 }')
-source_kib=$(du -sk -- "$current" | awk '{ print $1 }')
-reserve_gib=${HOME_BACKUP_MIN_FREE_GIB:-10}
-[[ $reserve_gib =~ ^[0-9]+$ ]] || { echo 'Invalid free-space reserve' >&2; exit 2; }
-(( available_kib >= source_kib + reserve_gib * 1024 * 1024 )) || {
-  echo "Insufficient free space for a monthly home archive with $reserve_gib GiB reserve" >&2
-  exit 1
-}
-
-work=$(mktemp -d -- "$monthly/.work.XXXXXXXX")
-trap 'rm -rf -- "$work"' EXIT
-if [[ -n $previous ]]; then
-  cp -- "$monthly/$previous.snar" "$work/state.snar"
+for kind in home btrfs; do
+  local_root=$(realpath -m -- "$state/archives/$kind")
+  [[ $local_root != "$dropbox" && $local_root != "$dropbox"/* ]] || { echo 'Local archives must be outside Dropbox' >&2; exit 1; }
+  python3 "$helper" relocate "$cloud_root/$kind" "$state/archives/$kind"
+done
+python3 "$helper" consolidate "$root" --year "$year"
+shopt -s nullglob
+existing=("$root/$year/$month"-??.zip)
+if ((${#existing[@]})); then
+  for archive in "${existing[@]}"; do python3 "$helper" verify "$archive"; done
+  echo "Local monthly ZIP already verified: ${existing[0]}"
 fi
-
-# The Unison lock keeps current/ stable from our own sync. Programs may still
-# write to Dropbox directly; tar reports changes and the archive is discarded.
-tar -C "$current" --one-file-system --listed-incremental="$work/state.snar" \
-  -cf - . | zstd -T0 -q -o "$work/$month.tar.zst"
-zstd -tq -- "$work/$month.tar.zst"
-(cd "$work" && sha256sum "$month.tar.zst" >"$month.sha256")
-printf 'format=gnu-tar-incremental\nkind=%s\nparent=%s\nsource=current\n' \
-  "$kind" "${previous:-none}" >"$work/$month.meta"
-mv -- "$work/state.snar" "$monthly/$month.snar"
-mv -- "$work/$month.sha256" "$work/$month.meta" "$monthly/"
-mv -- "$work/$month.tar.zst" "$archive"
-echo "Created $kind monthly archive: $archive"
+for marker in last-partial last-conflicts; do
+  [[ ! -f $state/$marker ]] || { echo "Incomplete home synchronization ($marker); retry later" >&2; exit 1; }
+done
+[[ -f $state/last-success ]] || { echo 'No completed local home synchronization' >&2; exit 1; }
+synced_at=$(python3 "$helper" synced-at "$state/last-success")
+reserve=${HOME_BACKUP_MIN_FREE_GIB:-10}
+[[ $reserve =~ ^[0-9]+$ ]] || exit 2
+available=$(df -Pk -- "$dropbox" | awk 'NR == 2 {print $4}')
+size=$(du -sk -- "$current" | awk '{print $1}')
+((available >= size * 2 + reserve * 1024 * 1024)) || { echo 'Insufficient space for ZIP staging and reserve' >&2; exit 1; }
+if ((!${#existing[@]})); then
+  python3 "$helper" pack "$current" "$root/$year/$date.zip" --synced-at "$synced_at"
+fi
+python3 "$helper" cloud "$current" "$dropbox" --includes "$includes" --synced-at "$synced_at"

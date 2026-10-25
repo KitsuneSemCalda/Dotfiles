@@ -28,7 +28,13 @@ my $reboot = 0;
 my $theme   = 0;
 my $openrgb = 0;
 my $ek75_knob = 0;
+my $clamshell = 0;
+my $calibrate = 0;
 my $home_backup = 0;
+my $maintenance = 0;
+my $ai_memory = 0;
+my $ai_jail = 0;
+my $omatuber = 0;
 my $all     = 0;
 my $help    = 0;
 my $target  = $ENV{HOME};
@@ -42,7 +48,13 @@ my %installation_options = (
     'theme'          => \$theme,
     'openrgb'        => \$openrgb,
     'ek75-knob'      => \$ek75_knob,
+    'clamshell'      => \$clamshell,
+    'calibrate'      => \$calibrate,
     'home-backup'    => \$home_backup,
+    'maintenance'    => \$maintenance,
+    'ai-memory'      => \$ai_memory,
+    'ai-jail'        => \$ai_jail,
+    'omatuber'       => \$omatuber,
 );
 
 GetOptions(
@@ -64,7 +76,8 @@ if ($all) {
 my $installation_requested = grep { $$_ } values %installation_options;
 my $only_home_backup = $home_backup && !$all && !$reboot
     && !($apps || $bookmarks || $fonts || $plugin || $omastore
-        || $theme || $openrgb || $ek75_knob);
+        || $theme || $openrgb || $ek75_knob || $clamshell || $calibrate || $maintenance
+        || $ai_memory || $ai_jail || $omatuber);
 
 if ($restore && ($backup || $installation_requested || $reboot)) {
     die "--restore cannot be combined with installation actions or --reboot\n";
@@ -86,6 +99,9 @@ die "Missing destination: $target\n" unless -d $target;
 my $home_root = abs_path($ENV{HOME} // '') // '';
 if (($installation_requested || $reboot) && $target ne $home_root) {
     die "Omarchy actions can only use the real HOME; use --target only to test file installation\n";
+}
+if ($omatuber && !$dry_run && system('pgrep', '-u', "$<", '-x', 'obs') == 0) {
+    die "Close OBS Studio before installing OmaTuber and its scene configuration\n";
 }
 
 my $backup_base = File::Spec->catdir($target, '.local', 'state', 'dotfiles', 'backups');
@@ -129,6 +145,7 @@ my %home_backup_files = map { $_ => 1 } qw(
     .config/systemd/user/home-dropbox-monthly.timer
     .local/bin/home-dropbox-backup
     .local/bin/home-dropbox-monthly
+    .local/bin/backup-zip
 );
 
 find(
@@ -193,6 +210,36 @@ if (@conflicts) {
     die scalar(@conflicts) . " conflict(s) found; validation failed and nothing was changed\n";
 }
 
+# Prepare alias dependencies before publishing any dotfiles. A normal profile
+# install needs both tools too, even without --all.
+if ($target eq $home_root && !$only_home_backup) {
+    my $installs_aliases = -f File::Spec->catfile($source_root, '.aliasrc');
+    my $needs_jail = $ai_jail || ($installs_aliases && !executable_on_path('ai-jail'));
+    my $wrapper = File::Spec->catfile($target, '.local', 'bin', 'ai-memory');
+    my $native = File::Spec->catfile($ENV{XDG_CACHE_HOME} // File::Spec->catdir($target, '.cache'),
+        'ai-memory', 'native-runner', 'ai-memory');
+    my $needs_memory = $ai_memory || ($installs_aliases && (!-x $wrapper || !-x $native));
+    if ($needs_jail) {
+        ensure_repo_packages('bubblewrap');
+        ensure_aur_packages('ai-jail-bin');
+    }
+    if ($needs_memory) {
+        ensure_repo_packages('curl', 'docker', 'docker-compose', 'openssl', 'iproute2');
+        run_command('pkexec', 'systemctl', 'enable', '--now', 'docker.socket');
+        run_command('perl', File::Spec->catfile($repo_root, 'scripts', 'docker-stack.pl'),
+            '--memory', '--agents');
+    }
+    if (!$dry_run && ($installs_aliases || $ai_jail || $ai_memory)) {
+        die "ai-jail or bubblewrap is unavailable; no dotfiles were copied\n"
+            if ($installs_aliases || $ai_jail)
+                && (!executable_on_path('ai-jail') || !executable_on_path('bwrap'));
+        die "ai-memory wrapper is unavailable; no dotfiles were copied\n"
+            if ($installs_aliases || $ai_memory) && !-x $wrapper;
+        die "ai-memory native launch client is unavailable; no dotfiles were copied\n"
+            if $installs_aliases && !-x $native;
+    }
+}
+
 # Install GPU API dependencies before publishing the corresponding helper.
 if ($target eq $home_root && !$only_home_backup
     && -f File::Spec->catfile($source_root, '.local', 'bin', 'check-ai-acceleration')) {
@@ -240,18 +287,44 @@ for my $item (@plan) {
 }
 
 if ($target eq $home_root && !$only_home_backup) {
-    run_command('python3', File::Spec->catfile($target, '.local', 'bin', 'check-ai-acceleration'))
-        if -f File::Spec->catfile($source_root, '.local', 'bin', 'check-ai-acceleration');
     run_command('python3', File::Spec->catfile($target, '.local', 'bin', 'setup-ai-models'))
         if -f File::Spec->catfile($source_root, '.local', 'bin', 'setup-ai-models');
+    run_command('python3', File::Spec->catfile($target, '.local', 'bin', 'check-ai-acceleration'))
+        if -f File::Spec->catfile($source_root, '.local', 'bin', 'check-ai-acceleration');
     ensure_skills();
 } elsif ($target ne $home_root) {
     say 'SKIP    skill installation (using a test --target, not the real HOME)';
 }
 
+# Install dependencies before any optional integration consumes them.
+ensure_repo_packages('git') if $openrgb || $plugin || $omastore;
+ensure_repo_packages('curl', 'fontconfig') if $fonts;
+ensure_repo_packages('openrgb', 'base-devel', 'qt6-base', 'qt6-tools',
+    'hidapi', 'libusb', 'mbedtls3') if $openrgb;
+if ($clamshell) {
+    for my $helper (qw(omarchy-hyprland-monitor-clamshell omarchy-hyprland-monitor-watch
+                       omarchy-system-lid-close)) {
+        die "Missing Omarchy helper: $helper; update Omarchy before using --clamshell\n"
+            unless grep { -x File::Spec->catfile($_, $helper) } split /:/, ($ENV{PATH} // '');
+    }
+    run_command('systemctl', '--user', 'daemon-reload');
+    run_command('systemctl', '--user', 'enable', '--now', 'dotfiles-clamshell-recover.timer');
+}
+if ($calibrate) {
+    ensure_repo_packages('python', 'pavucontrol', 'v4l-utils', 'usbutils', 'pciutils', 'bluez-utils', 'blueman');
+    run_command(File::Spec->catfile($target, '.local', 'bin', 'calibrate-devices'), '--scan');
+    say 'Run calibrate-devices in a terminal to adjust connected hardware.';
+}
 ensure_fonts()  if $fonts;
 ensure_chromium_bookmarks() if $apps || $bookmarks;
 ensure_apps()   if $apps;
+if ($omatuber) {
+    ensure_repo_packages('git', 'base-devel', 'pkgconf', 'libxkbcommon', 'python',
+        'obs-studio', 'obs-studio-plugin-browser');
+    ensure_repo_packages('rust') unless executable_on_path('cargo');
+    run_command('bash', File::Spec->catfile($repo_root, 'scripts', 'install-omatuber.sh'));
+    run_command('python3', File::Spec->catfile($repo_root, 'scripts', 'configure-omatuber.py'));
+}
 ensure_omastore() if $omastore;
 ensure_plugin() if $plugin;
 ensure_theme()  if $theme;
@@ -264,7 +337,7 @@ if (!$only_home_backup && $target eq $home_root
     run_command(File::Spec->catfile($target, '.local', 'bin', 'obs-theme-slates'));
 }
 
-if ($plugin || $reboot) {
+if ($plugin || $clamshell || $reboot) {
     run_command('hyprctl', 'reload');
     unless ($dry_run) {
         my $errors = command_output('hyprctl', 'configerrors');
@@ -272,15 +345,25 @@ if ($plugin || $reboot) {
     }
 }
 
-if ($openrgb || $ek75_knob || $home_backup) {
+if ($openrgb || $ek75_knob || $home_backup || $clamshell || $maintenance) {
     my @actions;
     push @actions, ('--openrgb', File::Spec->catdir($target, '.local', 'share', 'dareu-ek75-openrgb')) if $openrgb;
     push @actions, '--ek75-knob' if $ek75_knob;
+    push @actions, '--clamshell' if $clamshell;
     push @actions, '--home-backup' if $home_backup;
+    if ($maintenance) {
+        ensure_repo_packages('python', 'pacman-contrib', 'smartmontools');
+        push @actions, ('--maintenance', scalar getpwuid($<));
+    }
     run_command('pkexec', '/usr/bin/bash',
         File::Spec->catfile($repo_root, 'scripts', 'install-system.sh'), @actions);
     say 'Reconnect the EK75 to activate the knob rule on an already connected keyboard.' if $ek75_knob;
-    say 'Home sync, monthly home archive and monthly Btrfs export timers are enabled.' if $home_backup;
+    say 'Local full-backup and budgeted cloud publication timers are enabled.' if $home_backup;
+}
+
+if ($maintenance) {
+    run_command('systemctl', '--user', 'daemon-reload');
+    run_command('/usr/local/bin/dotfiles-maintenance', 'enable');
 }
 
 say $dry_run ? 'Dry-run finished.' : 'Dotfiles installed.';
@@ -478,6 +561,7 @@ sub ensure_lexend_font {
 }
 
 sub ensure_apps {
+    run_command('bash', File::Spec->catfile($repo_root, 'scripts', 'install-ai-desktops.sh'));
     for my $name ('HEY', 'Basecamp') {
         if (webapp_present($name)) {
             run_command('omarchy', 'webapp', 'remove', $name);
@@ -521,8 +605,6 @@ sub ensure_apps {
         { name => 'GitLab',           url => 'https://gitlab.com/' },
         { name => 'Codeberg',         url => 'https://codeberg.org/' },
         { name => 'Copilot',          url => 'https://github.com/copilot' },
-        { name => 'Claude',           url => 'https://claude.ai/' },
-        { name => 'ChatGPT',          url => 'https://chatgpt.com/' },
         { name => 'Grok',             url => 'https://grok.com/' },
         { name => 'Gemini',           url => 'https://gemini.google.com/' },
         { name => 'Waz',              url => 'https://www.waz.com.br/'},
@@ -790,8 +872,7 @@ sub ensure_plugin {
 }
 
 sub ensure_openrgb {
-    # The build and the launcher point back into this checkout, so it has to
-    # outlive the dotfiles clone.
+    # Keep the build checkout outside the dotfiles repository.
     my $url = 'https://github.com/KitsuneSemCalda/Dareu-EK75-OpenRGB-Compat.git';
     my $dir = File::Spec->catdir($target, '.local', 'share', 'dareu-ek75-openrgb');
 
@@ -813,7 +894,7 @@ sub ensure_ek75_knob {
 }
 
 sub ensure_home_backup {
-    ensure_repo_packages('unison', 'zstd', 'btrfs-progs');
+    ensure_repo_packages('unison', 'zip', 'unzip', 'python', 'btrfs-progs');
     run_command('systemctl', '--user', 'daemon-reload');
     run_command('systemctl', '--user', 'enable', '--now', 'home-dropbox-backup.timer');
     run_command('systemctl', '--user', 'enable', '--now', 'home-dropbox-monthly.timer');
@@ -851,6 +932,12 @@ sub ensure_theme {
     }
 
     run_command('omarchy', 'theme', 'set', 'Sword Art Omarchy');
+}
+
+sub executable_on_path {
+    my ($name) = @_;
+    return scalar grep { -x File::Spec->catfile($_, $name)
+        && !-d File::Spec->catfile($_, $name) } split /:/, ($ENV{PATH} // '');
 }
 
 sub ensure_repo_packages {
@@ -946,9 +1033,15 @@ Usage: perl omarchy.pl [options]
   --reboot           reboots after successful installation and Hyprland validation
   --theme            installs/applies the Sword Art Omarchy theme
   --openrgb          installs the Dareu EK75 OpenRGB driver, udev rule and theme hook
+  --calibrate        installs hardware setup tools and saves a connected-device inventory
+  --clamshell        configures logind for closed-lid use with an external display
   --ek75-knob        blocks the faulty EK75 knob (mute and volume rotation)
-  --home-backup      installs Unison and enables home/Dropbox synchronization
-  --all              runs all optional installation actions, including --home-backup
+  --home-backup      enables local full backups and budgeted Dropbox essentials
+  --maintenance      enables daily diagnosis and weekly unattended maintenance
+  --ai-memory        starts ai-memory and configures MCP/hooks for detected AI CLIs
+  --ai-jail          installs ai-jail and its bubblewrap sandbox dependency
+  --omatuber         installs pinned OmaTuber, OBS browser support and authenticated integration
+  --all              runs all optional installation actions, including backups and maintenance
   --target PATH      uses a different root directory only to test file installation
   --help             shows this help
 USAGE

@@ -1,5 +1,5 @@
 [Unit]
-Description=Archive the synchronized home in a monthly compressed chain
+Description=Save local monthly HOME ZIPs and publish budgeted cloud essentials
 ConditionPathIsDirectory=%h/Dropbox
 Wants=home-dropbox-backup.service
 After=home-dropbox-backup.service

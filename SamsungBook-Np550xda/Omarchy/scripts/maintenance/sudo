@@ -1,0 +1,3 @@
+#!/bin/sh
+# Upstream migrations must fail instead of waiting for a password in the background.
+exec /usr/bin/sudo -n "$@"

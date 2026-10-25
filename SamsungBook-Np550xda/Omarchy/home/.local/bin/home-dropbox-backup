@@ -7,7 +7,7 @@ Usage: home-dropbox-backup [--dry-run]
        home-dropbox-backup --review
        home-dropbox-backup --restore [--apply] [--target DIRECTORY]
 
-Synchronize HOME with Dropbox/Backups/SamsungBook-Np550xda/Omarchy/home/current.
+Maintain the local working copy used to publish monthly ZIP backups to Dropbox.
 Restore previews changes unless --apply is specified.
 EOF
 }
@@ -52,7 +52,11 @@ home_root=$(realpath -e -- "$HOME")
 }
 dropbox_relative=${dropbox_root#"$home_root"/}
 destination="$dropbox_root/Backups/SamsungBook-Np550xda/Omarchy/home"
-current="$destination/current"
+state_dir=$(realpath -m -- "${XDG_STATE_HOME:-$HOME/.local/state}/home-dropbox-backup")
+[[ $state_dir != "$dropbox_root" && $state_dir != "$dropbox_root"/* ]] || { echo 'Backup state must be outside Dropbox' >&2; exit 1; }
+archive_root=$(realpath -m -- "$state_dir/archives")
+[[ $archive_root != "$dropbox_root" && $archive_root != "$dropbox_root"/* ]] || { echo 'Local archives must be outside Dropbox' >&2; exit 1; }
+current="$state_dir/current"
 excludes="${HOME_BACKUP_EXCLUDES_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/home-dropbox-backup/excludes}"
 [[ -f "$excludes" ]] || { echo "Missing exclusion file: $excludes" >&2; exit 1; }
 
@@ -81,11 +85,21 @@ fi
 command -v unison >/dev/null || { echo 'unison is required' >&2; exit 1; }
 
 umask 077
-state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/home-dropbox-backup"
 mkdir -p -- "$state_dir"
 chmod 700 "$state_dir"
 exec 9>"$state_dir/lock"
 flock -n 9 || { echo 'Another home synchronization is running' >&2; exit 0; }
+
+# Preserve the old layout before moving working files outside Dropbox.
+zip_helper="$(dirname -- "$0")/backup-zip"
+if [[ -d "$destination/current" || -d "$destination/history" || -d "$destination/monthly" ]]; then
+  if ((dry_run)); then
+    echo 'Legacy Dropbox layout needs migration; no files were changed'
+    exit 0
+  fi
+  mkdir -p -- "$state_dir/work"
+  TMPDIR="$state_dir/work" python3 "$zip_helper" migrate "$destination" "$state_dir"
+fi
 
 available_kib=$(df -Pk -- "$dropbox_root" | awk 'NR == 2 { print $4 }')
 min_free_gib=${HOME_BACKUP_MIN_FREE_GIB:-10}
@@ -95,12 +109,13 @@ min_free_gib=${HOME_BACKUP_MIN_FREE_GIB:-10}
   exit 1
 }
 
-mkdir -p -- "$current" "$destination/history/unison" "$state_dir/unison"
-chmod 700 "$destination" "$destination/history" "$destination/history/unison" "$state_dir/unison"
+mkdir -p -- "$current" "$state_dir/history/unison" "$state_dir/unison"
+chmod 700 "$state_dir/history" "$state_dir/history/unison" "$state_dir/unison"
 chmod --reference="$home_root" "$current"
 options=(-ui text -auto -times -copyonconflict
+  -force "$home_root"
   -nodeletion "$home_root" -confirmbigdel
-  -backup 'Regex .*' -backuploc central -backupdir "$destination/history/unison"
+  -backup 'Regex .*' -backuploc central -backupdir "$state_dir/history/unison"
   -maxbackups 3 -ignore "BelowPath $dropbox_relative")
 if ((!review)); then options+=(-batch); fi
 if [[ "$state_dir" == "$home_root"/* ]]; then
@@ -115,16 +130,19 @@ done <"$excludes"
 if ((dry_run)); then
   options+=(-noupdate "$home_root" -noupdate "$current"
     -nocreation "$home_root" -nocreation "$current" -terse)
-  echo "Previewing both-way sync: $home_root <-> $current"
+  echo "Previewing local backup: $home_root -> $current"
 else
   if ((!review)); then options+=(-silent); fi
   if [[ "${HOME_BACKUP_SEED_HOME:-0}" == 1 ]]; then
     options+=(-prefer "$home_root")
   fi
-  echo "Synchronizing both ways: $home_root <-> $current"
+  echo "Updating local backup: $home_root -> $current"
 fi
 
 export UNISON="$state_dir/unison"
+if ((!dry_run)); then
+  date --iso-8601=seconds >"$state_dir/last-partial"
+fi
 result=0
 unison "$home_root" "$current" "${options[@]}" || result=$?
 if ((dry_run)); then
@@ -135,7 +153,9 @@ fi
 case "$result" in
   0)
     if ((!dry_run)); then
-      date --iso-8601=seconds >"$state_dir/last-success"
+      python3 "$zip_helper" sqlite-copies "$home_root" "$current"
+      printf '{"format":2,"synced_at":"%s"}\n' "$(date --iso-8601=seconds)" >"$state_dir/last-success.tmp"
+      mv -- "$state_dir/last-success.tmp" "$state_dir/last-success"
       rm -f -- "$state_dir/last-conflicts"
       rm -f -- "$state_dir/last-partial"
     fi

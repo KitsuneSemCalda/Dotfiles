@@ -4,6 +4,9 @@ See also the [architecture analysis and diagrams](../docs/architecture.md),
 covering the modifications to the base system and the installers' limitations.
 The [capture pipeline](../docs/capture.md) documents OBS profiles, PipeWire
 audio buses, scene setup, hardware limits and benchmark steps.
+For OmaTuber and OBS browser support, close OBS and run
+`perl ./omarchy.pl --omatuber --backup` (also included in `--all`). See the
+[OmaTuber first-use steps](../docs/capture.md#omatuber-no-omarchy).
 
 Initial dotfiles baseline for the Samsung NP550XDA-KF2BR, running Omarchy with
 Hyprland. The full snapshot used to make these decisions is at
@@ -28,10 +31,20 @@ The power profile is left to Omarchy's own
 
 ## Closed-lid use with an external monitor
 
+The desk's Samsung SMB2030N (serial HXOZB03691) has an explicit rule in
+`home/.config/hypr/monitors.lua`, matched by its description rather than its HDMI
+port: 1600×900 at 60 Hz, scale 1, SDR sRGB, 8-bit output and VRR off. Its EDID
+lists 1600×900 as preferred even though it also accepts 1080p signals. Other
+external monitors retain the generic preferred-mode rule. This establishes the
+display configuration; it is not a measured color calibration. No measured ICC
+profile is installed, and brightness/contrast could not be controlled through
+DDC/CI on the tested connection.
+
 Omarchy already handles clamshell mode: with an external monitor connected,
 closing the lid disables the internal panel and keeps the session on the external
 screen; opening the lid enables the panel again. Without an external screen,
-closing the lid locks and suspends the notebook. Connect an external keyboard and
+closing the lid on battery locks and suspends the notebook. On AC it stays awake
+even if HDMI temporarily disappears. Connect an external keyboard and
 mouse and keep the notebook on a hard, ventilated surface. The internal `eDP-1`
 monitor rule stays on one line because Omarchy's clamshell helper reads its
 scale and position when it restores the panel. The expected internal scale is 1.
@@ -42,10 +55,57 @@ stock shortcut `Super+Ctrl+Delete` toggles the internal display manually when an
 external display is active. Omarchy's monitor watcher recovers the internal
 panel if the external display disappears.
 
-The installed `systemd-logind` already has `HandleLidSwitch=suspend` and
-`HandleLidSwitchDocked=ignore`; Omarchy's lid handler takes care of the display.
-Check effective settings with `systemd-analyze cat-config systemd/logind.conf`.
-There is no extra logind drop-in to install for this machine.
+`--clamshell` (included in `--all`) installs
+`/etc/systemd/logind.conf.d/60-dotfiles-clamshell.conf`: suspend when undocked
+on battery, and ignore the lid on AC power or when docked. It checks for Omarchy's
+lid and monitor helpers and validates Hyprland before installing the policy.
+The installer reloads logind to apply settings. Check effective settings with
+`systemd-analyze cat-config systemd/logind.conf`.
+
+`--clamshell` also enables the user timer `dotfiles-clamshell-recover.timer`.
+Every five seconds it invokes Omarchy's own clamshell reconciliation under the
+same lock as the stock monitor watcher. This recovers missed lid/display state
+changes even if that watcher exits. Each run is limited to 20 seconds, and the
+timer stops with the graphical session. If an enabled output has no valid video
+mode, it also retries a Hyprland reload at most once per minute, respecting
+Omarchy's reload guard. It does not wake valid displays that are idle. A black
+display that still reports a valid mode cannot be diagnosed by this check alone.
+On attach or lid transitions it focuses the external display, preferring the
+desk Samsung, and enables its DPMS when the lid is closed. It leaves focus and
+DPMS alone between transitions.
+Check it with `systemctl --user status dotfiles-clamshell-recover.timer` and
+`journalctl --user -u dotfiles-clamshell-recover.service`.
+
+## Connected hardware setup
+
+Install the setup tools and capture a hardware inventory:
+
+```sh
+perl omarchy.pl --backup --calibrate --clamshell
+calibrate-devices
+```
+
+`--calibrate` is included in `--all`; installation records an inventory without
+opening interactive windows. Run `calibrate-devices` in a terminal after
+connecting new devices. Its menu covers monitors (advertised modes and scale),
+mouse/touchpad (per-device sensitivity and natural scrolling), audio/microphone
+(default devices, profiles and levels through pavucontrol), webcam (preview,
+formats and supported controls through qv4l2), and Bluetooth pairing.
+The inventory also includes USB and PCI devices; unsupported hardware needs
+its own setup rather than guessed settings.
+
+Monitor and pointer adjustments are stored outside the managed dotfiles in
+`~/.config/dotfiles-hardware/`. Changes require confirmation within 15 seconds;
+unconfirmed or invalid changes are reverted. Omarchy's display toggles load
+after these overrides so clamshell recovery continues working. Audio settings
+are managed by WirePlumber; webcam control persistence depends on the camera
+and application. Color measurement requires a colorimeter and a measured
+profile; EDID color handling is not a measured calibration.
+
+The Compose file keeps locale sequences and Omarchy emoji shortcuts, then
+maps acute + c/C to ç/Ç. The session explicitly selects this Compose file and
+GTK/Qt composition modules. Log out and back in after installation, then test
+`ç Ç á é ã õ` in GTK, Qt and Chromium applications.
 
 ## EK75 keyboard and Fifine K688 microphone
 
@@ -103,8 +163,9 @@ scripts/hooks/pihole-dns-resume-watch.sh  # systemd --user service: reruns the r
 scripts/hooks/pihole-dns-resume.service   # unit installed for the script above
 scripts/udev/61-ek75-knob.hwdb             # suppresses the faulty EK75 knob
 home/.local/bin/select-k688-microphone      # selects the connected USB input
-home/.local/bin/home-dropbox-backup         # copies HOME to Dropbox; previews restores
-home/.local/bin/home-dropbox-monthly        # monthly compressed home archive chain
+home/.local/bin/home-dropbox-backup         # local working copy; previews restores
+home/.local/bin/home-dropbox-monthly        # local full ZIPs and budgeted cloud essentials
+home/.local/bin/backup-zip                  # verified ZIP publication/migration
 home/.config/home-dropbox-backup/excludes   # backup exclusions
 home/.config/systemd/user/home-dropbox-backup.{service,timer}
 home/.config/systemd/user/home-dropbox-monthly.{service,timer}
@@ -121,12 +182,18 @@ terminal keeps using JetBrainsMono Nerd Font, which is monospaced. The
 Lexend files are downloaded by the installer and are not copied into
 the repository.
 
-The app profile includes Bitwarden, AppFlowy, PrismLauncher, CurseForge, and
+The app profile includes Bitwarden, AppFlowy, PrismLauncher, CurseForge,
+ChatGPT Desktop (the official binary repackaged by AUR `chatgpt-desktop`),
+Claude Desktop (the pinned official Linux .deb repackaged by the local recipe), and
 the web apps Amazon Shopping, Mercado Livre, Pinterest, Z Ai, WebMotors,
-Panini Brasil, GitHub, GitLab, Codeberg, Copilot, Claude, ChatGPT, Grok, and
+Panini Brasil, GitHub, GitLab, Codeberg, Copilot, Grok, and
 Gemini. It also removes any previously installed HEY or Basecamp web app and
 any 1Password installation (package, AUR package, or browser extension) via
 `omarchy remove service`, since neither is part of this profile.
+`--apps` and `--all` replace the ChatGPT and Claude web launchers only after both
+desktop packages and their commands are present. To run only that migration:
+`bash scripts/install-ai-desktops.sh`. The Claude recipe downloads its official
+package with a pinned SHA-256; no `.deb` needs to be stored in the repository.
 It also registers the [Sword Art Omarchy](https://github.com/KitsuneSemCalda/Sword-Art-Omarchy)
 theme. `--plugin` (also `--plugins`) reinstalls three external shell plugins
 in the current profile: Feader RSS, Spaces, and
@@ -161,6 +228,8 @@ installer steps: an OpenRGB build with the driver, the launcher, and a hook
 that colours the keyboard with each Omarchy theme's accent. The udev rule is
 installed in the installer's single `pkexec` call. It needs the Qt 6
 build dependencies of OpenRGB and takes a while on the first run.
+The installer first installs missing packages, including `openrgb` (whose menu
+entry the launcher needs), `base-devel`, Qt 6, HID/USB libraries and `mbedtls3`.
 
 The EK75 knob on this machine sends repeated mute events even when untouched.
 `--ek75-knob` installs `scripts/udev/61-ek75-knob.hwdb` into
@@ -216,7 +285,9 @@ when `--target` points elsewhere for testing.
 
 The steps can also be run separately with `--fonts`, `--apps`,
 `--bookmarks`, `--plugin`, `--omastore`, `--theme`, `--openrgb`, `--ek75-knob`,
-or `--home-backup`. `--apps` uses the official repositories for
+`--clamshell`, `--calibrate`, `--maintenance`, `--ai-memory`, `--ai-jail`,
+or `--home-backup`.
+`--apps` uses the official repositories for
 PrismLauncher and the AUR packages for Bitwarden, AppFlowy, and CurseForge,
 installs the web apps listed above (skipping any already present), and
 removes HEY/Basecamp and 1Password if it finds them installed.
@@ -229,7 +300,9 @@ skipped, and a copy of the file is saved under
 before running either option; the Default profile must already exist.
 
 To reinstall the complete profile, including bookmarks, apps, plugins,
-OmaStore, fonts, theme, OpenRGB, the EK75 knob rule and the home backup timer:
+OmaStore, fonts, theme, OpenRGB, the EK75 knob rule, clamshell configuration,
+hardware inventory, automatic maintenance, ai-memory MCP/hooks, ai-jail and
+the home backup timers:
 
 ```bash
 perl ./omarchy.pl --all --backup
@@ -245,142 +318,163 @@ The OpenRGB udev rule, EK75 knob rule and system backup timer share one
 `pkexec` authorization when selected together.
 
 The installer copies the files under `home/`, preserving executable permissions.
-The Codex and Claude aliases in `home/.aliasrc` use `ai-memory run --yolo`,
-which starts both agents with their native permission prompts disabled. Bash must
-source `~/.aliasrc` from `~/.bashrc` for them to be active. The current machine
-already does this. A new terminal loads changes to the alias file.
+The Codex and Claude aliases in `home/.aliasrc` use
+`ai-jail --forward-port 49374 ai-memory run --yolo codex` (or `claude`).
+The launcher and harness run inside ai-jail, with the local ai-memory service
+reachable through port 49374; `--yolo` selects the harness's unattended mode.
+The aliases map only ai-memory's cache and data directories read-write in addition
+to ai-jail's default project and harness state mounts. The installer prepares
+the verified native launch client on the host before enabling these aliases.
+Both tools must be installed (`--all` or `--ai-memory --ai-jail`). Bash must
+source `~/.aliasrc` from `~/.bashrc` for them to be active. The profile includes
+a `.bashrc` that loads it after the Omarchy defaults, in interactive shells.
+Install with `--backup` to preserve an existing `.bashrc` before replacement.
+A new terminal loads changes to the alias file.
+When installing the profile into the real HOME, the installer prepares missing
+alias dependencies before copying any dotfiles and aborts if setup fails.
+This also applies without `--all`; test targets and standalone home backup skip
+this dependency setup.
 Legacy links to this checkout are replaced automatically. You can remove the
 checkout after installation; pull or clone it again and rerun the installer
 to update. Locally edited files require `--backup` before replacement. No
 system configuration was changed when this repository was created; `--all` is the
 option that applies external changes.
 
-## Home ↔ Dropbox synchronization
+## Automatic maintenance
 
-Running `--home-backup` by itself copies only the seven backup files listed
-above, installs any missing backup packages, and enables the backup timers. It
-does not install other dotfiles, skills, OBS assets or applications, and it
-does not call the app removal path. Use `--dry-run` to review the exact file
-plan first. A changed backup configuration is rejected unless `--backup` is
-also supplied; then the previous copy is saved under
-`~/.local/state/dotfiles/backups/` before replacement. Combining the flag with
-other actions or `--all` still runs the full profile installer.
+`perl ./omarchy.pl --maintenance --backup` enables daily local diagnosis and
+weekly maintenance; `--all` includes it. Updates run between 03:00 and 06:00
+from Sunday onward, only on AC and after 15 minutes idle. Missed windows retry
+the next night. It does not wake the laptop or request a reboot. Stay Awake
+postpones heavy work. See [maintenance commands, reports and limits](../docs/maintenance.md).
 
-The backup timer runs every 15 minutes. It synchronizes the selected home
-files in both directions with
-`~/Dropbox/Backups/SamsungBook-Np550xda/Omarchy/home/current/`. A file changed
-on either side updates the other side at the next run. Simultaneous edits are
-kept as conflicts for manual review; the service reports a skipped path rather
-than choosing a winner. Deleting a file in the home removes it from `current/`
-and keeps an older version under `home/history/unison/`. Deletions arriving
-from Dropbox do not delete files in the home. Up to three backup versions per
-path are retained. Dropbox syncs the local `current/` and `history/` folders to
-the account. A successful Unison run proves the local replicas agree; check the
-Dropbox client or website to confirm cloud upload.
+Use `dotfiles-maintenance simulate` to inspect eligibility without changes,
+`dotfiles-maintenance status` to read results, and `dotfiles-maintenance disable`
+to stop scheduling and restore owned power preferences.
 
-Two additional timers run daily and create at most one archive for each calendar
-month, retrying after a failed run. The user timer writes a GNU tar incremental
-chain compressed with zstd under `home/monthly/home/YYYY-MM.tar.zst`; each month
-also has a `.snar` state file, `.sha256` checksum and `.meta` parent record.
-It waits for a completed home sync and retries the next day if the most recent
-sync skipped changing files or conflicts.
-The first archive is full; later archives require every ancestor back to that
-full archive. The system timer creates a read-only Btrfs snapshot of `/` and
-exports a compressed `btrfs send` stream under `home/monthly/btrfs/`. The first
-stream is full, later streams use the previous month's snapshot as parent when
-its archive is intact. It keeps only the newest local snapshot under
-`/var/lib/home-dropbox-backup/snapshots/`; exported streams stay in Dropbox.
-An existing stream is skipped only after its checksum and metadata validate.
-Incomplete or corrupt monthly exports are moved to a dated `.incomplete-*`
-directory beside the streams before the timer retries that month.
-This captures the root subvolume at monthly dates. The separate `@home`,
-`@pkg` and `@log` subvolumes are not part of the root stream; the selected home
-files are covered by the home archive and live replica. Existing Snapper
-pre-update snapshots are separate recovery points and are not individually
-exported by this timer.
+## Local backups and budgeted Dropbox publication
 
-The script stores its Unison archive, lock and last-success marker in
-`${XDG_STATE_HOME:-~/.local/state}/home-dropbox-backup/`, with exclusions in
-`${XDG_CONFIG_HOME:-~/.config}/home-dropbox-backup/excludes`. The XDG user
-directories, active projects, configuration, and credentials are included.
-The exclusion file skips the Dropbox folder itself, caches, Steam and container
-data, reinstallable toolchains and build outputs. The source files under
-`~/Projects/omastore-fork-backups` and project dependency lockfiles are included;
-its large `target/` build directory is excluded. Edit the rules before the first run if
-you need those items. The synchronized copy includes credentials such as `~/.ssh` in
-plain text, as requested; anyone with access to the Dropbox account can read
-them. The script refuses to start if the disk has less than 10 GiB free.
-Chromium bookmarks remain included, but live cookies, history, favicons,
-preferences and session files are excluded because they repeatedly changed
-during transfer. Close Chromium and use a separate profile export if those
-parts of the browser profile must be recovered.
-Older copies of excluded Chromium files may remain under `current/`; restore
-also skips them, and the exclusion rules do not delete existing backup data.
+`--home-backup` installs the backup helpers, dependencies and user/system timers.
+It is included in `--all`. Use `--backup` to preserve changed installed scripts.
+The Dropbox account must already be linked for cloud publication.
+
+Every 15 minutes, Unison updates the one-way working copy in
+`~/.local/state/home-dropbox-backup/current/`. Changes to this copy never flow
+back to HOME. Up to three previous versions per path remain in `history/unison/`.
+Ordinary SQLite databases are normalized with Python's online backup API,
+including committed WAL data. Database errors, conflicts and interrupted runs
+block publication; encrypted databases require their application's own export.
+
+Daily retry timers save one complete ZIP per month **outside Dropbox**:
+
+```text
+~/.local/state/home-dropbox-backup/
+├── current/
+├── history/unison/
+└── archives/
+    ├── home/
+    │   ├── history.zip
+    │   └── 2026/2026-10-24.zip
+    └── btrfs/
+        ├── history.zip
+        └── 2026/2026-10-24.zip
+
+~/Dropbox/Backups/SamsungBook-Np550xda/Omarchy/latest.zip
+```
+
+Completed years are consolidated locally into a `history.zip` for HOME and one
+for Btrfs. Original monthly and legacy annual ZIPs remain nested inside them,
+with outer DEFLATE level 9 compression. Their contents are compared using
+SHA-256 before originals are removed. Local history has no 2 GB cloud limit;
+recursive ZIP compression is not a quota or deduplication mechanism. Local
+archives occupy the same computer's storage and are not an off-device backup.
+
+On upgrade, old managed ZIPs in Dropbox's `home/` and `btrfs/` backup directories
+are copied to the local archives, verified byte for byte, and only then removed
+from the synchronized directories. Interrupted copies can be retried; conflicting
+local files stop migration without replacing either version. Other Dropbox
+files are never selected for removal. The older `current/history/monthly`
+layout is first preserved in a local legacy ZIP before its working copy moves.
+Moving these old ZIPs out of Dropbox also removes their cloud copies when the
+client processes the changes; their verified local copies remain.
+
+After a successful synchronization within the last hour, the daily HOME job
+refreshes the single cloud `latest.zip`, even if this month's local archive
+already exists. The default selection is:
+
+```text
+Documents
+Work
+.config
+.ssh
+.gnupg
+.local/bin
+.aliasrc
+.bashrc
+.gitconfig
+.XCompose
+```
+
+Selections refer to the filtered working copy, not the live HOME. Existing
+Unison exclusions still apply. Files outside this list remain in local complete
+backups. To customize, create `~/.config/home-dropbox-backup/cloud-includes`
+with one relative path per line (`#` comments allowed); this replaces the default
+list. Missing selections are skipped, but an empty selection is rejected.
+Nothing is silently dropped to make an oversized selection fit. ZIPs include
+credentials when selected and are compressed, not encrypted.
+
+Publication counts **all files in the local Dropbox tree**, subtracts the old
+`latest.zip`, adds the new ZIP, and requires the total to be strictly below
+**1,800,000,000 bytes**. This leaves 200 MB below the assumed 2 GB account quota.
+`HOME_BACKUP_DROPBOX_BUDGET_BYTES` can lower this total budget (maximum 2 GB).
+An oversized result leaves the local backups and previous cloud ZIP intact.
+Staging is outside Dropbox; an atomic rename replaces the current ZIP without
+exposing a second temporary ZIP to the sync client. This requires staging and
+Dropbox to share a filesystem.
+
+This is a local budget check, not a Dropbox account API query. Files or shared
+folders existing only in the cloud are not measured; lower the budget to reserve
+space for them. Concurrent uploads from other devices are also outside this
+check. Confirm the actual account usage and completed uploads with Dropbox;
+a locally created ZIP does not establish cloud protection.
 
 ```bash
-perl ./omarchy.pl --home-backup --dry-run
 perl ./omarchy.pl --home-backup --backup
 home-dropbox-backup --dry-run
 home-dropbox-monthly --dry-run
-systemctl --user start home-dropbox-backup.service
-systemctl --user list-timers 'home-dropbox-*'
-systemctl list-timers 'home-btrfs-monthly*'
-cat ~/.local/state/home-dropbox-backup/last-success
-journalctl --user -u home-dropbox-backup.service -n 50
+home-dropbox-monthly --list
+systemctl --user start home-dropbox-monthly.service
+dropbox-cli status
 ```
 
-On a reinstall, install and sign in to Dropbox, wait for `home/current/` to
-download, then preview restoration before applying it:
+`--dry-run` does not relocate old cloud files. Full archives require additional
+local disk space: the default reserve is 10 GiB beyond staging. The user backup
+respects `XDG_STATE_HOME`; the root Btrfs exporter uses the fixed HOME-relative
+state directory shown above.
+
+Restore the cloud selection by verifying `latest.zip` with `unzip -t`, then
+extracting into an empty recovery directory. Local HOME ZIPs preserve Unix
+permissions and symbolic links. The working-copy restore remains preview-first:
 
 ```bash
 home-dropbox-backup --restore
 home-dropbox-backup --restore --apply
 ```
 
-Restoration copies files from `current/` into the home without overwriting
-local files whose modification time is newer than the backup copy. Preview
-the changes first; rsync uses modification times to decide which copy is newer.
-Older versions in `history/` can be copied manually as needed.
-For a monthly recovery, verify all `.sha256` files with `sha256sum -c`, then
-extract the full home archive followed by each incremental archive in date
-order into a new, empty directory. For example, with archive names `2026-10`
-and `2026-11`:
+Local Btrfs ZIPs contain a full `root.send` and `manifest.json`. They do not need
+older streams, and are validated with `btrfs receive --dump` before the source
+snapshot is deleted. For recovery, use a mounted Btrfs recovery filesystem:
 
 ```bash
-cd ~/Dropbox/Backups/SamsungBook-Np550xda/Omarchy/home/monthly/home
-sha256sum -c 2026-10.sha256 2026-11.sha256
-mkdir -p /mnt/recovery/home
-zstd -dc 2026-10.tar.zst | tar -xG -C /mnt/recovery/home -f -
-zstd -dc 2026-11.tar.zst | tar -xG -C /mnt/recovery/home -f -
+unzip -t 2026-10-24.zip
+unzip -p 2026-10-24.zip root.send | sudo btrfs receive /mnt/recovery
 ```
 
-Mount a recovery filesystem at `/mnt/recovery` first. Extract into an empty
-directory because incremental tar archives also record deletions. For Btrfs,
-verify the checksums and receive each `.send.zst` in parent order onto a Btrfs
-filesystem; receiving the full stream and then its incremental descendants
-recreates the dated root snapshots. For example, from `monthly/btrfs/`:
-
-```bash
-sha256sum -c 2026-10.sha256 2026-11.sha256
-zstd -dc 2026-10.send.zst | pkexec btrfs receive /mnt/recovery
-zstd -dc 2026-11.send.zst | pkexec btrfs receive /mnt/recovery
-```
-
-Use each `.meta` file to find its parent; if a month is `kind=full`, start a
-new receive chain with that archive. The Btrfs stream is for system recovery
-and does not replace a reinstall of packages, bootloader or the other
-subvolumes.
-Install this script from the dotfiles checkout first, or run it from the
-checkout's `home/.local/bin/` path. The timer only runs while the user manager
-is active; missed runs trigger after the next login. Resolve skipped conflicts
-with `home-dropbox-backup --review` from a terminal; the timestamp in
-`~/.local/state/home-dropbox-backup/last-conflicts` marks the latest run with
-skipped paths. Files changed during a run are retried by the next timer
-activation and recorded in `last-partial`; the current copy of those files may
-be older until the application stops writing. Sockets, temporary database side
-files and caches are excluded. Verify that the Dropbox account is linked and
-syncing with `dropbox-cli status`; a local Unison success does not confirm cloud
-upload.
+The root stream omits separate subvolumes such as `@home`, `@pkg` and `@log`.
+HOME is covered by its own local archive. Snapper recovery points stay separate.
+For history archives, extract the desired nested ZIP first; legacy annual ZIPs
+require a further extraction. A real recovery drill remains necessary to verify
+the complete restore procedure.
 
 ## Docker stack
 
@@ -399,6 +493,8 @@ machine. Pi-hole's DNS and web UI are also reachable from the local network:
   `~/.local/bin/ai-memory` wrapper (`scripts/docker-stack.pl --agents`) is
   downloaded from the matching `v2.3.0` GitHub release and verified against a
   SHA-256 checksum pinned in `ensure_wrapper()`, not fetched at run time.
+  After verification, the managed wrapper's image and release download defaults
+  are pinned to `2.3.0` too, including its native launch client.
 - **pihole** (`2026.07.2`) — local DNS, port `53` and admin UI on `8080`.
 
 Every image and the wrapper download use an explicit version, never `latest`,
@@ -424,6 +520,23 @@ Wire ai-memory to every already-installed AI agent (currently detects
 ```bash
 perl scripts/docker-stack.pl --agents
 ```
+
+The main installer includes both integrations in `--all`. Run them separately with:
+
+```bash
+perl ./omarchy.pl --ai-memory --ai-jail --backup
+```
+
+`--ai-memory` installs Docker dependencies, enables `docker.socket`, starts only
+the ai-memory Compose service, installs the verified wrapper, and applies MCP
+and hooks to detected agents. Docker must already be accessible to the current
+user; the installer does not change group membership. Existing `docker/.env`
+values are preserved. `scripts/docker-stack.pl --memory --agents` runs the
+service and agent setup directly without starting the other services or changing DNS.
+
+`--ai-jail` installs the AUR package `ai-jail-bin` and `bubblewrap`. ai-jail is
+a sandbox launcher. The Codex and Claude aliases invoke it around
+`ai-memory run --yolo`, forwarding the local memory port 49374.
 
 Make Pi-hole this machine's default DNS (waits for the container to become
 healthy before applying; delegates to `omarchy dns Custom` with
@@ -506,6 +619,28 @@ perl scripts/hardware-profile.pl --save
 After installing or changing Hyprland Lua files, validate them in the
 graphical environment with `hyprctl reload` and `hyprctl configerrors`, per Omarchy's
 documentation.
+
+
+## Inferctl and local ComfyUI
+
+The local AI governor, benchmarker and tuning project lives in
+[`calibration/inferctl/`](calibration/inferctl/README.md). Its container setup is documented in
+[`calibration/inferctl/deploy/comfyui/`](calibration/inferctl/deploy/comfyui/README.md).
+
+### Armazenamento de modelos de IA
+
+A aplicação normal dos dotfiles executa `setup-ai-models` e centraliza os pesos
+em `~/.ai/models/lmstudio` e `~/.ai/models/comfyui`. Os caminhos `~/.lmstudio/models`
+e `~/.local/share/inferctl/comfyui/models` são links para essas pastas.
+O comando também pode ser executado manualmente; reaplicá-lo não copia os pesos.
+Diretórios existentes são movidos; destinos conflitantes ou links inesperados
+interrompem a operação sem sobrescrever arquivos. Os pesos ficam fora do Git.
+
+A separação preserva a estrutura publisher/model do LM Studio e as categorias
+checkpoints, diffusion_models, loras e latent_upscale_models do ComfyUI.
+O Docker continua usando os caminhos originais; recriações resolvem os links
+para o armazenamento central. A pasta externa do LM Studio continua disponível
+para os modelos explicitamente registrados em extra_model_paths.yaml.
 
 ### Aceleração Intel
 

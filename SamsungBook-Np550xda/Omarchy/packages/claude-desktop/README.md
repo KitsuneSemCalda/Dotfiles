@@ -2,7 +2,7 @@
 
 O arquivo `claude-desktop_amd64.deb` é a versão 3.1623.0 do Claude Desktop
 para Debian/Ubuntu. O Omarchy usa Arch Linux e `pacman` não instala `.deb`
-diretamente. Este `PKGBUILD` transforma o arquivo local em um pacote Arch
+diretamente. Este `PKGBUILD` baixa o arquivo oficial e o transforma em um pacote Arch
 rastreado pelo `pacman`. Não coloque o `.deb` no Git.
 
 ## Instalar esta versão
@@ -10,8 +10,6 @@ rastreado pelo `pacman`. Não coloque o `.deb` no Git.
 Execute a partir desta pasta:
 
 ```bash
-cp ~/Downloads/claude-desktop_amd64.deb .
-sha256sum -c <(printf '%s  %s\n' d39e1d9a570f1e517f158479f5a1d903b9a74d1ef3f279362002dcad375e33cf claude-desktop_amd64.deb)
 makepkg
 pkexec pacman -U -- ./claude-desktop-*.pkg.tar.zst
 claude-desktop
@@ -27,7 +25,7 @@ Para remover:
 pkexec pacman -Rns claude-desktop
 ```
 
-Para uma versão futura, baixe o novo `.deb`, atualize `pkgver` e
+Para uma versão futura, confirme a URL do novo `.deb`, atualize `pkgver` e
 `sha256sums` no `PKGBUILD`, depois execute `makepkg` e `pkexec pacman -U` novamente. Uma
 instalação feita com este arquivo local não recebe atualizações automáticas.
 

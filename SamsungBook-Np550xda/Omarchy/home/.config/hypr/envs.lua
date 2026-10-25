@@ -7,3 +7,8 @@ hl.env(
   "XDG_DATA_DIRS",
   paths.home .. "/.local/share/flatpak/exports/share:/var/lib/flatpak/exports/share:/usr/local/share:/usr/share"
 )
+
+-- Use the same dead-key composition in native Wayland, GTK and Qt apps.
+hl.env("XCOMPOSEFILE", paths.home .. "/.XCompose")
+hl.env("GTK_IM_MODULE", "simple")
+hl.env("QT_IM_MODULE", "compose")

@@ -1,0 +1,390 @@
+#!/usr/bin/env python3
+"""Publish verified ZIPs and consolidate completed years without losing versions."""
+import argparse
+from contextlib import closing
+import datetime
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import sqlite3
+import stat
+import subprocess
+import sys
+import tempfile
+import time
+import zipfile
+
+
+def verify(path, btrfs=False):
+    with zipfile.ZipFile(path) as archive:
+        names = archive.namelist()
+        if len(names) != len(set(names)) or archive.testzip() is not None:
+            raise ValueError(f'Invalid ZIP: {path}')
+        if btrfs:
+            metadata = json.loads(archive.read('manifest.json'))
+            if metadata != {'format': 'btrfs-send', 'kind': 'full', 'parent': None} \
+                    or 'root.send' not in names or not archive.getinfo('root.send').file_size:
+                raise ValueError(f'Invalid Btrfs ZIP: {path}')
+            args = ['btrfs', 'receive', '--dump']
+            with archive.open('root.send') as stream, subprocess.Popen(
+                    args, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL) as receiver:
+                try:
+                    shutil.copyfileobj(stream, receiver.stdin, 1024 * 1024)
+                    receiver.stdin.close()
+                except BrokenPipeError:
+                    pass
+                if receiver.wait():
+                    raise subprocess.CalledProcessError(receiver.returncode, args)
+
+
+def sqlite_copies(source, destination):
+    """Replace staged SQLite files with consistent online backups, including WAL data."""
+    source = source.resolve(strict=True)
+    for directory, dirs, files in os.walk(destination, followlinks=False):
+        for name in files:
+            staged = Path(directory) / name
+            if staged.is_symlink() or not staged.is_file():
+                continue
+            with staged.open('rb') as candidate:
+                if candidate.read(16) != b'SQLite format 3\x00':
+                    continue
+            original = source / staged.relative_to(destination)
+            if original.resolve(strict=True) != original:
+                raise ValueError(f'Refusing linked SQLite source: {original}')
+            deadline = time.monotonic() + 30
+            def progress(status, remaining, total):
+                if time.monotonic() > deadline:
+                    raise RuntimeError(f'SQLite backup timed out: {original}')
+            with tempfile.TemporaryDirectory(dir=staged.parent, prefix='.sqlite-backup-') as work:
+                saved = Path(work) / 'database'
+                with closing(sqlite3.connect(original.as_uri() + '?mode=ro', uri=True)) as live, \
+                        closing(sqlite3.connect(saved)) as output:
+                    live.backup(output, pages=256, progress=progress)
+                    output.execute('PRAGMA journal_mode=DELETE')
+                    if output.execute('PRAGMA quick_check').fetchall() != [('ok',)]:
+                        raise ValueError(f'Invalid SQLite backup: {original}')
+                shutil.copystat(staged, saved)
+                os.replace(saved, staged)
+            for suffix in ('-wal', '-shm', '-journal'):
+                Path(str(staged) + suffix).unlink(missing_ok=True)
+
+
+def synced_at(path):
+    record = json.loads(path.read_text())
+    stamp = datetime.datetime.fromisoformat(record['synced_at'])
+    if record.get('format') != 2 or stamp.tzinfo is None or not 0 <= (
+            datetime.datetime.now(datetime.timezone.utc) - stamp).total_seconds() <= 3600:
+        raise ValueError('Home synchronization must have completed within the last hour')
+    return record['synced_at']
+
+
+def digest(stream):
+    result = hashlib.sha256()
+    for block in iter(lambda: stream.read(1024 * 1024), b''):
+        result.update(block)
+    return result.digest()
+
+
+def inventory(source, selections):
+    result = {}
+    def visit(path):
+        info = path.lstat()
+        if not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode)):
+            raise ValueError(f'Unsupported backup file: {path}')
+        result[str(path.relative_to(source))] = (info.st_mode, info.st_size, info.st_mtime_ns,
+                                               os.readlink(path) if path.is_symlink() else '')
+        if path.is_dir() and not path.is_symlink():
+            for child in sorted(path.iterdir()):
+                visit(child)
+    for name in selections:
+        visit(source / name)
+    return result
+
+
+def pack(source, destination, selections=None, synced=None):
+    source = source.resolve(strict=True)
+    selections = selections or ['.']
+    if destination.exists():
+        verify_source(destination, source, selections)
+        print(f'Existing ZIP matches its source: {destination}')
+        return
+    # Work outside the source tree; only publish a complete verified archive.
+    before = inventory(source, selections)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='backup-zip-') as work:
+        staged = Path(work) / 'backup.zip'
+        subprocess.run(['zip', '-q', '-r', '-y', str(staged), '--', *selections], cwd=source, check=True)
+        if synced:
+            with zipfile.ZipFile(staged, 'a') as archive:
+                archive.comment = json.dumps({'synced_at': synced}).encode()
+        verify(staged)
+        if inventory(source, selections) != before:
+            raise RuntimeError('Source changed during backup; archive was discarded')
+        verify_source(staged, source, selections)
+        publish(staged, destination)
+    print(f'Created ZIP: {destination}')
+
+
+def verify_source(path, source, selections):
+    verify(path)
+    expected = inventory(source, selections)
+    expected.pop('.', None)
+    with zipfile.ZipFile(path) as archive:
+        if {name.rstrip('/') for name in archive.namelist()} != set(expected):
+            raise ValueError(f'ZIP file inventory differs from source: {path}')
+        for name, (mode, size, modified, link) in expected.items():
+            info = archive.getinfo(name + '/' if stat.S_ISDIR(mode) else name)
+            if (info.external_attr >> 16) & 0o177777 != mode & 0o177777:
+                raise ValueError(f'ZIP permissions differ from source: {name}')
+            if stat.S_ISDIR(mode):
+                continue
+            with archive.open(info) as saved:
+                if stat.S_ISLNK(mode):
+                    matches = saved.read() == os.fsencode(link)
+                else:
+                    with (source / name).open('rb') as original:
+                        matches = digest(saved) == digest(original)
+                if not matches:
+                    raise ValueError(f'ZIP content differs from source: {name}')
+
+
+def publish(staged, destination):
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    # The staging area may be on tmpfs. Copy to the destination filesystem,
+    # verify once more, then rename atomically. Never expose a partial final ZIP.
+    fd, temporary = tempfile.mkstemp(prefix='.partial-', suffix='.zip', dir=destination.parent)
+    try:
+        with os.fdopen(fd, 'wb') as output, open(staged, 'rb') as source:
+            shutil.copyfileobj(source, output, 1024 * 1024)
+            output.flush()
+            os.fsync(output.fileno())
+        verify(temporary)
+        os.replace(temporary, destination)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
+def consolidate(root, year):
+    if not root.exists():
+        return
+    sources = []
+    directories = []
+    for path in sorted(root.iterdir()):
+        if path.stem.isdigit() and len(path.stem) == 4 and int(path.stem) < year:
+            if path.is_symlink():
+                raise ValueError(f'Linked historical backup: {path}')
+            if path.suffix == '.zip' and path.is_file():
+                sources.append(path)
+            elif path.name.isdigit() and path.is_dir():
+                monthly = sorted(path.iterdir())
+                if any(p.is_symlink() or not p.is_file() or p.suffix != '.zip' for p in monthly):
+                    raise ValueError(f'Year contains non-ZIP files: {path}')
+                sources.extend(monthly)
+                directories.append(path)
+    if not sources:
+        for directory in directories:
+            directory.rmdir()
+        return
+    destination = root / 'history.zip'
+    if destination.is_symlink():
+        raise ValueError(f'Linked consolidated backup: {destination}')
+    for path in sources:
+        verify(path)
+    expected = {}
+    with tempfile.TemporaryDirectory(prefix='backup-history-') as work:
+        staged = Path(work) / 'history.zip'
+        with zipfile.ZipFile(staged, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as output:
+            if destination.exists():
+                verify(destination)
+                with zipfile.ZipFile(destination) as previous:
+                    for info in previous.infolist():
+                        with previous.open(info) as saved:
+                            expected[info.filename] = digest(saved)
+                        with previous.open(info) as saved, output.open(info.filename, 'w', force_zip64=True) as target:
+                            shutil.copyfileobj(saved, target, 1024 * 1024)
+            for path in sources:
+                name = path.relative_to(root).as_posix()
+                with path.open('rb') as original:
+                    checksum = digest(original)
+                if name in expected:
+                    if expected[name] != checksum:
+                        raise ValueError(f'Consolidated backup has a different version of {name}')
+                else:
+                    output.write(path, name)
+                    expected[name] = checksum
+        verify(staged)
+        with zipfile.ZipFile(staged) as archive:
+            for name, checksum in expected.items():
+                with archive.open(name) as saved:
+                    if digest(saved) != checksum:
+                        raise ValueError(f'Consolidation verification failed: {name}')
+        publish(staged, destination)
+    with zipfile.ZipFile(destination) as published:
+        for path in sources:
+            with published.open(path.relative_to(root).as_posix()) as saved, path.open('rb') as original:
+                if digest(saved) != digest(original):
+                    raise ValueError(f'Backup changed during publication; preserved: {path}')
+            path.unlink()
+    for directory in directories:
+        directory.rmdir()
+    print(f'Consolidated history: {destination}')
+
+
+def migrate(root, state, date):
+    selections = [name for name in ('current', 'history', 'monthly') if (root / name).exists()]
+    if not selections:
+        return
+    for name in ('current', 'history'):
+        if name in selections and (state / name).exists():
+            raise FileExistsError(f'Local migration destination already exists: {state / name}')
+    destination = state / 'archives/home' / date[:4] / f'{date}-legacy.zip'
+    pack(root, destination, selections)
+    state.mkdir(parents=True, exist_ok=True)
+    for name in selections:
+        if name == 'monthly':
+            shutil.rmtree(root / name)
+        else:
+            shutil.move(str(root / name), state / name)
+    print(f'Migrated legacy backups: {destination}')
+
+
+def relocate(source, destination):
+    """Evacuate managed cloud ZIPs only after verifying their local copies."""
+    if not source.exists():
+        return
+    if source.is_symlink() or destination.resolve().is_relative_to(source.resolve()):
+        raise ValueError(f'Invalid migration paths: {source}, {destination}')
+    contents = inventory(source, ['.'])
+    files = [source / name for name, info in contents.items() if stat.S_ISREG(info[0])]
+    if any(stat.S_ISLNK(info[0]) for info in contents.values()) or any(p.suffix != '.zip' for p in files):
+        raise ValueError(f'Expected only managed ZIPs and directories: {source}')
+    for path in files:
+        verify(path)
+        target = destination / path.relative_to(source)
+        if target.is_symlink():
+            raise ValueError(f'Linked migration target: {target}')
+        if not target.exists():
+            publish(path, target)
+        verify(target)
+        with path.open('rb') as original, target.open('rb') as saved:
+            if digest(original) != digest(saved):
+                raise ValueError(f'Different local backup already exists; preserved: {path}')
+        path.unlink()
+    for directory, dirs, files in os.walk(source, topdown=False):
+        Path(directory).rmdir()
+    print(f'Moved verified backups outside Dropbox: {destination}')
+
+
+CLOUD_SELECTION = ('Documents', 'Work', '.config', '.ssh', '.gnupg', '.local/bin',
+                   '.aliasrc', '.bashrc', '.gitconfig', '.XCompose')
+
+
+def cloud(source, dropbox, includes, synced):
+    """Publish one current essentials ZIP under a budget for the whole local Dropbox."""
+    source = source.resolve(strict=True)
+    dropbox = dropbox.resolve(strict=True)
+    if source.is_relative_to(dropbox):
+        raise ValueError('Backup working copy must be outside Dropbox')
+    names = [line.strip() for line in includes.read_text().splitlines()
+             if line.strip() and not line.lstrip().startswith('#')] if includes.exists() else CLOUD_SELECTION
+    selections = []
+    for name in names:
+        relative = Path(name)
+        if relative.is_absolute() or '..' in relative.parts or not relative.parts:
+            raise ValueError(f'Cloud selection must be a relative path: {name}')
+        if (source / relative).exists() or (source / relative).is_symlink():
+            selections.append(relative.as_posix())
+    selections = sorted(set(selections))
+    selections = [name for name in selections if not any(
+        Path(name).is_relative_to(other) for other in selections if other != name)]
+    if not selections:
+        raise ValueError('No selected essential files exist; cloud backup unchanged')
+    budget = int(os.environ.get('HOME_BACKUP_DROPBOX_BUDGET_BYTES', '1800000000'))
+    if not 0 < budget <= 2_000_000_000:
+        raise ValueError('Dropbox budget must be between 1 and 2,000,000,000 bytes')
+    destination = dropbox / 'Backups/SamsungBook-Np550xda/Omarchy/latest.zip'
+    # Stage outside Dropbox, on the same filesystem for an atomic replacement.
+    # No second ZIP is exposed to the sync client during replacement.
+    with tempfile.TemporaryDirectory(prefix='cloud-backup-', dir=source.parent) as work:
+        staged = Path(work) / 'latest.zip'
+        pack(source, staged, selections, synced)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        entries = inventory(dropbox, ['.'])
+        if any(stat.S_ISLNK(info[0]) for info in entries.values()):
+            raise ValueError('Cannot account for linked Dropbox entries; cloud backup unchanged')
+        used = sum(info[1] for info in entries.values() if stat.S_ISREG(info[0]))
+        previous = destination.stat().st_size if destination.exists() else 0
+        projected = used - previous + staged.stat().st_size
+        if projected >= budget:
+            raise ValueError(f'Dropbox budget exceeded: projected {projected} bytes, budget {budget}; '
+                             'local backups and previous cloud ZIP preserved')
+        if staged.stat().st_dev != destination.parent.stat().st_dev:
+            raise ValueError('Cloud staging and Dropbox must share a filesystem for atomic publication')
+        os.replace(staged, destination)
+    print(f'Published essentials: {destination}; local Dropbox total {projected}/{budget} bytes')
+
+
+def stream(destination):
+    if destination.exists():
+        raise FileExistsError(destination)
+    with tempfile.TemporaryDirectory(prefix='backup-stream-') as work:
+        staged = Path(work) / 'snapshot.zip'
+        with zipfile.ZipFile(staged, 'w', compression=zipfile.ZIP_DEFLATED, allowZip64=True) as archive:
+            archive.writestr('manifest.json', json.dumps({'format': 'btrfs-send', 'kind': 'full', 'parent': None}))
+            with archive.open('root.send', 'w', force_zip64=True) as output:
+                shutil.copyfileobj(sys.stdin.buffer, output, 1024 * 1024)
+        verify(staged)
+        publish(staged, destination)
+
+
+def main():
+    os.umask(0o077)
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest='command', required=True)
+    for name in ('pack', 'migrate'):
+        command = commands.add_parser(name)
+        command.add_argument('source', type=Path)
+        command.add_argument('destination', type=Path)
+        if name == 'migrate':
+            command.add_argument('--date', default=datetime.date.today().isoformat())
+        else:
+            command.add_argument('--synced-at')
+    command = commands.add_parser('sqlite-copies')
+    command.add_argument('source', type=Path)
+    command.add_argument('destination', type=Path)
+    command = commands.add_parser('synced-at')
+    command.add_argument('path', type=Path)
+    command = commands.add_parser('relocate')
+    command.add_argument('source', type=Path)
+    command.add_argument('destination', type=Path)
+    command = commands.add_parser('cloud')
+    command.add_argument('source', type=Path)
+    command.add_argument('dropbox', type=Path)
+    command.add_argument('--includes', type=Path, required=True)
+    command.add_argument('--synced-at', required=True)
+    for name in ('verify', 'stream'):
+        command = commands.add_parser(name)
+        command.add_argument('path', type=Path)
+        if name == 'verify': command.add_argument('--btrfs', action='store_true')
+    command = commands.add_parser('consolidate')
+    command.add_argument('root', type=Path)
+    command.add_argument('--year', type=int, default=datetime.date.today().year)
+    args = parser.parse_args()
+    if args.command == 'pack': pack(args.source, args.destination, synced=args.synced_at)
+    elif args.command == 'sqlite-copies': sqlite_copies(args.source, args.destination)
+    elif args.command == 'synced-at': print(synced_at(args.path))
+    elif args.command == 'relocate': relocate(args.source, args.destination)
+    elif args.command == 'cloud': cloud(args.source, args.dropbox, args.includes, args.synced_at)
+    elif args.command == 'migrate': migrate(args.source, args.destination, args.date)
+    elif args.command == 'consolidate': consolidate(args.root, args.year)
+    elif args.command == 'stream': stream(args.path)
+    else: verify(args.path, args.btrfs)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (OSError, ValueError, KeyError, RuntimeError, sqlite3.Error, subprocess.CalledProcessError, zipfile.BadZipFile) as error:
+        sys.exit(str(error))

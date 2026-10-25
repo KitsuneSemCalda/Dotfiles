@@ -125,6 +125,19 @@ use). The profile attempts to load the modules once, on the second call to the
 `prompt` function, and initializes Starship at that same moment. Subsequent calls
 use the prompt installed by Starship. It does not use `PowerShell.OnIdle`.
 
+## Automatic maintenance
+
+`pwsh ./win11.ps1 -Maintenance -Backup` enables daily diagnosis, power preferences
+and weekly automatic maintenance; `-All` includes it. Updates run between 03:00
+and 06:00 from Sunday onward, on AC and after 15 minutes idle. Missed windows
+retry the next night. No passwords are saved and no reboot is requested.
+The independent Windows Update service retains its own reboot behavior.
+
+The scripts are copied to `%ProgramFiles%\DotfilesMaintenance`. Run its
+`maintenance.ps1 -Mode Simulate`, `-Mode Status` or `-Mode Disable` to inspect
+eligibility, read reports or disable future runs. See [maintenance commands,
+security boundaries and limits](../docs/maintenance.md).
+
 ## Debloat and optimization
 
 `scripts/debloat.ps1` is intentionally conservative and built from

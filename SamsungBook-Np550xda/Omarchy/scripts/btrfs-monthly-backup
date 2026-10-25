@@ -8,106 +8,61 @@ home=$(realpath -e -- "$1")
 }
 owner=$(stat -c %U -- "$home")
 [[ $owner != root && $owner != UNKNOWN ]] || { echo 'Invalid home owner' >&2; exit 1; }
-dropbox="$home/Dropbox"
-[[ -d $dropbox && ! -L $dropbox ]] || { echo 'Dropbox directory missing or linked' >&2; exit 1; }
-dropbox=$(realpath -e -- "$dropbox")
-[[ $dropbox == "$home"/* && $(stat -c %U -- "$dropbox") == "$owner" ]] || {
-  echo 'Dropbox must belong to the home owner' >&2; exit 1;
-}
 
-month=$(date +%Y-%m)
+date=$(date +%F)
+month=${date:0:7}
+year=${date:0:4}
 state=/var/lib/home-dropbox-backup
 snapshots="$state/snapshots"
-destination="$dropbox/Backups/SamsungBook-Np550xda/Omarchy/home/monthly/btrfs"
-runuser -u "$owner" -- mkdir -p -- "$destination"
-archive="$destination/$month.send.zst"
+destination="$home/.local/state/home-dropbox-backup/archives/btrfs"
+helper=/usr/local/libexec/dotfiles-backup-zip
+work="$home/.local/state/home-dropbox-backup/btrfs"
 install -d -m 0700 -- "$snapshots"
 exec 9>"$state/lock"
 flock -w 3600 9 || { echo 'Timed out waiting for Btrfs export' >&2; exit 1; }
-snapshot="$snapshots/$month"
-
-archive_complete() {
-  runuser -u "$owner" -- test -f "$archive" \
-    && runuser -u "$owner" -- test -f "$destination/$month.sha256" \
-    && runuser -u "$owner" -- test -f "$destination/$month.meta" \
-    && grep -qx 'format=btrfs-send' "$destination/$month.meta" \
-    && grep -Eq '^kind=(full|incremental)$' "$destination/$month.meta" \
-    && grep -Eq '^parent=(none|[0-9]{4}-(0[1-9]|1[0-2]))$' "$destination/$month.meta" \
-    && grep -qx 'subvolume=/' "$destination/$month.meta" \
-    && (cd "$destination" && runuser -u "$owner" -- sha256sum --status -c -- "$month.sha256")
+runuser -u "$owner" -- mkdir -p -- "$destination/$year" "$work"
+resolved_destination=$(realpath -e -- "$destination")
+[[ $resolved_destination != "$home/Dropbox" && $resolved_destination != "$home/Dropbox"/* ]] || {
+  echo 'Btrfs archives must be outside Dropbox' >&2; exit 1;
 }
-
-if archive_complete; then
-  # A crash after publishing the archive may have preceded the state update.
-  if [[ -d $snapshot ]]; then
-    printf '%s\n' "$month" >"$state/latest.tmp"
-    mv -- "$state/latest.tmp" "$state/latest"
-  fi
-  echo "Btrfs archive already verified: $archive"
-  exit 0
-fi
-
-# Keep an incomplete or corrupt set for inspection, then retry this month.
-if [[ -e $archive || -e $destination/$month.sha256 || -e $destination/$month.meta ]]; then
-  incomplete=$(runuser -u "$owner" -- mktemp -d -- "$destination/.incomplete-$month.XXXXXXXX")
-  for file in "$archive" "$destination/$month.sha256" "$destination/$month.meta"; do
-    if [[ -e $file || -L $file ]]; then
-      runuser -u "$owner" -- mv -- "$file" "$incomplete/"
+runuser -u "$owner" -- env TMPDIR="$work" python3 "$helper" consolidate "$destination" --year "$year"
+shopt -s nullglob
+existing=("$destination/$year/$month"-??.zip)
+if ((${#existing[@]})); then
+  valid=true
+  for archive in "${existing[@]}"; do
+    if ! runuser -u "$owner" -- python3 "$helper" verify "$archive" --btrfs; then
+      valid=false
+      quarantine=$(runuser -u "$owner" -- mktemp -d -- "$work/incomplete.XXXXXXXX")
+      runuser -u "$owner" -- mv -- "$archive" "$quarantine/"
+      echo "Preserved corrupt Btrfs ZIP in $quarantine; retrying $month" >&2
     fi
   done
-  echo "Preserved incomplete Btrfs export in $incomplete; retrying $month" >&2
+  if [[ $valid == true ]]; then
+    echo "Btrfs ZIP already verified: ${existing[0]}"
+    exit 0
+  fi
 fi
 
-if [[ ! -e $snapshot ]]; then
-  btrfs subvolume snapshot -r / "$snapshot"
-fi
-
-previous=''
-if [[ -f $state/latest ]]; then
-  read -r previous <"$state/latest"
-fi
-if [[ $previous =~ ^[0-9]{4}-(0[1-9]|1[0-2])$ && $previous < $month \
-      && -d $snapshots/$previous ]] \
-    && runuser -u "$owner" -- test -f "$destination/$previous.send.zst" \
-    && runuser -u "$owner" -- test -f "$destination/$previous.sha256" \
-    && (cd "$destination" && runuser -u "$owner" -- sha256sum -c -- "$previous.sha256"); then
-  parent=( -p "$snapshots/$previous" )
-  kind=incremental
-else
-  parent=()
-  previous=''
-  kind=full
-fi
-
+snapshot="$snapshots/$month"
+[[ -e $snapshot ]] || btrfs subvolume snapshot -r / "$snapshot"
 available_kib=$(df -Pk -- "$destination" | awk 'NR == 2 { print $4 }')
 source_kib=$(du -skx --exclude=/.snapshots --exclude=/var/lib/home-dropbox-backup / | awk '{ print $1 }')
-(( available_kib >= source_kib + 10 * 1024 * 1024 )) || {
-  echo 'Insufficient free space for Btrfs export with 10 GiB reserve' >&2
-  exit 1
+(( available_kib >= source_kib * 2 + 10 * 1024 * 1024 )) || {
+  echo 'Insufficient free space for a full Btrfs ZIP and 10 GiB reserve' >&2; exit 1;
 }
 
-temporary="$destination/.$month.$$.part"
-temporary_checksum="$destination/.$month.$$.sha256.part"
-temporary_meta="$destination/.$month.$$.meta.part"
-cleanup() { runuser -u "$owner" -- rm -f -- "$temporary" "$temporary_checksum" "$temporary_meta"; }
+temporary=$(runuser -u "$owner" -- mktemp -- "$work/snapshot.XXXXXXXX.zip")
+runuser -u "$owner" -- rm -- "$temporary"
+cleanup() { runuser -u "$owner" -- rm -f -- "$temporary"; }
 trap cleanup EXIT
-btrfs send "${parent[@]}" "$snapshot" | zstd -T0 -q | runuser -u "$owner" -- tee "$temporary" >/dev/null
-runuser -u "$owner" -- zstd -tq -- "$temporary"
-checksum=$(runuser -u "$owner" -- sha256sum -- "$temporary")
-printf '%s  %s\n' "${checksum%% *}" "$month.send.zst" \
-  | runuser -u "$owner" -- tee "$temporary_checksum" >/dev/null
-printf 'format=btrfs-send\nkind=%s\nparent=%s\nsubvolume=/\n' \
-  "$kind" "${previous:-none}" | runuser -u "$owner" -- tee "$temporary_meta" >/dev/null
-runuser -u "$owner" -- mv -- "$temporary_checksum" "$destination/$month.sha256"
-runuser -u "$owner" -- mv -- "$temporary_meta" "$destination/$month.meta"
-runuser -u "$owner" -- mv -- "$temporary" "$archive"
-printf '%s\n' "$month" >"$state/latest.tmp"
-mv -- "$state/latest.tmp" "$state/latest"
-
-# The export chain lives in Dropbox; only the newest local snapshot is needed
-# as the parent of next month's send stream.
+# A full stream makes each month's backup independently restorable, including
+# after annual consolidation. Publish only after the producer also succeeds.
+btrfs send "$snapshot" \
+  | runuser -u "$owner" -- env TMPDIR="$work" python3 "$helper" stream "$temporary"
+runuser -u "$owner" -- python3 "$helper" verify "$temporary" --btrfs
+runuser -u "$owner" -- mv -- "$temporary" "$destination/$year/$date.zip"
 for old in "$snapshots"/????-??; do
-  [[ $old == "$snapshot" || ! -d $old ]] && continue
-  btrfs subvolume delete -- "$old"
+  [[ ! -d $old ]] || btrfs subvolume delete -- "$old"
 done
-echo "Created $kind Btrfs send archive: $archive"
+echo "Created local full Btrfs ZIP: $destination/$year/$date.zip"

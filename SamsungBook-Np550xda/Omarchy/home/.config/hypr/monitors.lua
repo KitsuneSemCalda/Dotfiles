@@ -15,3 +15,8 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = monitor
 -- Keep this rule on one line: Omarchy's clamshell helper reads scale and
 -- position from the eDP rule when it restores the panel after opening the lid.
 hl.monitor({ output = "eDP-1", mode = "preferred", position = "auto", scale = monitor_scale, cm = "edid" })
+
+-- Samsung SMB2030N on the desk: preferred EDID timing is 1600x900 at 60 Hz.
+-- Match the display identity so the rule survives HDMI connector renumbering.
+-- Keep SDR sRGB and 8-bit output; no measured ICC profile is available.
+hl.monitor({ output = "desc:Samsung Electric Company SMB2030N HXOZB03691", mode = "1600x900@60", position = "auto", scale = 1, transform = 0, bitdepth = 8, cm = "srgb", vrr = 0 })

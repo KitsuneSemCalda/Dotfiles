@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Called under the stock watcher's lock by the user service.
+omarchy-hyprland-monitor-clamshell
+
+# Prefer the desk display on attach and lid transitions, not on every poll.
+monitors=$(hyprctl monitors all -j)
+external=$(jq -r '[.[] | select(.disabled != true and .width > 0 and .height > 0)
+  | select(.name | test("^(eDP|LVDS|DSI)-") | not)]
+  | sort_by(if .model == "SMB2030N" then 0 else 1 end) | .[0].name // ""' <<< "$monitors")
+lid=open
+omarchy-hw-laptop-closed && lid=closed
+state="${external}:${lid}"
+state_file="${XDG_RUNTIME_DIR:?}/dotfiles-clamshell-focus-state"
+old_state=''
+[[ ! -f $state_file ]] || read -r old_state < "$state_file" || true
+if [[ $state != "$old_state" ]]; then
+  if [[ $external =~ ^[A-Za-z0-9._-]+$ ]]; then
+    if [[ $lid == closed ]]; then
+      hyprctl dispatch "hl.dsp.dpms({ action = \"enable\", monitor = \"$external\" })"
+    fi
+    hyprctl dispatch "hl.dsp.focus({ monitor = \"$external\" })"
+    echo "External display selected: $external (lid $lid)"
+  fi
+  printf '%s\n' "$state" > "$state_file"
+fi
+
+# A powered-off HDMI sink may return without a usable mode or hotplug event.
+# Never wake a valid display: its DPMS state may be intentional.
+if omarchy-hyprland-monitor-modeless; then
+  omarchy-hyprland-reload-guard paused && exit 0
+  stamp="${XDG_RUNTIME_DIR:?}/dotfiles-clamshell-last-reload"
+  now=$(date +%s)
+  previous=0
+  [[ ! -f $stamp ]] || read -r previous < "$stamp" || true
+  [[ $previous =~ ^[0-9]+$ ]] || previous=0
+  if (( now - previous >= 60 )); then
+    printf '%s\n' "$now" > "$stamp"
+    echo 'Retrying a display without a video mode'
+    hyprctl reload
+  fi
+fi

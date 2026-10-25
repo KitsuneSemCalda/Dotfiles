@@ -27,6 +27,9 @@
     },
     {
       "name": "Ending"
+    },
+    {
+      "name": "OmaTuber Live"
     }
   ],
   "sources": [
@@ -330,6 +333,22 @@
       },
       "mixers": 0,
       "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "browser_source",
+      "name": "OmaTuber",
+      "uuid": "857f3a0a-dbb3-510e-b2d0-9c1bcc291673",
+      "settings": {
+        "url": "http://127.0.0.1:39017/",
+        "width": 512,
+        "height": 512,
+        "shutdown": false,
+        "restart_when_active": false,
+        "fps": 30
+      },
+      "mixers": 0,
+      "volume": 0.0,
       "hotkeys": {}
     },
     {
@@ -765,6 +784,71 @@
             "id": 2,
             "name": "Ending Slate",
             "source_uuid": "78ce65c2-4ae3-5847-ae9e-2476328116a4",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0,
+              "y": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "align": 5,
+            "bounds_type": 0
+          }
+        ]
+      },
+      "mixers": 0,
+      "volume": 1.0,
+      "hotkeys": {}
+    },
+    {
+      "id": "scene",
+      "name": "OmaTuber Live",
+      "uuid": "dd73f38d-e73e-5505-8e79-66ae0416e181",
+      "settings": {
+        "id_counter": 4,
+        "custom_size": false,
+        "items": [
+          {
+            "id": 1,
+            "name": "Capture Monitor",
+            "source_uuid": "5675269c-28e7-511a-8c7f-7c02fef1c5d0",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 0,
+              "y": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 2,
+            "name": "OmaTuber",
+            "source_uuid": "857f3a0a-dbb3-510e-b2d0-9c1bcc291673",
+            "visible": true,
+            "locked": false,
+            "pos": {
+              "x": 1504,
+              "y": 664
+            },
+            "scale": {
+              "x": 0.75,
+              "y": 0.75
+            },
+            "align": 5,
+            "bounds_type": 0
+          },
+          {
+            "id": 3,
+            "name": "Audio Buses",
+            "source_uuid": "5ed334e9-09fc-575c-8965-24c3dbebdefc",
             "visible": true,
             "locked": false,
             "pos": {

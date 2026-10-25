@@ -1,5 +1,8 @@
 # Run omarchy-restart-xcompose to apply changes
 
+# Locale sequences first; personal overrides must come after all includes.
+include "%L"
+
 # Include fast emoji access
 include "/usr/share/omarchy/default/xcompose"
 

@@ -12,8 +12,26 @@ jobs:
         run: python3 SamsungBook-Np550xda/Omarchy/tests/ai_acceleration.py
       - name: Check Perl syntax
         run: perl -c SamsungBook-Np550xda/Omarchy/omarchy.pl
+      - name: Check hardware setup rollback
+        run: python3 SamsungBook-Np550xda/Omarchy/tests/calibrate_devices.py
+      - name: Check clamshell recovery and reload limits
+        run: python3 SamsungBook-Np550xda/Omarchy/tests/clamshell_recover.py
+      - name: Check maintenance policy and resume safety
+        run: python3 SamsungBook-Np550xda/Omarchy/tests/maintenance.py
       - name: Test installation, backups and restore
         run: python3 SamsungBook-Np550xda/tests/install.py
+      - name: Test desktop app migration
+        run: python3 SamsungBook-Np550xda/Omarchy/tests/ai_desktops.py
+      - name: Test OmaTuber installation and OBS integration
+        run: python3 SamsungBook-Np550xda/Omarchy/tests/omatuber.py
+      - name: Test ZIP backups and annual consolidation
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y btrfs-progs unison zip unzip
+          python3 SamsungBook-Np550xda/Omarchy/tests/backup_zip.py
+          python3 SamsungBook-Np550xda/Omarchy/tests/cloud_backup.py
+          bash SamsungBook-Np550xda/Omarchy/tests/home_dropbox_backup.sh
+          python3 SamsungBook-Np550xda/Omarchy/tests/btrfs_monthly_backup.py
   windows:
     runs-on: windows-latest
     timeout-minutes: 10
@@ -24,3 +42,5 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Test Windows installer (${{ matrix.shell }})
         run: ${{ matrix.shell }} -NoProfile -File ./SamsungBook-Np550xda/tests/install.ps1
+      - name: Test maintenance (${{ matrix.shell }})
+        run: ${{ matrix.shell }} -NoProfile -File ./SamsungBook-Np550xda/tests/maintenance.ps1
