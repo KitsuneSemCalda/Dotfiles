@@ -193,6 +193,14 @@ if (@conflicts) {
     die scalar(@conflicts) . " conflict(s) found; validation failed and nothing was changed\n";
 }
 
+# Install GPU API dependencies before publishing the corresponding helper.
+if ($target eq $home_root && !$only_home_backup
+    && -f File::Spec->catfile($source_root, '.local', 'bin', 'check-ai-acceleration')) {
+    ensure_repo_packages('python', 'mesa', 'vulkan-intel', 'vulkan-icd-loader',
+        'vulkan-tools', 'intel-media-driver', 'libva-utils', 'intel-compute-runtime',
+        'level-zero-loader', 'clinfo', 'intel-gpu-tools', 'ffmpeg');
+}
+
 # Passagem de aplicacao: so comeca depois que a validacao inteira passou.
 my @applied;
 for my $item (@plan) {
@@ -232,6 +240,10 @@ for my $item (@plan) {
 }
 
 if ($target eq $home_root && !$only_home_backup) {
+    run_command('python3', File::Spec->catfile($target, '.local', 'bin', 'check-ai-acceleration'))
+        if -f File::Spec->catfile($source_root, '.local', 'bin', 'check-ai-acceleration');
+    run_command('python3', File::Spec->catfile($target, '.local', 'bin', 'setup-ai-models'))
+        if -f File::Spec->catfile($source_root, '.local', 'bin', 'setup-ai-models');
     ensure_skills();
 } elsif ($target ne $home_root) {
     say 'SKIP    skill installation (using a test --target, not the real HOME)';

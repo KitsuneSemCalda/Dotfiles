@@ -8,6 +8,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Check Intel GPU discovery and model storage
+        run: python3 SamsungBook-Np550xda/Omarchy/tests/ai_acceleration.py
       - name: Check Perl syntax
         run: perl -c SamsungBook-Np550xda/Omarchy/omarchy.pl
       - name: Test installation, backups and restore

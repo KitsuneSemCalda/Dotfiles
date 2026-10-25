@@ -506,3 +506,10 @@ perl scripts/hardware-profile.pl --save
 After installing or changing Hyprland Lua files, validate them in the
 graphical environment with `hyprctl reload` and `hyprctl configerrors`, per Omarchy's
 documentation.
+
+### Aceleração Intel
+
+A instalação normal prepara Vulkan, OpenCL, Level Zero e VA-API e executa
+`check-ai-acceleration` para verificar acesso e descoberta da GPU.
+Os modelos ficam em `~/.ai/models`, mantidos por `setup-ai-models`.
+Veja [dependências, verificações e limites de suporte](docs/ai-acceleration.md).

@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+"""Check Intel GPU APIs separately from application backend support."""
+import ctypes
+import glob
+import os
+import subprocess
+import sys
+
+
+def run(command):
+    try:
+        p = subprocess.run(command, text=True, capture_output=True, timeout=60)
+        return p.returncode == 0, p.stdout + p.stderr
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, str(exc)
+
+
+def level_zero():
+    try:
+        ze = ctypes.CDLL('libze_loader.so.1')
+        for name in ('zeInit', 'zeDriverGet', 'zeDeviceGet'):
+            getattr(ze, name).restype = ctypes.c_uint32
+        ze.zeInit.argtypes = [ctypes.c_uint32]
+        ze.zeDriverGet.argtypes = [ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_void_p)]
+        ze.zeDeviceGet.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32), ctypes.POINTER(ctypes.c_void_p)]
+        if ze.zeInit(1) != 0:  # ZE_INIT_FLAG_GPU_ONLY
+            return False, 'zeInit(GPU_ONLY) failed'
+        count = ctypes.c_uint32()
+        if ze.zeDriverGet(ctypes.byref(count), None) != 0 or count.value == 0:
+            return False, 'No Level Zero GPU drivers'
+        drivers = (ctypes.c_void_p * count.value)()
+        if ze.zeDriverGet(ctypes.byref(count), drivers) != 0:
+            return False, 'Cannot enumerate Level Zero drivers'
+        total = 0
+        for driver in drivers:
+            devices = ctypes.c_uint32()
+            if ze.zeDeviceGet(driver, ctypes.byref(devices), None) == 0:
+                total += devices.value
+        return total > 0, f'{total} Level Zero GPU device(s)'
+    except (OSError, AttributeError) as exc:
+        return False, str(exc)
+
+
+def check():
+    checks = []
+    render = [p for p in glob.glob('/dev/dri/renderD*') if os.access(p, os.R_OK | os.W_OK)]
+    checks.append(('DRM render access', bool(render), ', '.join(render) or 'No accessible render node'))
+    ok, details = run(['vulkaninfo', '--summary'])
+    # llvmpipe alone must not count as a hardware accelerator.
+    intel_gpu = any('INTEGRATED_GPU' in line or 'DISCRETE_GPU' in line for line in details.splitlines())
+    checks.append(('Vulkan GPU', ok and intel_gpu and '0x8086' in details.lower(), details))
+    ok, details = run(['clinfo'])
+    # clinfo may return zero even when it finds no platforms/devices.
+    import re
+    checks.append(('OpenCL GPU', ok and bool(re.search(r'Device Type\s+GPU', details)) and 'Intel' in details, details))
+    ok, details = level_zero()
+    checks.append(('Level Zero GPU', ok, details))
+    va_ok = False
+    va_details = 'No accessible render node'
+    for device in render:
+        ok, details = run(['vainfo', '--display', 'drm', '--device', device])
+        if ok and 'VAEntrypoint' in details:
+            va_ok, va_details = True, details
+            break
+        va_details = details
+    checks.append(('VA-API', va_ok, va_details))
+    for name, ok, details in checks:
+        print(f'{"OK" if ok else "FAIL"}  {name}')
+        if not ok:
+            print(details.strip()[:1600])
+    print('Application support is separate: LM Studio/llama.cpp require a GPU backend.')
+    print('The ComfyUI CPU image stays on CPU; Iris Xe Tiger Lake is not listed as validated PyTorch XPU hardware.')
+    return 0 if all(ok for _, ok, _ in checks) else 1
+
+
+if __name__ == '__main__':
+    sys.exit(check())
