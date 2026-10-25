@@ -3,9 +3,11 @@
 Governador e calibrador local para Linux. Compara throughput antes de recomendar
 limites, mantém um piso de performance e preserva os resultados brutos.
 
-**Estado: implementação inicial para piloto local.** Os protocolos foram testados
-com servidores sintéticos. Ainda não há ganho de TPS ou geração comprovado com
-modelos reais, nem validação das integrações systemd/Docker em uma sessão real.
+Ferramenta para uso pessoal supervisionado. Os testes incluem servidores
+sintéticos e registros do host com LM Studio (Qwen3-0.6B), controles transitórios
+do systemd e Docker em CPU. A comparação Qwen não demonstrou ganho reproduzível;
+o smoke test do ComfyUI executou um grafo sem modelo de IA. Geração de imagem/vídeo,
+containers GPU, thermal tuning e speculative decoding ainda precisam de ensaios.
 Consulte [o estado por fase e as limitações](docs/validation.md).
 
 ```bash

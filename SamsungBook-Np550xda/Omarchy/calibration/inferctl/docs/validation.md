@@ -1,17 +1,23 @@
 # Evidência, arquitetura e trabalho restante
 
-Avaliação em 2026-10-24. Base do repositório: `1d46d1bd558cbffddbb359c6ac8ba68f7ec4823b`,
-com outras alterações locais preexistentes. Escopo: somente o novo diretório
-`inferctl/`. Nenhum dotfile existente foi alterado e nenhum serviço foi instalado.
+A avaliação inicial de 2026-10-24 usou a base
+`1d46d1bd558cbffddbb359c6ac8ba68f7ec4823b`, com alterações locais preexistentes,
+e cobriu somente `inferctl/`. Esta revisão incorpora os registros de host
+recebidos em 2026-10-25. O projeto está versionado em
+`SamsungBook-Np550xda/Omarchy/calibration/inferctl`; sua instalação e execução
+são separadas do instalador de dotfiles. Os testes reais e seus limites estão
+em [homologation.md](homologation.md).
 
 ## Julgamento de prontidão
 
 Ferramenta inicial para uso pessoal supervisionado. A jornada build → hardware →
 plano → benchmark HTTP → relatório está implementada e testada. O produto ainda
 não demonstrou seu objetivo final: ganho reproduzível em workload real mantendo
-o desktop utilizável. Os testes sintéticos comprovam contratos e decisões, não
-qualidade de geração, TPS real, limites efetivos de controladores ou estabilidade
-térmica do hardware.
+o desktop utilizável. Os testes sintéticos verificam contratos e decisões;
+os registros do host acrescentam medições de um modelo pequeno, confirmação de
+controles do kernel e integração Docker em CPU. Nenhum desses resultados
+comprova qualidade de geração, responsividade real do desktop ou estabilidade
+térmica prolongada.
 
 ### Estado por fase
 

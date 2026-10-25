@@ -32,7 +32,12 @@ usam quatro threads e o cache intermediário está desativado para reduzir reten
 de pesos em CPU. A execução de vídeo é lenta e deve ser verificada por modelo.
 Não aplica quota rígida de CPU.
 A API só é publicada no loopback. Os sete diretórios persistem após remoção.
-Não há custom nodes, gerenciadores ou downloads de modelos automáticos.
+Custom nodes exigem instalação explícita, como o helper ComfyUI-GGUF no comando
+acima. Não há gerenciador de custom nodes nem download automático de modelos.
+Os limites de memória, as quatro threads e o cache desativado são escolhas deste
+piloto em CPU; ainda precisam de comparação para determinar seu custo em tempo
+de geração. O compose permite swap e não aplica o orçamento de admissão do
+calibrador a esta instância independente.
 
 Para parar e remover somente esta instalação, preservando os dados:
 

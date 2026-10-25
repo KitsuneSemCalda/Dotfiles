@@ -2,13 +2,11 @@
 
 ## Scope and evidence
 
-This document is maintained alongside the installers and scripts it
-describes and was last synced with the codebase on 2026-09-17 (commit
-`6d7812d`): installers, helper scripts, configuration, Compose, environment
-examples, reports, and documentation. It is not a frozen snapshot — the code
-is the reference for the behavior described below, and any difference
-between this document and the scripts is a documentation bug to fix rather
-than evidence of drift.
+This document describes the installers and tools at commit `b2060f8`, checked
+on 2026-10-25. It covers configuration copies, package setup, backup storage,
+maintenance, OBS integration and the separate inferctl project. The code is
+the reference for current behavior. Hardware snapshots and host-test records
+retain their own dates; updating this document does not rerun those tests.
 
 The Linux base compared against was the local package **Omarchy 4.0.3-1**, specifically
 `/usr/share/omarchy/config/hypr/`, `default/hypr/`, and `shell/Commons/Color.qml`.
@@ -48,13 +46,21 @@ flowchart TB
 
 The arrows represent dependencies and configuration application, not a
 dual-boot installation. No script configures boot switching between the two systems.
-`--all`/`-All` do not include Docker, debloat, or hardware updates.
+The diagram shows the main installation layers. Omarchy's ordinary installation
+also prepares the AI alias dependencies and starts ai-memory when needed;
+`--all` includes the explicit AI options, backups, maintenance, hardware setup
+and OmaTuber. It does not start every service in the optional Docker stack or
+change DNS. Windows `-All` includes maintenance. Debloat remains a separate
+action on Windows, and inferctl is built and run separately on Linux.
 
 ## Omarchy: inheritance and differences
 
 The main configuration preserves Omarchy's bootstrap and defaults.
 The theme is loaded inside `default.hypr.omarchy`; personal configuration is
 loaded afterward. Values that are not redefined remain dependent on the base and the theme.
+The load chain also includes personal environment and window rules, plus
+`~/.config/dotfiles-hardware/devices.lua` when present. Hardware overrides load
+before the default display toggles so clamshell recovery can restore the panel.
 
 ```mermaid
 flowchart TD
@@ -72,16 +78,16 @@ flowchart TD
 
 | Area / source in `Omarchy/home/` | Local base consulted | Modification or reaffirmation |
 |---|---|---|
-| [.config/hypr/monitors.lua](../Omarchy/home/.config/hypr/monitors.lua) | `GDK_SCALE=2`, `auto` scale | Both set to `1`; keeps generic output, `preferred` mode, and `auto` position |
+| [.config/hypr/monitors.lua](../Omarchy/home/.config/hypr/monitors.lua) | `GDK_SCALE=2`, `auto` scale | Both set to `1`; generic preferred-mode fallback, internal `eDP-1` with EDID color handling, and a Samsung SMB2030N rule at 1600×900/60 Hz |
 | [.config/hypr/input.lua](../Omarchy/home/.config/hypr/input.lua) | Layout derived from `/etc/vconsole.conf`; sensitivity `0`; natural scroll off | Global `us/intl`, Caps as Compose, sensitivity `0.3`, natural scroll and disable-while-typing enabled; 3-finger horizontal gesture |
 | Same file, devices | No personal rules of this kind | Internal keyboard `br/abnt2`; two EK75 interfaces set to `us/intl` |
 | Same file, repeat rate | Rate `40`, delay `250`, Num Lock on | Reaffirms the base values; not an additional optimization |
 | [.config/hypr/looknfeel.lua](../Omarchy/home/.config/hypr/looknfeel.lua) | Gaps `5/10`, border `2`, rounding `0`, shadow and blur off before the theme | Keeps the gaps; border `1`, rounding `8`, shadow range `12`/render power `2`, blur size `4`/passes `2`; animations inherited |
-| [.config/hypr/bindings.lua](../Omarchy/home/.config/hypr/bindings.lua) | Shortcuts loaded from the defaults | Removes `Super+Shift+C`, `E`, `Alt+E`, and `Slash`; adds no replacements |
+| [.config/hypr/bindings.lua](../Omarchy/home/.config/hypr/bindings.lua) | Shortcuts loaded from the defaults | Removes `Super+Shift+C`, `E`, `Alt+E`, and `Slash`; maps `Super+Space` to the Glass menu |
 | [.config/hypr/autostart.lua](../Omarchy/home/.config/hypr/autostart.lua) | Template with no active personal autostart | No personal entries; the power profile is left to Omarchy's own `omarchy-powerprofiles-init`, already invoked by `default.hypr.omarchy` |
 | [.config/hypr/hyprland.lua](../Omarchy/home/.config/hypr/hyprland.lua) | Chain of defaults and overrides | Adds a conditional `felixzsh.key-visualizer` hook; the installer does not install that plugin |
 
-Blur and shadow are **enabled on top of defaults that turn them off**. The values
+Blur and shadow are enabled over defaults that turn them off. The values
 express a visual choice; there is no power-consumption or performance benchmark in the
 repository demonstrating savings relative to the base system.
 
@@ -91,29 +97,41 @@ repository demonstrating savings relative to the base system.
 |---|---|
 | [fontconfig/fonts.conf](../Omarchy/home/.config/fontconfig/fonts.conf) | Prefers Lexend for `sans-serif`, `system-ui`, `-apple-system`, and `BlinkMacSystemFont`; a minimum-size rule of `20` for fonts that pass through this mechanism |
 | [gtk-3.0/settings.ini](../Omarchy/home/.config/gtk-3.0/settings.ini), [gtk-4.0/settings.ini](../Omarchy/home/.config/gtk-4.0/settings.ini) | `gtk-font-name=Lexend 20` |
-| [omarchy/shell.toml](../Omarchy/home/.config/omarchy/shell.toml) | `[font] base-size=20`; the local shell implementation merges this file over the theme |
-| [alacritty/alacritty.toml](../Omarchy/home/.config/alacritty/alacritty.toml) | Imports the current theme; JetBrainsMono Nerd Font `20`, padding `14`, no decorations; OSC52 CopyPaste and clipboard/Enter shortcuts |
+| [omarchy/shell.toml](../Omarchy/home/.config/omarchy/shell.toml) | `[font] base-size=14`; the local shell implementation merges this file over the theme |
+| [alacritty/alacritty.toml](../Omarchy/home/.config/alacritty/alacritty.toml) | Imports the current theme; JetBrainsMono Nerd Font `11`, padding `14`, no decorations; OSC52 CopyPaste and clipboard/Enter shortcuts |
 | [foot/foot.ini](../Omarchy/home/.config/foot/foot.ini) | Imports the current theme; same family/size/padding; 10k lines of scrollback, non-blinking cursor, clipboard and Enter sequences |
 | [btop/btop.conf](../Omarchy/home/.config/btop/btop.conf) | `current` theme, 2-second update interval, CPU/memory/network/processes, temperature, and swap |
 | [starship.toml](../Omarchy/home/.config/starship.toml) | Directory, branch, and Git state in cyan; `200 ms` timeout; some Git states hidden |
 | [omarchy/rss-reader.json](../Omarchy/home/.config/omarchy/rss-reader.json) | Five feeds in the Programming folder; 1-minute refresh, `maxItems=200`, `retentionItems=1000`, `scrollStep=90` |
 
-The `20` size is interpreted by each consumer; it is not a guarantee of identical
-physical size across applications. The fontconfig setup does not prove that
-applications ignoring its rules adopt this floor. There is no versioned
+GTK and the fontconfig minimum remain at `20`, while the shell uses `14` and
+the terminals use `11`. Applications interpret these settings separately;
+applications that bypass fontconfig do not necessarily adopt its floor. There is no versioned
 configuration for Kitty or Ghostty, even though they appear in the fonts documentation.
 
-The [installer](../Omarchy/omarchy.pl) always processes the copies before the optional steps:
+The [installer](../Omarchy/omarchy.pl) validates file conflicts before applying
+copies. In the real HOME, it prepares missing AI alias dependencies and Intel
+GPU API packages before copying files. Model-directory setup, GPU checks and
+skill installation follow the copies. Requested optional steps then run:
 
 | Option | Change external to the file set |
 |---|---|
 | `--fonts` | Downloads Lexend Regular/Bold from Google Fonts into `~/.local/share/fonts/lexend` and refreshes the cache; does not install JetBrainsMono |
-| `--apps` | Removes HEY/Basecamp and the 1Password service when detected; installs PrismLauncher, Bitwarden, AppFlowy, and CurseForge; registers Amazon Shopping, Mercado Livre, Pinterest, Z Ai, WebMotors, Panini Brasil, GitHub, GitLab, Codeberg, Copilot, Claude, ChatGPT, Grok, and Gemini |
-| `--plugin` | Reinstalls Feader RSS, Spaces, and Glass, then enables them; backs up replaced plugin directories |
+| `--apps` | Removes HEY/Basecamp and the 1Password service when detected; installs native ChatGPT/Claude clients and the personal app list; registers shopping, media and development webapps |
+| `--bookmarks` | Adds FrankMD, Pi-hole and ai-memory to Chromium bookmarks; also runs with `--apps` |
+| `--omastore` | Installs or reinstalls OmaStore |
+| `--plugin` | Reinstalls Feader RSS, Spaces, Glass and the repository's audio panel; backs up replaced plugin directories |
 | `--theme` | Installs Sword Art Omarchy if absent and applies it; preserves any broken theme link |
 | `--openrgb` | Clones or updates the Dareu EK75 OpenRGB driver into `~/.local/share/dareu-ek75-openrgb`, builds it, installs its launcher and theme hook, and includes its udev rule in one shared `pkexec` call |
 | `--ek75-knob` | Installs a systemd hwdb rule that suppresses mute and volume events from the EK75's secondary input interface; reconnecting the keyboard applies it |
-| `--all` | All installation options: fonts → Chromium bookmarks → apps → OmaStore → plugin → theme → OpenRGB → EK75 knob rule, after the file copies and skill installation; no Docker/Pi-hole setup or reboot |
+| `--calibrate` | Installs device-setup tools and saves an inventory; interactive adjustments run separately with `calibrate-devices` |
+| `--clamshell` | Installs the logind lid policy and user recovery timer; reloads logind and validates Hyprland |
+| `--home-backup` | Installs local full backups and budgeted Dropbox publication; when used alone, copies only the backup file set |
+| `--maintenance` | Enables diagnosis and scheduled updates, with saved power preferences and fixed privileged operations |
+| `--ai-memory` | Starts ai-memory and configures MCP/hooks for detected clients |
+| `--ai-jail` | Installs ai-jail and bubblewrap for the sandboxed aliases |
+| `--omatuber` | Builds the pinned OmaTuber revision, installs OBS/browser support and configures authenticated WebSocket access |
+| `--all` | Enables every installation option above; no implicit reboot or Pi-hole DNS change |
 
 ### Power: delegated to the omarchy CLI
 
@@ -127,15 +145,61 @@ flowchart TD
   E -->|Yes| G["battery state: last profile saved for this state, else balanced"]
 ```
 
-A previous version of [.config/hypr/autostart.lua](../Omarchy/home/.config/hypr/autostart.lua)
-ran a personal Perl script that duplicated this via a direct `powerprofilesctl`
-call, using a cruder heuristic (discharging and charge <= 25%) that executed
-right after `omarchy-powerprofiles-init` and overrode its result. That script
-and the autostart entry were removed; the omarchy CLI's own decision (backed
-by the UPower AC/battery signal and persisted per ac/battery state under
-`~/.local/state/omarchy/powerprofiles/`) is now the only one in effect. There
-is still no timer or daemon reacting to a power-source change mid-session;
-`omarchy-powerprofiles-init` only runs again at the next Hyprland start.
+The personal autostart file delegates power selection to Omarchy. Choices are
+stored per AC/battery state under `~/.local/state/omarchy/powerprofiles/`.
+These dotfiles install no separate power-source watcher. Enabling maintenance
+sets balanced power on AC and power saving on battery through the same native
+mechanism; disable restores saved preferences only where they still match the
+values it installed. See [maintenance](maintenance.md).
+
+### Backups and Dropbox
+
+The local working copy, per-file history and complete monthly HOME/Btrfs ZIPs
+live under `~/.local/state/home-dropbox-backup/`, outside Dropbox. Completed
+years become nested local history ZIPs. Dropbox receives one `latest.zip` with
+selected essentials. The default publication budget is below 1.8 GB for all
+files in the local Dropbox tree, including unrelated files. Cloud-only files
+and changes from other devices are not measured.
+
+Managed ZIPs already in Dropbox are copied locally and compared byte for byte
+before removal from the synchronized directories. This removes their cloud
+copies after synchronization; their local archives remain. Local archives on
+the same drive do not protect against drive failure. See
+[selection, migration and recovery](../Omarchy/README.md#local-backups-and-budgeted-dropbox-publication).
+
+### OBS and OmaTuber
+
+The generated OBS collection preserves the existing capture scenes and adds
+`OmaTuber Live`, with a browser source at `http://127.0.0.1:39017/` and the same
+audio buses. The optional installer pins OmaTuber's implementation commit,
+enables authenticated OBS WebSocket access and generates a password locally
+when one is missing. Avatar selection, the first authenticated connection and
+portal capture selection need the graphical session. See
+[capture setup](capture.md#omatuber-no-omarchy).
+
+## inferctl: separate Linux project
+
+[inferctl](../Omarchy/calibration/inferctl/README.md) is built from Go source
+under `Omarchy/calibration/inferctl/`; the dotfile installer does not install
+or run it. Its packages separate hardware telemetry, backend adapters,
+benchmark execution, profiles, admission control, systemd/Docker lifecycle,
+optimization and scheduling.
+
+Calibration records a baseline, warm-up, repeated candidate runs and a final
+baseline check. Profiles keep hardware, model, workload and usage mode separate.
+Selection applies safety constraints and a throughput floor before choosing
+from the Pareto front. Recommended profiles are saved separately for review.
+Native limits use transient user services; Docker workloads use disposable
+containers with persistent data. Reset acts on recorded owned resources.
+
+Host records include a Qwen3-0.6B LM Studio comparison, systemd controller
+verification and CPU Docker integration. The observed Qwen differences have
+overlapping confidence intervals and do not establish a performance gain.
+ComfyUI's real API test used a graph without an AI model; GPU containers,
+image/video workloads, sustained thermal tuning and speculative decoding need
+further validation. The dynamic mode adjusts a running native workload; it
+is not a persistent job daemon. See the
+[validation record](../Omarchy/calibration/inferctl/docs/validation.md).
 
 ## Windows: components added and their targets
 
@@ -149,6 +213,7 @@ the `home/` tree, unlike the Linux installer.
 | [powershell/Microsoft.PowerShell_profile.ps1](../Windows-11/home/powershell/Microsoft.PowerShell_profile.ps1) | Copied to the `$PROFILE` of the host running the installer; PSReadLine, aliases, colors, modules, and deferred Starship initialization |
 | [rainmeter/AincradHUD](../Windows-11/home/rainmeter/AincradHUD/HUD.ini) | Directory copied to `%USERPROFILE%\Documents\Rainmeter\Skins\AincradHUD`; clock, CPU, RAM, C: drive, and network traffic |
 | [windows-terminal/sword-art-online.scheme.json](../Windows-11/home/windows-terminal/sword-art-online.scheme.json) | `-Theme` merges the palette into the first `settings.json` found and sets the default font; not a symlink |
+| [obs-studio](../Windows-11/home/obs-studio/) | Profiles and scene files are mapped individually to `%APPDATA%\obs-studio` |
 
 ```mermaid
 flowchart LR
@@ -164,7 +229,7 @@ flowchart LR
   P --> MO["PowerShell Gallery: Terminal-Icons, PSFzf, and z"]
 ```
 
-`-All` runs copies → fonts → apps/modules → theme, so Windows Terminal and
+`-All` runs copies, fonts, apps/modules, theme and maintenance, so Windows Terminal and
 Rainmeter are already installed by the time the theme step configures them on
 a fresh machine. Rainmeter itself still needs to be launched once to create
 its INI file before `Set-RainmeterHud` can edit it; the script detects the
@@ -175,7 +240,7 @@ shortcut suggested in the README requires manual configuration.
 
 `Install-Apps` lists GlazeWM, Windows Terminal, PowerToys, Starship, Rainmeter,
 fzf, Steam, PrismLauncher, Git, Claude, Codex CLI, Bitwarden, Obsidian,
-AppFlowy, VS Code, Go, Node.js, Python 3.13, and Lua. btop4win is mentioned in the README
+AppFlowy, VS Code, Go, Node.js, Python 3.13, Lua and OBS Studio. btop4win is mentioned in the README
 but does not appear in this install list.
 
 ### PowerShell initialization
@@ -309,7 +374,7 @@ flowchart TD
 ```
 
 The flowchart describes the common path; `--dry-run`/`-DryRun` only report the
-planned actions. **The installation is transactional in two passes**: validation is
+planned actions. File installation has two passes: validation is
 read-only and collects every conflict before anything is touched, so a conflict on
 one file aborts the whole run without any copy or backup having been created.
 If an unexpected failure happens during the application pass itself (a race
@@ -318,16 +383,15 @@ already applied instead of implying nothing happened.
 
 | Operation | Omarchy | Windows |
 |---|---|---|
-| Source → destination | Relative path of each file under `home/` preserved in HOME | Explicit map of four entries, including one directory |
+| Source → destination | Relative path of each file under `home/` preserved in HOME | Four explicit base entries, including one directory, plus each OBS configuration file |
 | Backup | `.local/state/dotfiles/backups/YYYYmmdd-HHMMSS` under the destination | Same pattern, plus a `manifest.json` recording each item's real destination and a post-install content hash |
 | Restore selection | Most recent snapshot | Most recent snapshot |
 | Destination protection on restore | Validates all before applying; accepts absent files, legacy links, or copies matching the installed content hash | Validates all before applying; aborts if a destination's content hash no longer matches what was recorded at install time |
 | Restored path | Relative to HOME, compatible with link backups | Read from `manifest.json`, matching the destinations used by `Install-Files`, `Set-WindowsTerminalTheme`, and `Set-RainmeterHud` |
 | Scope | Entries present in the snapshot, preserving the copy | Copy of files from the snapshot, using the manifest map |
 
-`win11.ps1 -Restore` now consults an explicit `manifest.json` written next to the
-snapshot instead of reconstructing destinations from `$Target` and the backup's
-relative path. Each backed-up item (GlazeWM, Starship, the PowerShell profile,
+`win11.ps1 -Restore` consults a `manifest.json` written next to the snapshot.
+Each backed-up item (GlazeWM, Starship, the PowerShell profile, OBS files,
 `AincradHUD`, the Windows Terminal `settings.json`, and `Rainmeter.ini`) records
 its real destination and a SHA-256 hash of its post-install content. Restore
 validates every entry against the current file content first and aborts with no
@@ -345,11 +409,11 @@ external installer created a real directory at the destination.
 | Finding | Evidence and consequence |
 |---|---|
 | HUD palette is not identical to the one advertised | The HUD uses cyan `90,220,255` (`#5adcff`), Consolas font, and its own sizes; it does not automatically share the terminal's Lexend/cyan `#3ee8ff` |
-| Windows README described OnIdle | The code uses a `prompt` wrapper; the description was corrected in this documentation |
+| PowerShell initialization follows prompt calls | Modules and Starship initialize on the second `prompt` call |
 | Incomplete profile dependencies | CompletionPredictor, F7History, and PSScriptAnalyzer are not part of the module installation |
 | Personal files are full replacements | Outside the explicit Lua inheritance/theme imports, the installer copies whole files rather than merging fields; new defaults may fail to appear |
-| Fonts, theme, plugin, wrapper, and images are not fully pinned | Remote updates can produce a different result; this analysis did not audit the external content |
-| Windows failure handling is partial | `winget`'s `$LASTEXITCODE` is not validated by the installer; several debloat operations silence errors; the final message does not prove each step succeeded |
+| Some remote assets are not pinned | Fonts, themes and external plugins can change upstream; the ai-memory wrapper, Claude package and OmaTuber revision have separate integrity/version checks |
+| Windows debloat has separate failure handling | App installation checks `winget` exit codes and fails if packages fail; several operations in the separate debloat script silence errors |
 
 ## Supplementary inventory and validation
 
@@ -366,8 +430,9 @@ secrets, noise, and tool artifacts. The READMEs for
 [fonts](../Omarchy/fonts/README.md) complement the operational details; where they diverge,
 the behavior identified in the code above takes precedence.
 
-This analysis used a static read of every versioned file and a targeted lookup
-against the installed Omarchy base. Documentation verification covers relative
-links, Mermaid blocks, and whitespace. No installers, debloat, DNS changes,
-desktop reloads, or services were executed. Mermaid's visual rendering
-depends on the viewer; it was not validated with a local renderer.
+This documentation update compared the current installers, configuration and
+inferctl validation records. It did not apply configuration or rerun host
+benchmarks. The Linux test suite and inferctl's `make check` passed before the
+documented commits were pushed. CI also defines Windows installer and maintenance
+tests; this record does not report their latest remote result. Mermaid blocks
+are preserved; their visual rendering was not checked with a local renderer.

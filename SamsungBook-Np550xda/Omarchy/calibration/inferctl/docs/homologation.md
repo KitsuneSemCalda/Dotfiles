@@ -4,6 +4,12 @@ Artefatos recebidos do host: `.qualification/20261025T004416.106875Z/`.
 O diretório é ignorado pelo Git e inclui logs, inventário, hashes de fontes/binário
 e o resultado de cada etapa. Esta rodada não homologa as dez fases.
 
+O registro abaixo segue a ordem dos testes e correções. Os resultados mais
+recentes incluem o protocolo Qwen3-0.6B no LM Studio, controles systemd e
+integração Docker em CPU. O ComfyUI passou no smoke de API sem modelo de IA;
+geração de imagem/vídeo permanece pendente. Consulte a
+[tabela de validação atual](validation.md#estado-por-fase) para o resumo por fase.
+
 ## Evidência recebida
 
 - Fase 1 aprovada no escopo medido: contadores de CPU/RAM comparados ao kernel.

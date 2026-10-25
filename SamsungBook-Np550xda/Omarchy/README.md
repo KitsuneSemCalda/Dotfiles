@@ -8,7 +8,7 @@ For OmaTuber and OBS browser support, close OBS and run
 `perl ./omarchy.pl --omatuber --backup` (also included in `--all`). See the
 [OmaTuber first-use steps](../docs/capture.md#omatuber-no-omarchy).
 
-Initial dotfiles baseline for the Samsung NP550XDA-KF2BR, running Omarchy with
+Dotfiles for the Samsung NP550XDA-KF2BR, running Omarchy with
 Hyprland. The full snapshot used to make these decisions is at
 [`hardware/inxi-Fz.txt`](hardware/inxi-Fz.txt).
 
@@ -18,13 +18,15 @@ Hyprland. The full snapshot used to make these decisions is at
 - 16 GiB of RAM
 - Intel Iris Xe (`i915`)
 - 1920×1080 internal display
-- Samsung NVMe, approximately 256 GiB
+- Samsung NVMe, 256 GB (about 238.5 GiB)
 - Battery capacity observed at 30.7% of design capacity
 - Btrfs filesystem with swapfile and zram
 
-The current choices follow this profile: scale 1, interface font size 14,
+The current choices follow this profile: scale 1, shell font size 14,
 terminal font size 11, preferred monitor mode and EDID color management for
 the internal BOE panel, plus moderate visual effects for the Iris Xe.
+GTK and the fontconfig minimum remain at 20; the shell and terminal settings
+do not impose a common physical font size across applications.
 The power profile is left to Omarchy's own
 `omarchy powerprofiles init`, which already runs at session start and picks
 `power-saver` or `balanced`/`performance` from the AC/battery signal.
@@ -336,9 +338,11 @@ This also applies without `--all`; test targets and standalone home backup skip
 this dependency setup.
 Legacy links to this checkout are replaced automatically. You can remove the
 checkout after installation; pull or clone it again and rerun the installer
-to update. Locally edited files require `--backup` before replacement. No
-system configuration was changed when this repository was created; `--all` is the
-option that applies external changes.
+to update. Locally edited files require `--backup` before replacement. The normal real-HOME
+installation also prepares AI alias dependencies and Intel GPU API packages,
+starts ai-memory when needed, centralizes model paths and checks GPU discovery.
+Optional actions add their own package, service or system changes; `--all`
+enables all of them. Inspect the dry-run before applying the profile.
 
 ## Automatic maintenance
 
@@ -626,6 +630,19 @@ documentation.
 The local AI governor, benchmarker and tuning project lives in
 [`calibration/inferctl/`](calibration/inferctl/README.md). Its container setup is documented in
 [`calibration/inferctl/deploy/comfyui/`](calibration/inferctl/deploy/comfyui/README.md).
+
+The dotfile installer does not build inferctl, start ComfyUI or run a calibration.
+Build and test it separately with `make check` and `make build` in its directory.
+Profiles distinguish hardware, backend, model, workload and usage mode; measured
+throughput and safety constraints determine which candidates can be recommended.
+Recommended profiles are saved separately and are not activated automatically.
+
+The [validation record](calibration/inferctl/docs/validation.md) includes host
+tests for the Qwen3-0.6B LM Studio control, transient systemd limits and CPU
+Docker integration. The Qwen comparison did not establish a performance gain.
+ComfyUI's real API smoke test used a graph without an AI model. GPU containers,
+image/video generation, thermal tuning under sustained load and speculative
+decoding still need their own workload tests.
 
 ### Armazenamento de modelos de IA
 

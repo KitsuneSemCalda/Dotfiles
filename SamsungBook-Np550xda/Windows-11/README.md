@@ -5,11 +5,11 @@ covering the modifications to the base system and the installers' limitations.
 The [capture pipeline](../docs/capture.md) documents the Windows OBS profiles,
 per-app audio capture, scene setup and benchmark steps.
 
-Initial dotfiles baseline for the same Samsung NP550XDA-KF2BR from the
+Dotfiles for the same Samsung NP550XDA-KF2BR from the
 [Omarchy profile](../Omarchy/README.md), now booting Windows 11. Visual theme
 inspired by Sword Art Online, reusing the palette and material from the
 [Sword Art Omarchy](https://github.com/KitsuneSemCalda/Sword-Art-Omarchy) theme
-already built for Hyprland — so both operating systems share the
+already built for Hyprland, so both operating systems share the
 same visual identity. The hardware snapshot used for these decisions is at
 [`hardware/hardware-profile.txt`](hardware/hardware-profile.txt).
 
@@ -56,7 +56,7 @@ tooling.
 - 16 GiB of RAM
 - Intel Iris Xe
 - 1920×1080 internal display
-- Samsung NVMe, approximately 256 GiB
+- Samsung NVMe, 256 GB (about 238.5 GiB)
 - Windows 11 Home Single Language
 
 ## Structure
@@ -84,7 +84,8 @@ for Starship) and PowerShell only handles automation/installation.
 
 ## Tools used
 
-All from existing, maintained projects — nothing written from scratch:
+The desktop uses the tools below. This repository supplies their configuration,
+the custom AincradHUD skin and installation scripts:
 
 | Role on Omarchy         | Tool on Windows                                                  |
 |-------------------------|-----------------------------------------------------------------|

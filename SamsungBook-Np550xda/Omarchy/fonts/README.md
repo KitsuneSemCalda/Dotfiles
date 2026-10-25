@@ -2,23 +2,23 @@
 
 These dotfiles use Lexend as the interface's sans-serif font (GTK/Qt apps,
 menus, and the Omarchy bar). It's distributed by [Google Fonts](https://fonts.google.com/specimen/Lexend)
-and was designed based on research into reading fluency, prioritizing
-visual comfort in long text — it replaces the Source Sans 3 used previously.
+and is downloaded by the font installer.
 
-The terminals' monospaced font (Alacritty/Kitty/Ghostty/Foot) remains
-separate, managed by `omarchy font set <name>` (see `omarchy font list`
-/ `omarchy font current`). Lexend is proportional, so it isn't used as
-a terminal font — keeping the two separate keeps code/table text
+The terminals' monospaced font remains separate. Omarchy provides font controls
+through `omarchy font set <name>` (see `omarchy font list`
+/ `omarchy font current`); this repository specifies the font in its Alacritty
+and Foot profiles and does not ship Kitty or Ghostty configuration.
+Lexend is proportional, so it isn't used as
+a terminal font, keeping code/table text
 aligned.
 
-`fonts.conf` also defines an accessibility floor: no font
-renders below 20pt, even if the app requests a smaller size (the
-`gtk-font-name` already uses 20 directly, so this rule covers other
-GTK/Qt/Pango apps that request smaller sizes). Terminals are excluded, since
-they set their size outside of fontconfig.
+`fonts.conf` requests a minimum size of 20 for applications that use its rules;
+`gtk-font-name` also uses 20 directly. Applications can bypass fontconfig.
+The shell has its own base size of 14, while the versioned Alacritty and Foot
+profiles use JetBrainsMono Nerd Font at size 11. These settings do not guarantee
+the same physical text size across applications.
 
-There is no Lexend package in the official Arch repositories or the AUR. The
-font files are not versioned here; the command below downloads the
+The font files are not versioned here; the command below downloads the
 Regular and Bold weights directly from the Google Fonts API to
 `~/.local/share/fonts/lexend/` and enables this repository's
 fontconfig/GTK rules:
