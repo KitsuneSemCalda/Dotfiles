@@ -1,0 +1,88 @@
+{
+  "memory": [
+    {
+      "locator": "",
+      "bank": "",
+      "size_field": 8192,
+      "data_width": 64,
+      "speed_MTs": 2667,
+      "configured_MTs": 2667,
+      "manufacturer": "",
+      "part": ""
+    },
+    {
+      "locator": "",
+      "bank": "",
+      "size_field": 8192,
+      "data_width": 64,
+      "speed_MTs": 3200,
+      "configured_MTs": 2667,
+      "manufacturer": "",
+      "part": ""
+    }
+  ],
+  "cpu_idle_parameters": {
+    "force_irq_on": "N",
+    "table": "",
+    "max_cstate": "9",
+    "ibrs_off": "N",
+    "states_off": "0",
+    "no_acpi": "N",
+    "no_native": "N",
+    "use_acpi": "N"
+  },
+  "gpu_debug": {
+    "/sys/kernel/debug/dri/1/i915_dmc_info": "DMC initialized: yes\nfw loaded: yes\npath: i915/tgl_dmc_ver2_12.bin\nPipe A fw needed: yes\nPipe A fw loaded: yes\nPipe B fw needed: no\nPipe B fw loaded: no\nversion: 2.12\nDC3CO count: 0\nDC3 -> DC5 count: 0\nDC5 -> DC6 count: 0\nprogram base: 0x0c004040\nssp base: 0x00086fc0\nhtp: 0x01a40188",
+    "/sys/kernel/debug/dri/1/i915_fbc_status": "FBC disabled: update pending\n  [PLANE:35:plane 1A]: plane not visible",
+    "/sys/kernel/debug/dri/1/i915_edp_psr_status": "OSError",
+    "/sys/kernel/debug/dri/1/i915_runtime_pm_status": "GPU idle: yes\nIRQs disabled: no\nUsage count: 12\nPCI device power state: D0 [0]",
+    "/sys/kernel/debug/dri/1/gt0/uc/huc_info": "HuC disabled",
+    "/sys/kernel/debug/dri/1/gt0/uc/guc_info": "GuC disabled\n\nGuC log relay not created"
+  },
+  "pci_links": {
+    "0000:00:1c.0": "\t\tLnkCap:\tPort #5, Speed 8GT/s, Width x4, ASPM L1, Exit Latency L1 <16us\n\t\t\tClockPM- Surprise- LLActRep+ BwNot+ ASPMOptComp+\n\t\tLnkCtl:\tASPM L1 Enabled; RCB 64 bytes, LnkDisable- CommClk+\n\t\t\tExtSynch- ClockPM- AutWidDis- BWInt+ AutBWInt+ FltModeDis-\n\t\tLnkSta:\tSpeed 8GT/s, Width x4\n\t\tDevCtl2: Completion Timeout: 50us to 50ms, TimeoutDis- ARIFwd-\n\t\tL1SubCap: PCI-PM_L1.2+ PCI-PM_L1.1+ ASPM_L1.2+ ASPM_L1.1+ L1_PM_Substates+\n\t\tL1SubCtl1: PCI-PM_L1.2+ PCI-PM_L1.1+ ASPM_L1.2+ ASPM_L1.1+\n\t\tL1SubCtl2: T_PwrOn=44us",
+    "0000:00:1d.0": "\t\tLnkCap:\tPort #9, Speed 8GT/s, Width x1, ASPM L0s L1, Exit Latency L0s <1us, L1 <16us\n\t\t\tClockPM- Surprise- LLActRep+ BwNot+ ASPMOptComp+\n\t\tLnkCtl:\tASPM Disabled; RCB 64 bytes, LnkDisable- CommClk+\n\t\t\tExtSynch- ClockPM- AutWidDis- BWInt+ AutBWInt+ FltModeDis-\n\t\tLnkSta:\tSpeed 2.5GT/s, Width x1\n\t\tDevCtl2: Completion Timeout: 50us to 50ms, TimeoutDis- ARIFwd-\n\t\tL1SubCap: PCI-PM_L1.2+ PCI-PM_L1.1+ ASPM_L1.2+ ASPM_L1.1+ L1_PM_Substates+\n\t\tL1SubCtl1: PCI-PM_L1.2- PCI-PM_L1.1- ASPM_L1.2- ASPM_L1.1-\n\t\tL1SubCtl2: T_PwrOn=150us",
+    "0000:01:00.0": "\t\tLnkCap:\tPort #0, Speed 8GT/s, Width x4, ASPM L1, Exit Latency L1 <64us\n\t\t\tClockPM+ Surprise- LLActRep- BwNot- ASPMOptComp+\n\t\tLnkCtl:\tASPM L1 Enabled; RCB 64 bytes, LnkDisable- CommClk+\n\t\t\tExtSynch- ClockPM+ AutWidDis- BWInt- AutBWInt- FltModeDis-\n\t\tLnkSta:\tSpeed 8GT/s, Width x4\n\t\tDevCtl2: Completion Timeout: 50us to 50ms, TimeoutDis-\n\t\tL1SubCap: PCI-PM_L1.2+ PCI-PM_L1.1+ ASPM_L1.2+ ASPM_L1.1+ L1_PM_Substates+\n\t\tL1SubCtl1: PCI-PM_L1.2+ PCI-PM_L1.1+ ASPM_L1.2+ ASPM_L1.1+\n\t\tL1SubCtl2: T_PwrOn=44us",
+    "0000:02:00.0": "\t\tLnkCap:\tPort #0, Speed 2.5GT/s, Width x1, ASPM L0s L1, Exit Latency L0s unlimited, L1 <64us\n\t\t\tClockPM+ Surprise- LLActRep- BwNot- ASPMOptComp+\n\t\tLnkCtl:\tASPM Disabled; RCB 64 bytes, LnkDisable- CommClk+\n\t\t\tExtSynch- ClockPM+ AutWidDis- BWInt- AutBWInt- FltModeDis-\n\t\tLnkSta:\tSpeed 2.5GT/s, Width x1\n\t\tDevCtl2: Completion Timeout: 50us to 50ms, TimeoutDis-\n\t\tL1SubCap: PCI-PM_L1.2+ PCI-PM_L1.1+ ASPM_L1.2+ ASPM_L1.1+ L1_PM_Substates+\n\t\tL1SubCtl1: PCI-PM_L1.2- PCI-PM_L1.1- ASPM_L1.2- ASPM_L1.1-\n\t\tL1SubCtl2: T_PwrOn=150us"
+  },
+  "i915_enable_guc": "-1",
+  "i915_enable_psr": "-1",
+  "i915_enable_fbc": "-1",
+  "i915_enable_dc": "-1",
+  "/sys/class/powercap/intel-rapl:1": {
+    "name": "psys",
+    "energy_uj": "23299421676",
+    "max_energy_range_uj": "262143328850",
+    "constraint_0_name": "long_term",
+    "constraint_0_power_limit_uw": "57000000",
+    "constraint_1_name": "short_term",
+    "constraint_1_power_limit_uw": "57000000"
+  },
+  "/sys/class/powercap/intel-rapl:0:0": {
+    "name": "core",
+    "energy_uj": "5012437302",
+    "max_energy_range_uj": "262143328850",
+    "constraint_0_name": "long_term",
+    "constraint_0_power_limit_uw": "0",
+    "constraint_1_name": "FileNotFoundError",
+    "constraint_1_power_limit_uw": "FileNotFoundError"
+  },
+  "/sys/class/powercap/intel-rapl:0": {
+    "name": "package-0",
+    "energy_uj": "10724231884",
+    "max_energy_range_uj": "262143328850",
+    "constraint_0_name": "long_term",
+    "constraint_0_power_limit_uw": "20000000",
+    "constraint_1_name": "short_term",
+    "constraint_1_power_limit_uw": "45000000"
+  },
+  "/sys/class/powercap/intel-rapl:0:1": {
+    "name": "uncore",
+    "energy_uj": "392430086",
+    "max_energy_range_uj": "262143328850",
+    "constraint_0_name": "long_term",
+    "constraint_0_power_limit_uw": "0",
+    "constraint_1_name": "FileNotFoundError",
+    "constraint_1_power_limit_uw": "FileNotFoundError"
+  }
+}

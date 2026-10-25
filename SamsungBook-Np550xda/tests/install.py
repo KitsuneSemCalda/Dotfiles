@@ -225,7 +225,7 @@ elif name == 'pgrep':
     explicit_preview = run_plugin(
         '--apps', '--bookmarks', '--fonts', '--plugin', '--omastore',
         '--theme', '--openrgb', '--ek75-knob', '--home-backup', '--clamshell', '--calibrate',
-        '--maintenance', '--ai-memory', '--ai-jail', '--omatuber', '--dry-run',
+        '--hardware', '--maintenance', '--ai-memory', '--ai-jail', '--omatuber', '--dry-run',
     )
     normalize_pid = lambda output: re.sub(r'\.dotfiles-tmp-\d+', '.dotfiles-tmp-PID', output)
     assert normalize_pid(all_preview.stdout) == normalize_pid(explicit_preview.stdout)
@@ -250,7 +250,7 @@ elif name == 'pgrep':
     assert "'--openrgb'" in preview.stdout
     assert "'--maintenance'" in preview.stdout
     assert "'/usr/local/bin/dotfiles-maintenance' 'enable'" in preview.stdout
-    assert "'--ek75-knob' '--clamshell' '--home-backup'" in preview.stdout
+    assert "'--ek75-knob' '--clamshell' '--hardware' '--home-backup'" in preview.stdout
     assert "'systemctl' '--user' 'enable' '--now' 'home-dropbox-backup.timer'" in preview.stdout
     assert "'systemctl' '--user' 'enable' '--now' 'dotfiles-clamshell-recover.timer'" in preview.stdout
     log.write_text('')

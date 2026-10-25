@@ -1,0 +1,20 @@
+  Object: size 208, type Spa:Pod:Object:Param:Format (262147), id Spa:Enum:ParamId:EnumFormat (3)
+    Prop: key Spa:Pod:Object:Param:Format:mediaType (1), flags 00000000
+      Id 1        (Spa:Enum:MediaType:audio)
+    Prop: key Spa:Pod:Object:Param:Format:mediaSubtype (2), flags 00000000
+      Id 1        (Spa:Enum:MediaSubtype:raw)
+    Prop: key Spa:Pod:Object:Param:Format:Audio:format (65537), flags 00000000
+      Choice: type Spa:Enum:Choice:Enum, flags 00000000 28 4
+        Id 271      (Spa:Enum:AudioFormat:S24LE)
+        Id 271      (Spa:Enum:AudioFormat:S24LE)
+        Id 259      (Spa:Enum:AudioFormat:S16LE)
+    Prop: key Spa:Pod:Object:Param:Format:Audio:rate (65539), flags 00000000
+      Choice: type Spa:Enum:Choice:Range, flags 00000000 28 4
+        Int 48000
+        Int 44100
+        Int 48000
+    Prop: key Spa:Pod:Object:Param:Format:Audio:channels (65540), flags 00000000
+      Int 1
+    Prop: key Spa:Pod:Object:Param:Format:Audio:position (65541), flags 00000000
+      Array: child.size 4, child.type Spa:Id
+        Id 2        (Spa:Enum:AudioChannel:MONO)

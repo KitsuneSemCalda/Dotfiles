@@ -1,0 +1,3 @@
+# Let r8169 suspend the tested Samsung adapter when it has no carrier.
+# This does not override PCIe ASPM safety restrictions.
+ACTION=="add|bind", SUBSYSTEM=="pci", DRIVER=="r8169", ATTR{vendor}=="0x10ec", ATTR{device}=="0x8168", ATTR{subsystem_vendor}=="0x144d", ATTR{subsystem_device}=="0xc195", TEST=="power/control", ATTR{power/control}="auto"

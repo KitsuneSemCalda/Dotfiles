@@ -20,3 +20,8 @@ hl.monitor({ output = "eDP-1", mode = "preferred", position = "auto", scale = mo
 -- Match the display identity so the rule survives HDMI connector renumbering.
 -- Keep SDR sRGB and 8-bit output; no measured ICC profile is available.
 hl.monitor({ output = "desc:Samsung Electric Company SMB2030N HXOZB03691", mode = "1600x900@60", position = "auto", scale = 1, transform = 0, bitdepth = 8, cm = "srgb", vrr = 0 })
+
+-- The desk HDMI-to-VGA adapter substitutes a generic EDID (preferred 1024x768).
+-- This identity belongs to that adapter, not to the Samsung panel. Keep its
+-- native 1600x900 timing explicit while this adapter drives the B2030N.
+hl.monitor({ output = "desc:RGT 0x1352 0x01010101", mode = "1600x900@60", position = "auto", scale = 1, transform = 0, bitdepth = 8, cm = "srgb", vrr = 0 })

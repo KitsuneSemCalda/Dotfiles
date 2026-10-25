@@ -1,0 +1,20 @@
+{
+  "date": "2026-10-25",
+  "consent": "User authorized one 15-second microphone level measurement without saving voice",
+  "command": "ffmpeg -hide_banner -nostdin -f pulse -i alsa_input.usb-MV-SILICON_fifine_Microphone_20190808-00.mono-fallback -t 15 -af astats=metadata=0:reset=0 -f null -",
+  "source_channels": 1,
+  "client_channels": 2,
+  "client_channels_identical_statistics": true,
+  "sample_rate_hz": 48000,
+  "client_sample_format": "S16_LE",
+  "peak_dbfs": -9.362457,
+  "rms_dbfs": -27.962702,
+  "rms_peak_dbfs": -18.635966,
+  "rms_trough_dbfs": -67.078742,
+  "dc_offset": -0.000017,
+  "min_sample": -10956,
+  "max_sample": 11151,
+  "samples_per_channel_processed_by_filter": 724800,
+  "raw_audio_saved": false,
+  "limits": "Pulse client duplicated the mono source into stereo. No controlled silence interval, calibrated SNR, acoustic frequency response, or electrical ENOB measurement. Filter processed slightly beyond output duration due buffering; output was limited to 15 seconds."
+}

@@ -1,0 +1,132 @@
+{
+  "protocol": {
+    "hwp": "8 counterbalanced trials; 60 warmup then 300 IO-woken SHA256 bursts, 5ms between requests; pinned worker CPU2; >=10% lower median and no >5% more psys joules/request required for adoption",
+    "ethernet": "ABBA, 12s settle then 6s sampling; disconnected only; require suspended state and separated psys power ranges for adoption"
+  },
+  "hwp": [
+    {
+      "setting": 0,
+      "median_us": 1229.688,
+      "p95_us": 1465.534,
+      "p99_us": 2313.603,
+      "seconds": 1.8656813979998788,
+      "joules": {
+        "package": 12.229399,
+        "psys": 26.973563
+      }
+    },
+    {
+      "setting": 1,
+      "median_us": 1294.0605,
+      "p95_us": 1519.896,
+      "p99_us": 1731.415,
+      "seconds": 1.9001498299999184,
+      "joules": {
+        "package": 10.522739,
+        "psys": 25.240597
+      }
+    },
+    {
+      "setting": 1,
+      "median_us": 1264.681,
+      "p95_us": 1460.807,
+      "p99_us": 1658.138,
+      "seconds": 1.875388633999819,
+      "joules": {
+        "package": 11.186434,
+        "psys": 25.855403
+      }
+    },
+    {
+      "setting": 0,
+      "median_us": 1286.6264999999999,
+      "p95_us": 1430.69,
+      "p99_us": 1855.214,
+      "seconds": 1.893117817999837,
+      "joules": {
+        "package": 10.587681,
+        "psys": 25.316464
+      }
+    },
+    {
+      "setting": 1,
+      "median_us": 1279.6345000000001,
+      "p95_us": 1483.363,
+      "p99_us": 2199.854,
+      "seconds": 1.8894609870001204,
+      "joules": {
+        "package": 11.02286,
+        "psys": 26.028681
+      }
+    },
+    {
+      "setting": 0,
+      "median_us": 1287.077,
+      "p95_us": 1449.254,
+      "p99_us": 1730.432,
+      "seconds": 1.8911155980001695,
+      "joules": {
+        "package": 10.965548,
+        "psys": 25.774775
+      }
+    },
+    {
+      "setting": 0,
+      "median_us": 1271.9185,
+      "p95_us": 1488.104,
+      "p99_us": 2418.785,
+      "seconds": 1.8789569360001224,
+      "joules": {
+        "package": 11.979828,
+        "psys": 27.042412
+      }
+    },
+    {
+      "setting": 1,
+      "median_us": 1251.324,
+      "p95_us": 1510.91,
+      "p99_us": 1874.329,
+      "seconds": 1.8774868499999684,
+      "joules": {
+        "package": 11.300081,
+        "psys": 25.922114
+      }
+    }
+  ],
+  "ethernet": [
+    {
+      "setting": "on",
+      "runtime_status": "active",
+      "watts": {
+        "package": 6.774486085871332,
+        "psys": 14.631916643332925
+      }
+    },
+    {
+      "setting": "auto",
+      "runtime_status": "suspended",
+      "watts": {
+        "package": 4.596312232936094,
+        "psys": 11.066365737665363
+      }
+    },
+    {
+      "setting": "auto",
+      "runtime_status": "suspended",
+      "watts": {
+        "package": 3.760896372735676,
+        "psys": 9.968819732112285
+      }
+    },
+    {
+      "setting": "on",
+      "runtime_status": "active",
+      "watts": {
+        "package": 4.584060704045127,
+        "psys": 11.499727278044887
+      }
+    }
+  ],
+  "hwp_restored": "0",
+  "ethernet_restored": "on"
+}

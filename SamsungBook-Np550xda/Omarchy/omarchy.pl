@@ -30,6 +30,7 @@ my $openrgb = 0;
 my $ek75_knob = 0;
 my $clamshell = 0;
 my $calibrate = 0;
+my $hardware = 0;
 my $home_backup = 0;
 my $maintenance = 0;
 my $ai_memory = 0;
@@ -50,6 +51,7 @@ my %installation_options = (
     'ek75-knob'      => \$ek75_knob,
     'clamshell'      => \$clamshell,
     'calibrate'      => \$calibrate,
+    'hardware'       => \$hardware,
     'home-backup'    => \$home_backup,
     'maintenance'    => \$maintenance,
     'ai-memory'      => \$ai_memory,
@@ -73,10 +75,11 @@ usage(0) if $help;
 if ($all) {
     $$_ = 1 for values %installation_options;
 }
+$clamshell = 1 if $hardware;
 my $installation_requested = grep { $$_ } values %installation_options;
 my $only_home_backup = $home_backup && !$all && !$reboot
     && !($apps || $bookmarks || $fonts || $plugin || $omastore
-        || $theme || $openrgb || $ek75_knob || $clamshell || $calibrate || $maintenance
+        || $theme || $openrgb || $ek75_knob || $clamshell || $calibrate || $hardware || $maintenance
         || $ai_memory || $ai_jail || $omatuber);
 
 if ($restore && ($backup || $installation_requested || $reboot)) {
@@ -99,6 +102,13 @@ die "Missing destination: $target\n" unless -d $target;
 my $home_root = abs_path($ENV{HOME} // '') // '';
 if (($installation_requested || $reboot) && $target ne $home_root) {
     die "Omarchy actions can only use the real HOME; use --target only to test file installation\n";
+}
+if ($hardware && !$dry_run) {
+    open my $board, '<', '/sys/class/dmi/id/board_name' or die "Cannot identify Samsung board: $!\n";
+    chomp(my $name = <$board> // '');
+    close $board;
+    die "--hardware is only supported on NP550XDA-KF2BR, found $name\n"
+        unless $name eq 'NP550XDA-KF2BR';
 }
 if ($omatuber && !$dry_run && system('pgrep', '-u', "$<", '-x', 'obs') == 0) {
     die "Close OBS Studio before installing OmaTuber and its scene configuration\n";
@@ -152,7 +162,12 @@ find(
     {
         no_chdir => 1,
         wanted   => sub {
+            if (-d $File::Find::name && $File::Find::name =~ m{(?:^|/)__pycache__$}) {
+                $File::Find::prune = 1;
+                return;
+            }
             return unless -f $File::Find::name;
+            return if $File::Find::name =~ /\.py[co]$/;
             my $relative = File::Spec->abs2rel($File::Find::name, $source_root);
             push @sources, $File::Find::name
                 if !$only_home_backup || $home_backup_files{$relative};
@@ -309,12 +324,17 @@ if ($clamshell) {
     }
     run_command('systemctl', '--user', 'daemon-reload');
     run_command('systemctl', '--user', 'enable', '--now', 'dotfiles-clamshell-recover.timer');
+    run_command('systemctl', '--user', 'restart', 'dotfiles-clamshell-recover.timer');
+    run_command('systemctl', '--user', 'start', 'dotfiles-clamshell-recover.service');
 }
 if ($calibrate) {
-    ensure_repo_packages('python', 'pavucontrol', 'v4l-utils', 'usbutils', 'pciutils', 'bluez-utils', 'blueman');
+    ensure_repo_packages('python', 'pavucontrol', 'v4l-utils', 'usbutils', 'pciutils', 'bluez-utils', 'blueman', 'rtkit');
     run_command(File::Spec->catfile($target, '.local', 'bin', 'calibrate-devices'), '--scan');
     say 'Run calibrate-devices in a terminal to adjust connected hardware.';
 }
+ensure_repo_packages('python', 'rtkit', 'thermald', 'power-profiles-daemon',
+    'pipewire', 'pipewire-pulse', 'wireplumber', 'jq', 'util-linux',
+    'mpv', 'libvpl', 'vpl-gpu-rt', 'linux-firmware-intel') if $hardware;
 ensure_fonts()  if $fonts;
 ensure_chromium_bookmarks() if $apps || $bookmarks;
 ensure_apps()   if $apps;
@@ -337,7 +357,7 @@ if (!$only_home_backup && $target eq $home_root
     run_command(File::Spec->catfile($target, '.local', 'bin', 'obs-theme-slates'));
 }
 
-if ($plugin || $clamshell || $reboot) {
+if ($plugin || $clamshell || $hardware || $reboot) {
     run_command('hyprctl', 'reload');
     unless ($dry_run) {
         my $errors = command_output('hyprctl', 'configerrors');
@@ -345,11 +365,12 @@ if ($plugin || $clamshell || $reboot) {
     }
 }
 
-if ($openrgb || $ek75_knob || $home_backup || $clamshell || $maintenance) {
+if ($openrgb || $ek75_knob || $home_backup || $clamshell || $maintenance || $hardware) {
     my @actions;
     push @actions, ('--openrgb', File::Spec->catdir($target, '.local', 'share', 'dareu-ek75-openrgb')) if $openrgb;
     push @actions, '--ek75-knob' if $ek75_knob;
     push @actions, '--clamshell' if $clamshell;
+    push @actions, '--hardware' if $hardware;
     push @actions, '--home-backup' if $home_backup;
     if ($maintenance) {
         ensure_repo_packages('python', 'pacman-contrib', 'smartmontools');
@@ -364,6 +385,16 @@ if ($openrgb || $ek75_knob || $home_backup || $clamshell || $maintenance) {
 if ($maintenance) {
     run_command('systemctl', '--user', 'daemon-reload');
     run_command('/usr/local/bin/dotfiles-maintenance', 'enable');
+}
+if ($hardware) {
+    run_command(File::Spec->catfile($target, '.local', 'bin', 'check-samsung-media'));
+    run_command('systemctl', '--user', 'daemon-reload');
+    run_command('systemctl', '--user', 'enable', 'dotfiles-samsung-session.service');
+    run_command('systemctl', '--user', 'restart', 'dotfiles-samsung-session.service');
+    run_command('systemctl', '--user', 'is-active', '--quiet', 'dotfiles-samsung-session.service');
+    say $dry_run
+        ? 'PLAN    Samsung boot/session policy will be reapplied and checked.'
+        : 'Samsung hardware policy reapplied and checked. Review PENDING notices for reboot or disconnected peripherals.';
 }
 
 say $dry_run ? 'Dry-run finished.' : 'Dotfiles installed.';
@@ -1034,6 +1065,7 @@ Usage: perl omarchy.pl [options]
   --theme            installs/applies the Sword Art Omarchy theme
   --openrgb          installs the Dareu EK75 OpenRGB driver, udev rule and theme hook
   --calibrate        installs hardware setup tools and saves a connected-device inventory
+  --hardware         enforces Samsung boot/session hardware policy and verifies applied state
   --clamshell        configures logind for closed-lid use with an external display
   --ek75-knob        blocks the faulty EK75 knob (mute and volume rotation)
   --home-backup      enables local full backups and budgeted Dropbox essentials

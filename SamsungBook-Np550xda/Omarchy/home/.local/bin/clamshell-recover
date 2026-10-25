@@ -11,6 +11,22 @@ external=$(jq -r '[.[] | select(.disabled != true and .width > 0 and .height > 0
   | sort_by(if .model == "SMB2030N" then 0 else 1 end) | .[0].name // ""' <<< "$monitors")
 lid=open
 omarchy-hw-laptop-closed && lid=closed
+
+# A saved clamshell toggle is not proof that the compositor applied it. At boot
+# or after a reload, enforce the actual output state even if the flag exists.
+if [[ $lid == closed && -n $external ]]; then
+  while read -r internal; do
+    [[ $internal =~ ^[A-Za-z0-9._-]+$ ]] || exit 1
+    echo "Disabling active internal display with lid closed: $internal"
+    hyprctl eval "hl.monitor({ output = \"$internal\", disabled = true })"
+  done < <(jq -r '.[] | select(.disabled != true)
+    | select(.name | test("^(eDP|LVDS|DSI)-")) | .name' <<< "$monitors")
+  monitors=$(hyprctl monitors all -j)
+  if jq -e 'any(.[]; .disabled != true and (.name | test("^(eDP|LVDS|DSI)-")))' <<< "$monitors" >/dev/null; then
+    echo 'Internal display remains enabled with lid closed; retrying on next timer tick' >&2
+    exit 1
+  fi
+fi
 state="${external}:${lid}"
 state_file="${XDG_RUNTIME_DIR:?}/dotfiles-clamshell-focus-state"
 old_state=''

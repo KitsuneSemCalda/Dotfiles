@@ -7,6 +7,7 @@ openrgb_dir=''
 ek75_knob=false
 home_backup=false
 clamshell=false
+hardware=false
 maintenance_user=''
 
 while (($#)); do
@@ -17,6 +18,7 @@ while (($#)); do
       shift 2
       ;;
     --clamshell) clamshell=true; shift ;;
+    --hardware) hardware=true; shift ;;
     --maintenance)
       (($# >= 2)) || { echo 'Missing maintenance user' >&2; exit 2; }
       maintenance_user=$2; shift 2 ;;
@@ -25,6 +27,21 @@ while (($#)); do
     *) echo "Unknown system installation action: $1" >&2; exit 2 ;;
   esac
 done
+
+if [[ $hardware == true ]]; then
+  [[ $(</sys/class/dmi/id/board_name) == NP550XDA-KF2BR ]] || {
+    echo 'Hardware enforcement requires NP550XDA-KF2BR' >&2; exit 1;
+  }
+  bash "$script_dir/enable-intel-huc.sh"
+  bash "$script_dir/enable-samsung-ethernet-pm.sh"
+  install -D -o root -g root -m 0755 "$script_dir/samsung-hardware-state.py" /usr/local/libexec/dotfiles-samsung-hardware
+  install -D -o root -g root -m 0644 "$script_dir/systemd/dotfiles-samsung-hardware.service" /etc/systemd/system/dotfiles-samsung-hardware.service
+  systemctl daemon-reload
+  systemctl enable --now thermald.service power-profiles-daemon.service
+  systemctl enable dotfiles-samsung-hardware.service
+  systemctl restart dotfiles-samsung-hardware.service
+  systemctl is-active --quiet dotfiles-samsung-hardware.service
+fi
 
 if [[ -n $maintenance_user ]]; then
   [[ $maintenance_user =~ ^[a-z_][a-z0-9_-]*$ ]] && id "$maintenance_user" >/dev/null || exit 2

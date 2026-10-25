@@ -1,0 +1,134 @@
+{
+  "protocol": {
+    "ethernet": "6 trials on/auto/auto/on/on/auto, 12s settle and 8s measure; energy exploratory, package versus psys and CPU activity recorded to expose confounding",
+    "wifi": "4 trials off/on/on/off; local default gateway only, 30 pings at 200ms; no profile changes; require zero loss and <5ms added average RTT for an interactive-use recommendation"
+  },
+  "ethernet": [
+    {
+      "setting": "on",
+      "status": "active",
+      "cpu_busy_percent": 17.038290019990775,
+      "watts": {
+        "package": 8.925839348028275,
+        "psys": 18.15595035866765
+      }
+    },
+    {
+      "setting": "auto",
+      "status": "suspended",
+      "cpu_busy_percent": 13.174846625766868,
+      "watts": {
+        "package": 5.1234861945467225,
+        "psys": 12.545379008844144
+      }
+    },
+    {
+      "setting": "auto",
+      "status": "suspended",
+      "cpu_busy_percent": 11.184615384615382,
+      "watts": {
+        "package": 4.419304111625959,
+        "psys": 11.52521375826134
+      }
+    },
+    {
+      "setting": "on",
+      "status": "active",
+      "cpu_busy_percent": 11.42330723169046,
+      "watts": {
+        "package": 5.3294445152924235,
+        "psys": 13.568652517272557
+      }
+    },
+    {
+      "setting": "on",
+      "status": "active",
+      "cpu_busy_percent": 12.250537304267727,
+      "watts": {
+        "package": 5.095809388768892,
+        "psys": 12.749330988929207
+      }
+    },
+    {
+      "setting": "auto",
+      "status": "suspended",
+      "cpu_busy_percent": 10.677523429098168,
+      "watts": {
+        "package": 4.294341787888184,
+        "psys": 11.31568446631868
+      }
+    }
+  ],
+  "wifi": [
+    {
+      "setting": "off",
+      "actual": "Power save: off",
+      "ping_status": 0,
+      "packet_loss_percent": 0.0,
+      "rtt_min_avg_max_mdev_ms": [
+        0.994,
+        7.957,
+        202.411,
+        36.109
+      ],
+      "cpu_busy_percent": 12.093710426340232,
+      "watts": {
+        "package": 6.65667957547494,
+        "psys": 14.397922298155517
+      }
+    },
+    {
+      "setting": "on",
+      "actual": "Power save: on",
+      "ping_status": 0,
+      "packet_loss_percent": 0.0,
+      "rtt_min_avg_max_mdev_ms": [
+        1.074,
+        2.573,
+        16.382,
+        2.651
+      ],
+      "cpu_busy_percent": 10.83192567567568,
+      "watts": {
+        "package": 4.8861286747051915,
+        "psys": 12.190285672341092
+      }
+    },
+    {
+      "setting": "on",
+      "actual": "Power save: on",
+      "ping_status": 0,
+      "packet_loss_percent": 0.0,
+      "rtt_min_avg_max_mdev_ms": [
+        1.081,
+        2.23,
+        3.016,
+        0.672
+      ],
+      "cpu_busy_percent": 12.112259970457906,
+      "watts": {
+        "package": 5.529621820540568,
+        "psys": 13.024588400290554
+      }
+    },
+    {
+      "setting": "off",
+      "actual": "Power save: off",
+      "ping_status": 0,
+      "packet_loss_percent": 0.0,
+      "rtt_min_avg_max_mdev_ms": [
+        1.003,
+        1.422,
+        6.74,
+        1.031
+      ],
+      "cpu_busy_percent": 11.303612930488061,
+      "watts": {
+        "package": 5.1608969846815524,
+        "psys": 12.652105142733406
+      }
+    }
+  ],
+  "ethernet_restored": "on",
+  "wifi_restored": "Power save: off"
+}

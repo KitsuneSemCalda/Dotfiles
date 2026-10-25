@@ -1,0 +1,163 @@
+#!/usr/bin/env python3
+"""Apply the Samsung session defaults; fail when a present feature cannot comply."""
+import json
+import os
+from pathlib import Path
+import subprocess
+import time
+
+REPORT = Path('/var/lib/dotfiles-samsung/hardware.json')
+BOOT_ID = Path('/proc/sys/kernel/random/boot_id')
+BATTERY = Path('/sys/class/power_supply/BAT1/charge_control_end_threshold')
+PROC = Path('/proc')
+FIFINE = 'alsa_input.usb-MV-SILICON_fifine_Microphone_20190808-00.mono-fallback'
+SERVICES = ('pipewire.service', 'pipewire-pulse.service', 'wireplumber.service')
+
+
+def command(*args):
+    return subprocess.check_output(args, text=True, stderr=subprocess.STDOUT, timeout=30).strip()
+
+
+def realtime_ready():
+    for service in SERVICES:
+        pid = command('systemctl', '--user', 'show', service, '-p', 'MainPID', '--value')
+        found = False
+        for task in (PROC / pid / 'task').glob('*'):
+            try:
+                if task.joinpath('comm').read_text().strip().startswith('data-loop'):
+                    policy = os.sched_getscheduler(int(task.name)) & ~os.SCHED_RESET_ON_FORK
+                    found |= (policy in (os.SCHED_FIFO, os.SCHED_RR)
+                              and os.sched_getparam(int(task.name)).sched_priority > 0)
+            except (FileNotFoundError, ProcessLookupError):
+                continue
+        if not found:
+            return False
+    return True
+
+
+def wait_for(check, label):
+    for _ in range(40):
+        try:
+            if check():
+                return
+        except (OSError, subprocess.SubprocessError):
+            pass
+        time.sleep(.25)
+    raise RuntimeError(f'Timed out waiting for {label}')
+
+
+def audio_nodes():
+    return json.loads(command('pw-dump'))
+
+
+def metadata_ready():
+    return any(o.get('props', {}).get('metadata.name') == 'default' or
+               o.get('info', {}).get('props', {}).get('metadata.name') == 'default'
+               for o in audio_nodes())
+
+
+def select_microphone():
+    nodes = [o for o in audio_nodes() if o.get('type') == 'PipeWire:Interface:Node'
+             and o.get('info', {}).get('props', {}).get('media.class') == 'Audio/Source'
+             and 'fifine' in o.get('info', {}).get('props', {}).get('node.name', '').lower()]
+    if len(nodes) > 1:
+        raise RuntimeError('Multiple Fifine sources; refusing an ambiguous default')
+    name = nodes[0]['info']['props']['node.name'] if nodes else FIFINE
+    # WirePlumber stores configured names even while the preferred node is absent.
+    command('pw-metadata', '-n', 'default', '0', 'default.configured.audio.source',
+            json.dumps({'name': name}), 'Spa:String:JSON')
+    def stored():
+        return any(m.get('key') == 'default.configured.audio.source'
+                   and m.get('value', {}).get('name') == name
+                   for obj in audio_nodes() for m in obj.get('metadata', []))
+    wait_for(stored, 'remembered Fifine preference')
+    if nodes:
+        wait_for(lambda: command('pactl', 'get-default-source') == name, 'Fifine default source')
+    else:
+        print('PENDING: Fifine disconnected; preferred name stored for its next connection.')
+
+
+def apply_profiles():
+    power = command('busctl', 'get-property', 'org.freedesktop.UPower',
+                    '/org/freedesktop/UPower', 'org.freedesktop.UPower', 'OnBattery')
+    if power not in ('b true', 'b false'):
+        raise RuntimeError('Cannot determine AC/battery state')
+    expected = 'power-saver' if power == 'b true' else 'balanced'
+    # Each set applies immediately; configure the inactive supply first.
+    pairs = [('battery', 'power-saver'), ('ac', 'balanced')]
+    if power == 'b true':
+        pairs.reverse()
+    for supply, profile in pairs:
+        command('omarchy', 'powerprofiles', 'set', supply, profile)
+    if command('powerprofilesctl', 'get') != expected:
+        raise RuntimeError('Active power profile differs from the supply policy')
+    print(f'Energy policy verified: AC balanced, battery power-saver; active {expected}')
+
+
+def verify_hardware():
+    data = json.loads(REPORT.read_text())
+    if data['boot_id'] != BOOT_ID.read_text().strip():
+        raise RuntimeError('Hardware verification report is from a previous boot')
+    if BATTERY.read_text().strip() != '80':
+        raise RuntimeError('Battery charge threshold drifted from 80%')
+    if data['huc_pending_reboot']:
+        print('PENDING: HuC needs reboot; no encoder success is claimed.')
+        return
+    command('ffmpeg', '-hide_banner', '-loglevel', 'error',
+            '-vaapi_device', '/dev/dri/renderD128', '-f', 'lavfi', '-i',
+            'testsrc2=size=1280x720:rate=30', '-frames:v', '90',
+            '-vf', 'format=nv12,hwupload', '-c:v', 'h264_vaapi', '-low_power', '1',
+            '-b:v', '4M', '-maxrate', '4M', '-bufsize', '8M', '-f', 'null', '-')
+    print('HuC low-power bitrate-control encoder test passed')
+
+
+def verify_displays():
+    command('systemctl', '--user', 'start', 'dotfiles-clamshell-recover.service')
+    monitors = json.loads(command('hyprctl', 'monitors', 'all', '-j'))
+    identities = ('RGT 0x1352 0x01010101', 'Samsung Electric Company SMB2030N HXOZB03691')
+    for monitor in monitors:
+        if monitor.get('description') in identities and not monitor.get('disabled', False):
+            expected = (monitor['width'] == 1600 and monitor['height'] == 900
+                        and abs(monitor['refreshRate'] - 60) < .2
+                        and monitor['scale'] == 1
+                        and monitor.get('colorManagementPreset') == 'srgb')
+            if not expected:
+                raise RuntimeError('Desk monitor differs from the tested 1600x900@60 sRGB policy')
+    external = any(not m.get('disabled', False) and m['width'] > 0 and m['height'] > 0
+                   and not m['name'].startswith(('eDP-', 'LVDS-', 'DSI-')) for m in monitors)
+    closed = any('closed' in p.read_text() for p in Path('/proc/acpi/button/lid').glob('*/state'))
+    if closed and external and any(not m.get('disabled', False)
+                                   and m['name'].startswith(('eDP-', 'LVDS-', 'DSI-')) for m in monitors):
+        raise RuntimeError('Internal panel is still enabled with lid closed and an active external display')
+
+
+def main():
+    if Path('/sys/class/dmi/id/board_name').read_text().strip() != 'NP550XDA-KF2BR':
+        raise RuntimeError('Unsupported board')
+    verify_hardware()
+    apply_profiles()
+    restore_capture = subprocess.run(
+        ['systemctl', '--user', 'is-active', '--quiet', 'capture-audio.service']).returncode == 0
+    try:
+        if not realtime_ready():
+            if restore_capture:
+                command('systemctl', '--user', 'stop', 'capture-audio.service')
+            command('systemctl', '--user', 'restart', *SERVICES)
+        wait_for(realtime_ready, 'realtime audio processing threads')
+        wait_for(metadata_ready, 'WirePlumber default metadata')
+        # Metadata can appear before ALSA discovery. Wait for a source on this laptop.
+        wait_for(lambda: any(o.get('info', {}).get('props', {}).get('media.class') == 'Audio/Source'
+                             for o in audio_nodes()), 'ALSA source discovery')
+        select_microphone()
+    finally:
+        if restore_capture:
+            command('systemctl', '--user', 'restart', 'capture-audio.service')
+    verify_displays()
+    errors = command('hyprctl', 'configerrors')
+    if errors:
+        raise RuntimeError(errors)
+    print('Samsung session verified: realtime audio and preferred microphone policy applied')
+
+
+if __name__ == '__main__':
+    main()

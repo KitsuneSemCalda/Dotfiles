@@ -6,5 +6,5 @@ ConditionEnvironment=HYPRLAND_INSTANCE_SIGNATURE
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/flock --nonblock --conflict-exit-code 0 %t/omarchy-monitor-clamshell.lock %h/.local/bin/clamshell-recover
+ExecStart=/usr/bin/flock --wait 10 %t/omarchy-monitor-clamshell.lock %h/.local/bin/clamshell-recover
 TimeoutStartSec=20

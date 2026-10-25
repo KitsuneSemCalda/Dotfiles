@@ -57,6 +57,22 @@ class Recovery(unittest.TestCase):
             run(MONITORS=monitor, LID_STATUS='0')
             self.assertEqual(log.read_text(), actions + actions)
 
+            # A successful stock helper with a stale toggle must not hide drift.
+            drift = monitor[:-1] + ',{"name":"eDP-1","disabled":false}]'
+            log.write_text('')
+            result = run(MONITORS=drift, LID_STATUS='0')
+            self.assertNotEqual(result.returncode, 0)  # Fake output never changes.
+            self.assertIn('eval hl.monitor({ output = "eDP-1", disabled = true })',
+                          log.read_text())
+            self.assertIn('remains enabled', result.stderr)
+            log.write_text('')
+            self.assertEqual(run(MONITORS=drift, LID_STATUS='1').returncode, 0)
+            self.assertNotIn('eval', log.read_text())  # Open lid permits two screens.
+            log.write_text('')
+            internal_only = '[{"name":"eDP-1","disabled":false}]'
+            self.assertEqual(run(MONITORS=internal_only, LID_STATUS='0').returncode, 0)
+            self.assertNotIn('eval', log.read_text())  # Never remove the only output.
+
 
 if __name__ == '__main__':
     unittest.main()

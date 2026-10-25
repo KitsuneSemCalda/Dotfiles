@@ -1,0 +1,14 @@
+[Unit]
+Description=Enforce and verify SamsungBook battery and hardware policy
+After=systemd-modules-load.service thermald.service power-profiles-daemon.service
+Wants=thermald.service power-profiles-daemon.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/usr/bin/modprobe samsung_galaxybook
+ExecStart=/usr/local/libexec/dotfiles-samsung-hardware
+TimeoutStartSec=45
+
+[Install]
+WantedBy=multi-user.target

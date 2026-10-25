@@ -1,0 +1,26 @@
+#!/usr/bin/env python3
+"""Synthetic QSV encode + VA-API decode smoke test; no screen/audio capture."""
+from pathlib import Path
+import subprocess
+import tempfile
+
+
+def main():
+    if Path('/sys/class/dmi/id/board_name').read_text().strip() != 'NP550XDA-KF2BR':
+        raise SystemExit('Unsupported board')
+    with tempfile.TemporaryDirectory(prefix='samsung-media-') as directory:
+        sample = str(Path(directory) / 'synthetic.mp4')
+        common = ['ffmpeg', '-hide_banner', '-loglevel', 'error', '-nostdin']
+        subprocess.run(common + ['-init_hw_device', 'qsv=hw', '-filter_hw_device', 'hw',
+            '-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=30', '-frames:v', '90',
+            '-vf', 'format=nv12,hwupload=extra_hw_frames=64', '-c:v', 'h264_qsv',
+            '-global_quality', '24', sample], check=True, timeout=45)
+        subprocess.run(common + ['-hwaccel', 'vaapi', '-hwaccel_device', '/dev/dri/renderD128',
+            '-hwaccel_output_format', 'vaapi', '-i', sample,
+            '-vf', 'hwdownload,format=nv12', '-f', 'null', '-'], check=True, timeout=45)
+    print('PASS: QSV H.264 CQP encoding and VA-API decoding (90 synthetic 720p frames).')
+    print('This does not validate OBS capture, streaming bitrate control, or game FPS.')
+
+
+if __name__ == '__main__':
+    main()

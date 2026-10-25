@@ -35,9 +35,11 @@ The power profile is left to Omarchy's own
 
 The desk's Samsung SMB2030N (serial HXOZB03691) has an explicit rule in
 `home/.config/hypr/monitors.lua`, matched by its description rather than its HDMI
-port: 1600×900 at 60 Hz, scale 1, SDR sRGB, 8-bit output and VRR off. Its EDID
-lists 1600×900 as preferred even though it also accepts 1080p signals. Other
-external monitors retain the generic preferred-mode rule. This establishes the
+port: 1600×900 at 60 Hz, scale 1, SDR sRGB, 8-bit output and VRR off. The current
+HDMI-to-VGA adapter replaces that identity with `RGT 0x1352 0x01010101` and
+advertises 1024×768 as preferred; a second rule keeps the Samsung's native mode
+for this adapter. Revisit that rule if the adapter is moved to another panel.
+Other external monitors retain the generic preferred-mode rule. This establishes the
 display configuration; it is not a measured color calibration. No measured ICC
 profile is installed, and brightness/contrast could not be controlled through
 DDC/CI on the tested connection.
@@ -65,8 +67,13 @@ The installer reloads logind to apply settings. Check effective settings with
 `systemd-analyze cat-config systemd/logind.conf`.
 
 `--clamshell` also enables the user timer `dotfiles-clamshell-recover.timer`.
-Every five seconds it invokes Omarchy's own clamshell reconciliation under the
-same lock as the stock monitor watcher. This recovers missed lid/display state
+One second after session activation, then every five seconds, it invokes Omarchy's own clamshell reconciliation under the
+same lock as the stock monitor watcher, waiting up to ten seconds for it. The
+installer also runs recovery immediately. With the lid closed and an external
+display active, it checks the actual Hyprland outputs and explicitly disables
+any internal panel still enabled, even if the saved toggle already exists. A
+panel that remains enabled makes the service fail visibly and retry on the next
+tick. This recovers missed lid/display state
 changes even if that watcher exits. Each run is limited to 20 seconds, and the
 timer stops with the graphical session. If an enabled output has no valid video
 mode, it also retries a Hyprland reload at most once per minute, respecting
@@ -79,6 +86,14 @@ Check it with `systemctl --user status dotfiles-clamshell-recover.timer` and
 `journalctl --user -u dotfiles-clamshell-recover.service`.
 
 ## Connected hardware setup
+
+The [Samsung/Linux hardware investigation](docs/samsung-linux-research.md)
+records verified capabilities, balanced AC and power-saver battery profiles,
+temporary performance holds, the tested Tiger Lake HuC workaround, and its
+post-reboot check and reversal. It also records battery wear and why encrypted
+root TRIM needs a separate decision. The deeper follow-up includes SMBIOS memory
+readings, CPU/Wi-Fi comparisons and a reversible Ethernet runtime-PM pilot
+with archived procedures and measurements.
 
 Install the setup tools and capture a hardware inventory:
 
@@ -111,6 +126,9 @@ GTK/Qt composition modules. Log out and back in after installation, then test
 
 ## EK75 keyboard and Fifine K688 microphone
 
+`--calibrate` installs RTKit so PipeWire can request realtime scheduling through
+the normal D-Bus service, without custom realtime limits.
+
 The internal notebook keyboard uses `br/abnt2`; both observed EK75 interfaces
 use `us/intl` through `home/.config/hypr/input.lua`. `--ek75-knob` suppresses
 the faulty volume/mute knob events on the EK75's secondary USB interface, and
@@ -121,8 +139,11 @@ Connect the Fifine K688 over USB, then run `select-k688-microphone`. It finds
 the live Fifine input node and makes it the default recording source through
 WirePlumber. If the recording buses were already started, run
 `systemctl --user restart capture-audio.service` so `capture_microphone` follows
-the K688 instead of the earlier source. The K688 was not connected during this
-setup, so its input level and mute state still need a recording check.
+the K688 instead of the earlier source. A later connected-device check confirmed
+mono capture, unmuted input and a
+-9.36 dBFS peak in a short authorized level test. The
+[peripheral investigation](docs/peripherals-linux-research.md) records the
+HDMI-to-VGA adapter rule, microphone limits and realtime audio scheduling fix.
 
 The customized `kitsuneforgering.audio` panel hides the `capture_*` buses and
 their `loopback-*` streams from **the Omarchy audio panel only**. They remain
@@ -287,7 +308,7 @@ when `--target` points elsewhere for testing.
 
 The steps can also be run separately with `--fonts`, `--apps`,
 `--bookmarks`, `--plugin`, `--omastore`, `--theme`, `--openrgb`, `--ek75-knob`,
-`--clamshell`, `--calibrate`, `--maintenance`, `--ai-memory`, `--ai-jail`,
+`--clamshell`, `--calibrate`, `--hardware`, `--maintenance`, `--ai-memory`, `--ai-jail`,
 or `--home-backup`.
 `--apps` uses the official repositories for
 PrismLauncher and the AUR packages for Bitwarden, AppFlowy, and CurseForge,
@@ -665,3 +686,56 @@ A instalação normal prepara Vulkan, OpenCL, Level Zero e VA-API e executa
 `check-ai-acceleration` para verificar acesso e descoberta da GPU.
 Os modelos ficam em `~/.ai/models`, mantidos por `setup-ai-models`.
 Veja [dependências, verificações e limites de suporte](docs/ai-acceleration.md).
+
+## Samsung hardware enforcement
+
+`--hardware --backup` installs and reapplies the Samsung policy; `--all` includes
+it automatically. It requires board NP550XDA-KF2BR and implies `--clamshell`.
+The system service checks battery charge limit 80%, Ethernet runtime PM auto,
+and enabled/running thermald and power-profiles-daemon at installation and boot.
+The installer persists i915 enable_guc=2 and rebuilds the boot image.
+
+The graphical-session service reapplies AC balanced / battery power-saver,
+checks realtime audio threads, remembers the Fifine default microphone, and
+checks the known external display at 1600x900@60, scale 1, sRGB. The clamshell
+timer reconciles lid/display state every five seconds. Policy mismatches fail
+the applicable service instead of reporting success. These are boot/login
+defaults, not continuous enforcement of every knob; temporary performance
+holds remain possible. Disconnected microphones and HuC awaiting reboot are
+reported as PENDING. Once the configured driver option is active, a synthetic
+low-power bitrate encode checks HuC functionality.
+
+Check `systemctl status dotfiles-samsung-hardware.service` and
+`systemctl --user status dotfiles-samsung-session.service
+dotfiles-clamshell-recover.timer`. The first live application and session checks
+passed; HuC still requires reboot. Physical Ethernet reconnect and suspend/resume
+validation remain outstanding. The complete `--all` path was dry-run checked;
+only the hardware and clamshell stages were reapplied live for this change.
+
+`--backup` preserves conflicting installed home files; it is not a system
+snapshot. `--restore` does not roll back packages, root services or boot images.
+The HuC and Ethernet helper scripts provide their own `--restore` operations.
+
+Minecraft's JACK client is covered by the managed PipeWire drop-in
+`~/.config/pipewire/jack.conf.d/60-java-audio.conf`. Java client loops use normal
+scheduling; the audio server retains realtime scheduling. This addresses the
+kernel SIGKILL reproduced on a Minecraft audio thread after enabling RTKit.
+The rule applies to Java JACK clients and requires restarting the game. No
+Prism preferences, bundled libraries, mods or worlds are replaced.
+
+## Gaming, content creation and playback
+
+`--hardware` (also in `--all`) now ensures mpv, Intel VPL/Quick Sync runtime and
+firmware, then runs `check-samsung-media`: 90 synthetic frames encoded with QSV
+and decoded with VA-API. A failed check aborts installation. mpv uses tested
+VA-API decoding with software fallback. Existing OBS profiles remain Quick Sync,
+48 kHz and MKV; HuC bitrate-control validation still needs the pending reboot.
+
+For an explicit foreground workload, use `samsung-workload gaming COMMAND ...`
+or `samsung-workload content COMMAND ...`. On AC at launch, performance is held
+until that command exits; on battery it keeps the existing profile. A later
+unplug does not cancel the hold. Launchers that hand off immediately do not keep
+it alive. This is optional and is not a claim of improved game frame times.
+
+[Research, tests and rejected tweaks](docs/gaming-media-research.md) distinguish
+local functional validation from performance/latency tests still pending.
