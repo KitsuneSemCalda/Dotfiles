@@ -385,3 +385,126 @@ Stopping decision: this pass established one additional driver-supported,
 reversible pilot and rejected automatic deployment of the CPU and Wi-Fi knobs.
 Further confidence now depends on a cable/reboot check or controlled application
 and battery workloads, rather than collecting more undocumented register writes.
+
+
+## ArchWiki and Gentoo follow-up: boot policy verification
+
+Follow-up performed on 2026-10-25, with the current system running kernel
+7.2.8-9-omarchy. ArchWiki article text was supplied by the user after automated
+access failed. The Gentoo power guides were readable through the research tool,
+whose cached copies were labelled as crawled about 1.3 years ago; their current
+revision dates were not verified. Gentoo Zram was blocked by robots.txt and the
+full-disk encryption page was unavailable. Indexed excerpts were discovery aids,
+not sufficient evidence for additional changes.
+
+### Applied repair and observed results
+
+The user session service failed at boot because hardware.json belonged to the
+previous boot. The enabled system hardware service had no execution recorded in
+this boot. The available journal does not establish why it was not dispatched;
+a race is a possible failure mode, not a confirmed explanation of that absence.
+
+The system hardware unit now orders itself before systemd-user-sessions.service.
+The session helper waits up to 45 seconds for an atomic report matching the
+current boot ID, then runs its existing hardware checks. Missing, malformed or
+stale reports never count as successful verification. Its service timeout is now
+150 seconds to accommodate the wait and existing checks. A genuinely failed
+system policy still produces a visible failure; the session does not escalate
+privileges or silently accept an old report.
+
+The updated files were installed locally. Starting the system hardware service
+and restarting the session service both succeeded. The real session run verified
+80% battery charge threshold, Ethernet runtime control auto, AC balanced/battery
+power-saver policy, realtime audio, microphone preference and display checks.
+The 90-frame VA-API low-power bitrate-control encoding check passed with HuC.
+This validates that encoding path, not OBS quality or a throughput improvement.
+Ten hardware-enforcement regression tests passed, including delayed, malformed
+and stale boot reports; systemd unit verification and git diff checks passed.
+The new startup ordering still needs observation after a physical reboot.
+
+User-file backups are in ~/.local/state/dotfiles/hardware-startup-1792972329.
+To roll back, restore those two user files and the previous system unit from
+Git, reload both systemd managers, and restart the hardware and session units.
+No reboot or firmware change was performed.
+
+### Research decision
+
+[Gentoo Power management/Guide](https://wiki.gentoo.org/wiki/Power_management/Guide)
+identifies thermald and power-profiles-daemon as available mechanisms and notes
+thermald adaptive operation. Both are already active here; the installed thermald
+unit includes --adaptive. No extra power-management daemon was installed.
+[Gentoo Power management/Processor](https://wiki.gentoo.org/wiki/Power_management/Processor)
+distinguishes Intel P-state control modes. Its recommendation of a performance
+default is not a local sustained-workload benchmark. The
+[kernel Intel P-state documentation](https://docs.kernel.org/admin-guide/pm/intel_pstate.html)
+is the mechanism reference for this machine's active HWP mode.
+
+Keep the measured baseline: i915 with HuC, dynamic Intel P-state control, turbo,
+zstd zram ahead of disk swap, and zswap disabled. Do not deploy the ArchWiki
+Gaming sysctl bundle globally, disable THP/SMT/security mitigations, force a
+clocksource, or enable GuC submission merely because an example shows it.
+
+TRIM remains conditional: the NVMe supports discard but the active root mapper
+advertises none. Maintenance already schedules fstrim, so another timer alone
+would not repair the path. Enabling dm-crypt discard exposes allocation
+information; the [kernel documentation](https://docs.kernel.org/admin-guide/device-mapper/dm-crypt.html)
+explains that tradeoff. No LUKS header or boot parameter was changed.
+Disabling dm-crypt read/write workqueues remains an unvalidated benchmark
+candidate, not an applied recommendation.
+
+Performance acceptance requires alternating baseline/candidate runs, warm-up,
+multiple repetitions and sustained thermal observation with the same workload
+and output quality. Compare LLM TPS/TTFT, ComfyUI generation time, or OBS missed
+frames as applicable. No performance percentage is claimed from this repair.
+
+
+## Completion checklist and opt-in periodic TRIM
+
+On 2026-10-25 the user explicitly accepted the allocation-information disclosure
+of dm-crypt discard and requested periodic TRIM. A live cryptsetup refresh was
+attempted with no passphrase input and failed because LUKS authentication was
+required. No LUKS metadata flags were changed. The original fstab was saved.
+The final implementation instead adds allow-discards to the existing encrypt-hook
+cryptdevice boot option in /etc/default/limine and adds nodiscard to the root
+filesystem's Btrfs fstab entries. Other filesystems and cryptdevice options are
+preserved. limine-mkinitcpio successfully rebuilt the UKI. Activation and first
+successful root fstrim remain pending reboot; current lsblk still advertises no
+discard on the already-open root mapping. No successful trim is claimed yet.
+
+The board-scoped installer is scripts/enable-root-trim.py. It uses root-only
+state in /var/lib/dotfiles-root-trim/original.json and refuses to overwrite
+configuration that has drifted from its original or installed versions.
+To undo the boot/fstab changes, run from the Omarchy directory:
+
+```sh
+sudo python3 -I scripts/enable-root-trim.py --restore
+```
+
+Restore regenerates the UKI; changing the running dm-crypt mapping still requires
+reboot. The helper does not clear TPM state, rewrite LUKS keyslots, or change
+workqueue flags. Dotfiles maintenance already owns periodic fstrim; no second
+timer was enabled. Root TRIM tests cover option preservation, idempotence,
+rejection of ambiguous boot configuration, and scoped filesystem edits.
+Hardware-policy and root-TRIM tests are now included in installer CI.
+
+| Item | Current evidence | Remaining acceptance check |
+| --- | --- | --- |
+| Hardware/session boot policy | Both active; current-boot report and session checks passed | Reboot and inspect both service journals |
+| Periodic TRIM | Boot config and fstab prepared; UKI rebuild passed | After reboot, lsblk -D must expose discard on root; sudo fstrim -v / must succeed |
+| GPU APIs | Local check-ai-acceleration passed DRM, Vulkan, OpenCL, Level Zero, VA-API | Actual application GPU backend and representative workload |
+| Clamshell | Recovery regression tests passed; Hyprland configerrors empty | Boot lid-closed with external screen; unplug/replug, open lid, suspend/resume |
+| Energy | thermald adaptive and power-profiles-daemon active | AC/battery transition; sustained balanced versus performance comparison |
+| OBS | Synthetic low-power VA-API encoding passed | Real capture with OmaTuber, output quality and missed frames |
+| AI tuning | No model was loaded when lms ps was queried (query woke the service) | Fixed model/workflow, warm-up, repeated sustained benchmarks |
+| OpenGL 32-bit | lib32-mesa absent; Vulkan 32-bit installed | Needed for 32-bit OpenGL games, not native 64-bit Prism; install during a coherent full update |
+| Package consistency | pacman dependency simulation rejected libelf 0.197 versus installed elfutils requiring libelf 0.196 | Resolve in a full supported system update; no forced or partial transaction |
+| TPM measured boot | Three failed system units report missing NvPCR data; TPM detected | Diagnose NvPCR provisioning separately; do not hide failures by masking units or clearing TPM |
+
+The 32-bit package check used pacman -Sp only; no package was installed. The
+[ArchWiki Intel graphics installation section](https://wiki.archlinux.org/title/Intel_graphics)
+requires lib32-mesa for 32-bit OpenGL applications. Its absence is conditional
+compatibility coverage, not evidence of a slowdown in the user's current 64-bit
+applications. The [systemd TPM setup manual](https://man.archlinux.org/man/systemd-tpm2-setup.service.8.en)
+distinguishes SRK setup from NvPCR initialization. Local logs show successful SRK
+public-key storage followed by NvPCR failures; this does not establish a broken
+TPM or justify clearing it. These are outstanding diagnoses, not applied tweaks.

@@ -2,6 +2,7 @@
 Description=Enforce and verify SamsungBook battery and hardware policy
 After=systemd-modules-load.service thermald.service power-profiles-daemon.service
 Wants=thermald.service power-profiles-daemon.service
+Before=systemd-user-sessions.service
 
 [Service]
 Type=oneshot

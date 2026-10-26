@@ -13,7 +13,11 @@ jobs:
       - name: Check Perl syntax
         run: perl -c SamsungBook-Np550xda/Omarchy/omarchy.pl
       - name: Check hardware setup rollback
-        run: python3 SamsungBook-Np550xda/Omarchy/tests/calibrate_devices.py
+        run: |
+          python3 SamsungBook-Np550xda/Omarchy/tests/calibrate_devices.py
+          python3 SamsungBook-Np550xda/Omarchy/tests/hardware_enforcement.py
+          python3 SamsungBook-Np550xda/Omarchy/tests/samsung_workload.py
+          python3 SamsungBook-Np550xda/Omarchy/tests/root_trim.py
       - name: Check clamshell recovery and reload limits
         run: |
           sudo apt-get update -qq

@@ -9,7 +9,7 @@ ConditionEnvironment=HYPRLAND_INSTANCE_SIGNATURE
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=%h/.local/bin/enforce-samsung-session
-TimeoutStartSec=90
+TimeoutStartSec=150
 
 [Install]
 WantedBy=graphical-session.target

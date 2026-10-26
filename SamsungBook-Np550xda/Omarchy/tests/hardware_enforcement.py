@@ -26,6 +26,23 @@ session = load('samsung_session', ROOT / 'home/.local/bin/enforce-samsung-sessio
 
 
 class HardwarePolicy(unittest.TestCase):
+    def test_session_waits_for_current_boot_report(self):
+        report = Mock()
+        report.read_text.side_effect = [FileNotFoundError(), '{broken',
+                                      '{"boot_id": "old"}', '{"boot_id": "new"}']
+        boot = Mock(); boot.read_text.return_value = 'new\n'
+        with patch.object(session, 'REPORT', report), patch.object(session, 'BOOT_ID', boot), \
+                patch.object(session.time, 'sleep') as sleep:
+            session.wait_for_hardware()
+            self.assertEqual(sleep.call_count, 3)
+
+    def test_session_never_accepts_stale_report_after_timeout(self):
+        report = Mock(); report.read_text.return_value = '{"boot_id": "old"}'
+        boot = Mock(); boot.read_text.return_value = 'new'
+        with patch.object(session, 'REPORT', report), patch.object(session, 'BOOT_ID', boot), \
+                self.assertRaisesRegex(RuntimeError, 'current-boot hardware report'):
+            session.wait_for_hardware(timeout=0)
+
     def test_rtkit_reset_on_fork_flag_is_realtime_but_timesharing_is_not(self):
         with tempfile.TemporaryDirectory() as tmp:
             proc = Path(tmp); task = proc / '123/task/456'; task.mkdir(parents=True)

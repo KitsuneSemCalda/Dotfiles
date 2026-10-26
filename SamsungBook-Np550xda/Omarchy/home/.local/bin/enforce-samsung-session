@@ -111,6 +111,21 @@ def verify_hardware():
     print('HuC low-power bitrate-control encoder test passed')
 
 
+def wait_for_hardware(timeout=45):
+    """Wait for this boot's atomic report, without accepting stale verification."""
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            if json.loads(REPORT.read_text()).get('boot_id') == BOOT_ID.read_text().strip():
+                return
+        except (OSError, ValueError):
+            pass
+        if time.monotonic() >= deadline:
+            raise RuntimeError('No current-boot hardware report after 45s; check '
+                               'systemctl status dotfiles-samsung-hardware.service')
+        time.sleep(.25)
+
+
 def verify_displays():
     command('systemctl', '--user', 'start', 'dotfiles-clamshell-recover.service')
     monitors = json.loads(command('hyprctl', 'monitors', 'all', '-j'))
@@ -134,6 +149,7 @@ def verify_displays():
 def main():
     if Path('/sys/class/dmi/id/board_name').read_text().strip() != 'NP550XDA-KF2BR':
         raise RuntimeError('Unsupported board')
+    wait_for_hardware()
     verify_hardware()
     apply_profiles()
     restore_capture = subprocess.run(
