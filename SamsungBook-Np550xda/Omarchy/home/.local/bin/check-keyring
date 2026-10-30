@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""Check that Electron apps can store secrets in GNOME Keyring under Hyprland."""
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+
+FLAG = '--password-store=gnome-libsecret'
+
+
+def run(command):
+    try:
+        p = subprocess.run(command, text=True, capture_output=True, timeout=10)
+        return p.returncode == 0, p.stdout.strip() or p.stderr.strip()
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, str(exc)
+
+
+def secret_service():
+    ok, out = run(['busctl', '--user', 'get-property', 'org.freedesktop.secrets',
+                   '/org/freedesktop/secrets/aliases/default',
+                   'org.freedesktop.Secret.Collection', 'Locked'])
+    if not ok:
+        return False, f'Secret Service has no default collection ({out})'
+    if out != 'b false':
+        return False, 'default keyring is locked; unlock it or sign in through the display manager'
+    return True, 'Secret Service is running and the default keyring is unlocked'
+
+
+def claude_launcher():
+    launcher = shutil.which('claude-desktop')
+    if not launcher:
+        return None, 'Claude Desktop is not installed'
+    if os.path.islink(launcher) or FLAG not in Path(launcher).read_text(errors='replace'):
+        return False, f'{launcher} does not add {FLAG}; reinstall the dotfiles recipe'
+    return True, f'{launcher} selects GNOME Keyring'
+
+
+def flags_file(name, command):
+    if not shutil.which(command):
+        return None, f'{command} is not installed'
+    path = Path(os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')) / name
+    if not path.is_file() or FLAG not in path.read_text().split():
+        return False, f'{path} does not contain {FLAG}'
+    return True, f'{path} selects GNOME Keyring'
+
+
+def main():
+    checks = [('Secret Service', secret_service()), ('Claude Desktop', claude_launcher()),
+              ('ChatGPT', flags_file('chatgpt-flags.conf', 'chatgpt')),
+              ('Electron', flags_file('electron-flags.conf', 'electron43'))]
+    failed = False
+    for label, (ok, detail) in checks:
+        status = 'SKIP' if ok is None else 'PASS' if ok else 'FAIL'
+        failed |= ok is False
+        print(f'{status}: {label}: {detail}')
+    sys.exit(1 if failed else 0)
+
+
+if __name__ == '__main__':
+    main()

@@ -73,7 +73,29 @@ try {
     Assert $failed 'Restore did not fail on unreadable backup file'
     Assert ((Get-Content $dest -Raw) -eq $beforeLocked) 'Restore touched destination despite unreadable backup file'
 
-    Write-Output 'OK: copies, removed checkout, reinstall, conflicts, restore, missing/unreadable backup safety'
+    # Every installed item must come back from a backup to its own path.
+    $state = Get-Content -LiteralPath (Join-Path $target '.local\state\dotfiles\installed-windows.json') -Raw | ConvertFrom-Json
+    $edits = @{}
+    foreach ($path in $state.PSObject.Properties.Name) {
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        $item = Get-Item -LiteralPath $path -Force
+        if ($item.PSIsContainer) {
+            $item = Get-ChildItem -LiteralPath $path -Recurse -File -Force | Sort-Object FullName | Select-Object -First 1
+        }
+        Set-Content -LiteralPath $item.FullName -Value "edit of $path"
+        $edits[$item.FullName] = Get-Content -LiteralPath $item.FullName -Raw
+    }
+    Assert ($edits.Count -gt 1) 'No installed items to round-trip'
+    & $installer -Target $target -Backup
+    foreach ($file in $edits.Keys) {
+        Assert ((Get-Content -LiteralPath $file -Raw) -ne $edits[$file]) "Backup install kept the edit in $file"
+    }
+    & $installer -Target $target -Restore
+    foreach ($file in $edits.Keys) {
+        Assert ((Get-Content -LiteralPath $file -Raw) -eq $edits[$file]) "Restore did not return $file"
+    }
+
+    Write-Output 'OK: copies, removed checkout, reinstall, conflicts, restore of every item, missing/unreadable backup safety'
 } finally {
     Remove-Item -LiteralPath $root -Recurse -Force
 }

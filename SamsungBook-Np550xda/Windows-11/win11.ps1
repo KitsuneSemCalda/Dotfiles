@@ -263,7 +263,8 @@ function Restore-Backups {
         $candidateManifest = Join-Path $candidate.FullName 'manifest.json'
         if (-not (Test-Path -LiteralPath $candidateManifest)) { continue }
         try {
-            $entries = @(Get-Content -LiteralPath $candidateManifest -Raw | ConvertFrom-Json)
+            # Windows PowerShell 5.1 emits a JSON array as one object; unroll it.
+            $entries = @(Get-Content -LiteralPath $candidateManifest -Raw | ConvertFrom-Json | ForEach-Object { $_ })
             $valid = $entries.Count -gt 0
             foreach ($entry in $entries) {
                 if (-not $entry -or -not $entry.Destination -or -not $entry.RelativePath) {
