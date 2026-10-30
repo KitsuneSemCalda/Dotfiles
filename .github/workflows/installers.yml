@@ -34,6 +34,8 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y libarchive-tools
           python3 SamsungBook-Np550xda/Omarchy/tests/claude_desktop_recipe.py
+      - name: Check keyring diagnostics
+        run: python3 SamsungBook-Np550xda/Omarchy/tests/check_keyring.py
       - name: Test OmaTuber installation and OBS integration
         run: python3 SamsungBook-Np550xda/Omarchy/tests/omatuber.py
       - name: Test ZIP backups and annual consolidation
