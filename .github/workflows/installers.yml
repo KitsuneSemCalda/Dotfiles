@@ -36,6 +36,8 @@ jobs:
           python3 SamsungBook-Np550xda/Omarchy/tests/claude_desktop_recipe.py
       - name: Check keyring diagnostics
         run: python3 SamsungBook-Np550xda/Omarchy/tests/check_keyring.py
+      - name: Check Claude Desktop version comparison
+        run: python3 SamsungBook-Np550xda/Omarchy/tests/claude_desktop_version.py
       - name: Lint shell scripts
         run: |
           scripts=()

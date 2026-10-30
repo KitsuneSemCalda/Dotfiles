@@ -1,0 +1,15 @@
+name: Claude Desktop version
+on:
+  schedule:
+    - cron: '0 12 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Compare the recipe with Anthropic's apt repository
+        run: python3 SamsungBook-Np550xda/Omarchy/scripts/check-claude-desktop-version.py
