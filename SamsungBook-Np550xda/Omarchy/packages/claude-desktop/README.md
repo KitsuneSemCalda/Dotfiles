@@ -19,6 +19,13 @@ O `pacman -U` instala o pacote final e resolve as dependências pelos
 repositórios Arch após a autorização do `pkexec`. Também é possível abrir Claude
 pelo menu de aplicativos. O pacote extraído já traz o lançador `.desktop`.
 
+O `.deb` oficial instala `/usr/bin/claude-desktop` como link direto para o
+binário. Fora do GNOME e do KDE, o Electron não usa o GNOME Keyring e grava
+login e segredos em texto puro; o Claude então mostra o aviso "No system
+keyring is available". Esta receita troca o link por um script que adiciona
+`--password-store=gnome-libsecret`, a menos que outro `--password-store` já
+tenha sido passado. Reinicie o Claude por completo depois de atualizar o pacote.
+
 Para remover:
 
 ```bash
