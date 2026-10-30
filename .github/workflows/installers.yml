@@ -36,6 +36,14 @@ jobs:
           python3 SamsungBook-Np550xda/Omarchy/tests/claude_desktop_recipe.py
       - name: Check keyring diagnostics
         run: python3 SamsungBook-Np550xda/Omarchy/tests/check_keyring.py
+      - name: Lint shell scripts
+        run: |
+          scripts=()
+          while IFS= read -r -d '' file; do
+            [[ -f $file ]] && IFS= read -r first < "$file" || continue
+            case $first in '#!'*/sh|'#!'*[/\ ]bash|'#!'*' sh') scripts+=("$file") ;; esac
+          done < <(git ls-files -z)
+          shellcheck --severity=warning "${scripts[@]}"
       - name: Test OmaTuber installation and OBS integration
         run: python3 SamsungBook-Np550xda/Omarchy/tests/omatuber.py
       - name: Test ZIP backups and annual consolidation
