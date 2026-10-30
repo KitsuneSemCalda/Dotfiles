@@ -1,6 +1,6 @@
 pkgname=claude-desktop
 pkgver=3.1623.0
-pkgrel=1
+pkgrel=2
 pkgdesc='Official Claude Desktop Linux beta, repackaged from the local Debian file'
 arch=('x86_64')
 url='https://claude.com/download'
@@ -14,4 +14,16 @@ sha256sums=('d39e1d9a570f1e517f158479f5a1d903b9a74d1ef3f279362002dcad375e33cf')
 
 package() {
   bsdtar -xOf "$srcdir/claude-desktop_amd64.deb" data.tar.xz | tar --no-same-owner -xJf - -C "$pkgdir"
+
+  # Electron only picks libsecret on GNOME or KDE; under Hyprland it falls back
+  # to plaintext storage and Claude warns that no keyring is available.
+  rm -f -- "$pkgdir/usr/bin/claude-desktop"
+  install -Dm755 /dev/stdin "$pkgdir/usr/bin/claude-desktop" <<'EOF'
+#!/bin/sh
+case " $* " in
+  *' --password-store'*) ;;
+  *) set -- --password-store=gnome-libsecret "$@" ;;
+esac
+exec /usr/lib/claude-desktop/claude-desktop "$@"
+EOF
 }
