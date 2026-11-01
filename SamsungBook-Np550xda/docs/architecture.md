@@ -1,5 +1,13 @@
 # Architecture and modifications to the base system
 
+The Omarchy installer was revised on 2026-10-29: it now validates conflicts,
+downloads/verifies all selected inputs, then installs from prepared caches.
+See [download preparation](../Omarchy/README.md#downloads-and-installation).
+The early hardware service no longer waits for the later Power Profiles daemon;
+session checks aggregate failures independently and preserve saved power
+preferences. The remaining historical inventory below describes its stated
+snapshot except where updated explicitly.
+
 ## Scope and evidence
 
 This document describes the installers and tools at commit `b2060f8`, checked
@@ -95,8 +103,8 @@ repository demonstrating savings relative to the base system.
 
 | Files under `Omarchy/home/.config/` | Effect declared by the configuration |
 |---|---|
-| [fontconfig/fonts.conf](../Omarchy/home/.config/fontconfig/fonts.conf) | Prefers Lexend for `sans-serif`, `system-ui`, `-apple-system`, and `BlinkMacSystemFont`; a minimum-size rule of `20` for fonts that pass through this mechanism |
-| [gtk-3.0/settings.ini](../Omarchy/home/.config/gtk-3.0/settings.ini), [gtk-4.0/settings.ini](../Omarchy/home/.config/gtk-4.0/settings.ini) | `gtk-font-name=Lexend 20` |
+| [fontconfig/fonts.conf](../Omarchy/home/.config/fontconfig/fonts.conf) | Prefers Lexend for `sans-serif`, `system-ui`, `-apple-system`, and `BlinkMacSystemFont`; no forced minimum size |
+| [gtk-3.0/settings.ini](../Omarchy/home/.config/gtk-3.0/settings.ini), [gtk-4.0/settings.ini](../Omarchy/home/.config/gtk-4.0/settings.ini) | `gtk-font-name=Lexend 14` |
 | [omarchy/shell.toml](../Omarchy/home/.config/omarchy/shell.toml) | `[font] base-size=14`; the local shell implementation merges this file over the theme |
 | [alacritty/alacritty.toml](../Omarchy/home/.config/alacritty/alacritty.toml) | Imports the current theme; JetBrainsMono Nerd Font `11`, padding `14`, no decorations; OSC52 CopyPaste and clipboard/Enter shortcuts |
 | [foot/foot.ini](../Omarchy/home/.config/foot/foot.ini) | Imports the current theme; same family/size/padding; 10k lines of scrollback, non-blinking cursor, clipboard and Enter sequences |
@@ -104,10 +112,10 @@ repository demonstrating savings relative to the base system.
 | [starship.toml](../Omarchy/home/.config/starship.toml) | Directory, branch, and Git state in cyan; `200 ms` timeout; some Git states hidden |
 | [omarchy/rss-reader.json](../Omarchy/home/.config/omarchy/rss-reader.json) | Five feeds in the Programming folder; 1-minute refresh, `maxItems=200`, `retentionItems=1000`, `scrollStep=90` |
 
-GTK and the fontconfig minimum remain at `20`, while the shell uses `14` and
-the terminals use `11`. Applications interpret these settings separately;
-applications that bypass fontconfig do not necessarily adopt its floor. There is no versioned
-configuration for Kitty or Ghostty, even though they appear in the fonts documentation.
+GTK and the shell use size `14`; Alacritty and Foot use `11`. Fontconfig selects
+Lexend without forcing a minimum size on application requests. These settings
+do not guarantee equal physical text sizes. There is no versioned
+configuration for Kitty or Ghostty.
 
 The [installer](../Omarchy/omarchy.pl) validates file conflicts before applying
 copies. In the real HOME, it prepares missing AI alias dependencies and Intel

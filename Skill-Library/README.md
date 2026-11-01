@@ -36,12 +36,14 @@ other machine, or with a different agent/list/dry-run option:
 # Linux/Omarchy (Perl)
 perl Skill-Library/install.pl            # install every skill into every agent detected
 perl Skill-Library/install.pl --agent codex
+perl Skill-Library/install.pl --skill claude-council # update just the portable council
 perl Skill-Library/install.pl --list     # show skills in the library and agents detected
 perl Skill-Library/install.pl --dry-run  # preview without copying
 
 # Windows (PowerShell, no Perl dependency)
 pwsh Skill-Library/install.ps1
 pwsh Skill-Library/install.ps1 -Agent codex
+pwsh Skill-Library/install.ps1 -Skill claude-council
 pwsh Skill-Library/install.ps1 -List
 pwsh Skill-Library/install.ps1 -DryRun
 ```
@@ -58,6 +60,35 @@ installer after editing a skill here to push the update out (or just re-run
 skills directory, since that copy isn't versioned.
 
 ## Evaluating changes
+
+Both installers support Claude Code, Codex, OpenCode, Gemini CLI, Cursor and
+Grok, detected through their user configuration directories. Each receives
+the same skill files under its own `skills/` directory.
+
+### Claude Council
+
+[`claude-council`](skills/claude-council/SKILL.md) packages the upstream
+runtime at a fixed commit with a portable skill adapter. Invoke it in any
+harness by asking: “Use claude-council para comparar opiniões sobre …”.
+Reload skills or start a new session after installing.
+
+The harness gathers answers with the same scripts and writes the synthesis.
+The Claude-only plugin commands, hooks and panels are not registered.
+This keeps the consultation interface common across harnesses, while each
+host model can still synthesize differently. Windows needs Git Bash and jq;
+API seats also require curl. Existing CLI logins or API keys are used.
+
+By default, upstream discovers available providers. To select a standing
+roster consistently, export `COUNCIL_PROVIDERS=codex,cursor-cli,grok-cli`
+in the environment that launches each harness, or specify providers in your
+request. This example names the CLI seats found on this machine, not a claim
+that their logins work. No credentials are stored in this repository.
+
+The adapter disables automatic file selection. Questions and deliberately
+attached files are sent to the selected providers, and plaintext transcripts
+remain in `.claude/council-cache/` in the current project. See
+[provenance](skills/claude-council/SOURCE.md) and the bundled
+[upstream reference](skills/claude-council/upstream/docs/REFERENCE.md).
 
 Use [evaluation.md](evaluation.md) for routing and behavior probes when a skill changes. These cases are prompts to run and inspect, not an automated pass claim.
 

@@ -5,11 +5,17 @@ set -euo pipefail
 revision=7a51920e8a6148ddf628f7ca1f35cab6be4682da
 url=https://github.com/KitsuneForgering/OmaTuber.git
 source_dir="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles/omatuber/source"
+if [[ -n ${DOTFILES_DOWNLOAD_MANIFEST:-} ]]; then
+  source_dir=$(python3 -c 'import json,os; print(json.load(open(os.environ["DOTFILES_DOWNLOAD_MANIFEST"]))["sources"]["OmaTuber"])')
+fi
 state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles"
-install_root="${CARGO_HOME:-$HOME/.cargo}"
+install_root="${DOTFILES_CARGO_INSTALL_ROOT:-${CARGO_HOME:-$HOME/.cargo}}"
 data_dir="${XDG_DATA_HOME:-$HOME/.local/share}"
 
 command -v cargo >/dev/null || { echo 'Cargo is required to build OmaTuber' >&2; exit 1; }
+if [[ -n ${DOTFILES_DOWNLOAD_MANIFEST:-} && ! -d $source_dir/.git ]]; then
+  echo 'Prepared OmaTuber source disappeared; rerun the main installer.' >&2; exit 1
+fi
 if [[ ! -d $source_dir/.git ]]; then
   mkdir -p -- "$(dirname -- "$source_dir")"
   git clone --depth 1 --branch dev --single-branch -- "$url" "$source_dir"
@@ -20,8 +26,10 @@ fi
 [[ -z $(git -C "$source_dir" status --porcelain) ]] || {
   echo 'OmaTuber checkout has local edits; preserved without changes' >&2; exit 1;
 }
-git -C "$source_dir" fetch --depth 1 origin "$revision"
-git -C "$source_dir" checkout --detach "$revision"
+if [[ -z ${DOTFILES_DOWNLOAD_MANIFEST:-} ]]; then
+  git -C "$source_dir" fetch --depth 1 origin "$revision"
+  git -C "$source_dir" checkout --detach "$revision"
+fi
 [[ $(git -C "$source_dir" rev-parse HEAD) == "$revision" ]]
 
 if [[ ! -x $install_root/bin/omatuber || ! -f $state_dir/omatuber-revision ]] \

@@ -1,7 +1,7 @@
 [Unit]
 Description=Enforce and verify SamsungBook battery and hardware policy
-After=systemd-modules-load.service thermald.service power-profiles-daemon.service
-Wants=thermald.service power-profiles-daemon.service
+After=systemd-modules-load.service
+# Power Profiles starts after multi-user.target; it cannot gate this early unit.
 Before=systemd-user-sessions.service
 
 [Service]

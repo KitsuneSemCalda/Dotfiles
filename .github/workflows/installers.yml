@@ -27,6 +27,8 @@ jobs:
         run: python3 SamsungBook-Np550xda/Omarchy/tests/maintenance.py
       - name: Test installation, backups and restore
         run: python3 SamsungBook-Np550xda/tests/install.py
+      - name: Check download barrier and cache integrity
+        run: python3 SamsungBook-Np550xda/Omarchy/tests/prepare_downloads.py
       - name: Test desktop app migration
         run: python3 SamsungBook-Np550xda/Omarchy/tests/ai_desktops.py
       - name: Check Claude Desktop recipe and launcher
@@ -34,6 +36,19 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y libarchive-tools
           python3 SamsungBook-Np550xda/Omarchy/tests/claude_desktop_recipe.py
+      - name: Check keyring diagnostics
+        run: python3 SamsungBook-Np550xda/Omarchy/tests/check_keyring.py
+      - name: Check Claude Desktop version comparison
+        run: python3 SamsungBook-Np550xda/Omarchy/tests/claude_desktop_version.py
+      - name: Lint shell scripts
+        run: |
+          scripts=()
+          while IFS= read -r -d '' file; do
+            case $file in Skill-Library/skills/claude-council/upstream/*) continue ;; esac
+            [[ -f $file ]] && IFS= read -r first < "$file" || continue
+            case $first in '#!'*/sh|'#!'*[/\ ]bash|'#!'*' sh') scripts+=("$file") ;; esac
+          done < <(git ls-files -z)
+          shellcheck --severity=warning "${scripts[@]}"
       - name: Test OmaTuber installation and OBS integration
         run: python3 SamsungBook-Np550xda/Omarchy/tests/omatuber.py
       - name: Test ZIP backups and annual consolidation

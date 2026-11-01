@@ -12,16 +12,14 @@ Lexend is proportional, so it isn't used as
 a terminal font, keeping code/table text
 aligned.
 
-`fonts.conf` requests a minimum size of 20 for applications that use its rules;
-`gtk-font-name` also uses 20 directly. Applications can bypass fontconfig.
-The shell has its own base size of 14, while the versioned Alacritty and Foot
-profiles use JetBrainsMono Nerd Font at size 11. These settings do not guarantee
-the same physical text size across applications.
+`fonts.conf` selects Lexend without forcing a global minimum size. GTK and the
+shell use size 14, while Alacritty and Foot use JetBrainsMono Nerd Font at size
+11. These settings do not guarantee identical physical text size across apps.
 
-The font files are not versioned here; the command below downloads the
-Regular and Bold weights directly from the Google Fonts API to
-`~/.local/share/fonts/lexend/` and enables this repository's
-fontconfig/GTK rules:
+The font files are not versioned here. The main installer first downloads the
+Regular and Bold TTFs into its unified download cache. Only after all selected
+downloads succeed does it copy them to `~/.local/share/fonts/lexend/`, refresh
+fontconfig and publish the font configuration:
 
 ```bash
 perl ./omarchy.pl --fonts --backup

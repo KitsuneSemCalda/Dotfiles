@@ -16,6 +16,7 @@ fi
 
 # Rebuild when the recipe is newer, so pkgver and pkgrel bumps reach this host.
 recipe="$script_dir/../packages/claude-desktop/PKGBUILD"
+# shellcheck disable=SC1090,SC2154 # The PKGBUILD defines pkgver and pkgrel.
 wanted=$(source "$recipe" && printf '%s-%s' "$pkgver" "$pkgrel")
 installed=$(pacman -Q claude-desktop 2>/dev/null) || installed=
 installed=${installed#claude-desktop }

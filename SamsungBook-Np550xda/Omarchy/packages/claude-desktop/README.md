@@ -25,6 +25,15 @@ login e segredos em texto puro; o Claude então mostra o aviso "No system
 keyring is available". Esta receita troca o link por um script que adiciona
 `--password-store=gnome-libsecret`, a menos que outro `--password-store` já
 tenha sido passado. Reinicie o Claude por completo depois de atualizar o pacote.
+Os dotfiles também instalam `~/.config/chatgpt-flags.conf` e
+`~/.config/electron-flags.conf` com a mesma opção, para o ChatGPT Desktop e os
+apps que usam o Electron do sistema, como o Obsidian. O comando `check-keyring`
+confere o GNOME Keyring, o lançador do Claude e esses dois arquivos.
+
+Para saber se a Anthropic publicou uma versão mais nova, execute
+`python3 ../../scripts/check-claude-desktop-version.py` a partir desta pasta. Ele
+mostra o `pkgver` e o `sha256sums` a usar. Um workflow semanal do GitHub
+Actions roda a mesma verificação e falha quando a receita fica para trás.
 
 Para remover:
 

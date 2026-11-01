@@ -1,0 +1,32 @@
+Write the synthesis under the transcript's `## 🧭 Synthesis` header, which sits under a `---` rule so it
+stands apart from the answers above it in the chat:
+
+- **Consensus**: where providers agree
+- **Divergence**: where they disagree, and why the disagreement matters
+- **Recommendation**: the best approach given everything above
+
+Calibration rules:
+
+- Prefer one strong recommendation over several hedged ones.
+- Only report divergence that changes the decision; ignore differences in wording or emphasis.
+- If all providers agree, treat that as a caution, not a result. Providers are
+  given a description and never the system itself, so none of them can check a
+  premise the question asserts — unanimity measures how clearly the question
+  was framed, not whether the framing was true. Say plainly that they agreed,
+  then name the assumption the whole answer rests on and state that no provider
+  was in a position to test it. Where the question distinguished what the asker
+  observed from what they had not verified, name the unverified item; where it
+  did not, say which premise you would check first.
+- A seat reached through a router (openrouter, or copilot-cli and opencode, which
+  pick from more than one vendor's models) may be running the same model as a
+  directly-seated vendor, and nothing in the response says so. Where such a seat
+  agrees with another, report possible duplication, not corroboration: two headers
+  are not two independent judgements if one id resolves to the other's model.
+- A seat whose model is Claude (`claude-cli`, a `claude-...` model through
+  `copilot-cli`, or an `anthropic/...` id through a router or opencode) is the same model
+  family writing this synthesis. Where it agrees
+  with the direction you would take anyway, that is not independent support:
+  count it as one voice among the others, and do not let it settle a split
+  between them.
+- If a provider returned an error or an empty/unparseable response, name it and exclude it from consensus claims.
+- If any provider's header shows that its default model was unavailable and a fallback model answered (rendered as `<model> (<preferred> unavailable)`), say so explicitly in the synthesis, naming both models — a reader comparing council members needs to know one did not answer with its usual model.

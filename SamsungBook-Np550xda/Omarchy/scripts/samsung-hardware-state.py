@@ -41,12 +41,9 @@ def reconcile():
     if len(devices) != 1 or (devices[0] / 'driver').resolve().name != 'r8169':
         raise RuntimeError('Expected one Samsung r8169 adapter')
     enforce(devices[0] / 'power/control', 'auto')
-    for service in ('thermald.service', 'power-profiles-daemon.service'):
-        command('/usr/bin/systemctl', 'is-enabled', '--quiet', service)
-        command('/usr/bin/systemctl', 'is-active', '--quiet', service)
     guc = (SYS / 'module/i915/parameters/enable_guc').read_text().strip()
     result = {'boot_id': BOOT_ID.read_text().strip(), 'battery_end_threshold': 80,
-              'ethernet_runtime_control': 'auto', 'system_services': 'enabled and active',
+              'ethernet_runtime_control': 'auto',
               'huc_pending_reboot': guc != '2', 'i915_enable_guc': guc}
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     staged = REPORT.with_suffix('.tmp')

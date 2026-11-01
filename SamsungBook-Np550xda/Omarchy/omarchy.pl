@@ -11,6 +11,8 @@ use JSON::PP qw(encode_json decode_json);
 use File::Basename qw(dirname);
 use File::Copy qw(copy move);
 use File::Find qw(find);
+use File::Temp qw(tempfile);
+use Fcntl qw(:flock);
 use File::Path qw(make_path);
 use File::Spec;
 use Getopt::Long qw(GetOptions);
@@ -225,41 +227,109 @@ if (@conflicts) {
     die scalar(@conflicts) . " conflict(s) found; validation failed and nothing was changed\n";
 }
 
-# Prepare alias dependencies before publishing any dotfiles. A normal profile
-# install needs both tools too, even without --all.
-if ($target eq $home_root && !$only_home_backup) {
-    my $installs_aliases = -f File::Spec->catfile($source_root, '.aliasrc');
-    my $needs_jail = $ai_jail || ($installs_aliases && !executable_on_path('ai-jail'));
-    my $wrapper = File::Spec->catfile($target, '.local', 'bin', 'ai-memory');
-    my $native = File::Spec->catfile($ENV{XDG_CACHE_HOME} // File::Spec->catdir($target, '.cache'),
-        'ai-memory', 'native-runner', 'ai-memory');
-    my $needs_memory = $ai_memory || ($installs_aliases && (!-x $wrapper || !-x $native));
-    if ($needs_jail) {
-        ensure_repo_packages('bubblewrap');
-        ensure_aur_packages('ai-jail-bin');
+# Resolve every input before the first package install or dotfile copy.
+my $installs_profile = $target eq $home_root && !$only_home_backup;
+my $installs_aliases = $installs_profile && -f File::Spec->catfile($source_root, '.aliasrc');
+my $wrapper = File::Spec->catfile($target, '.local', 'bin', 'ai-memory');
+my $native = File::Spec->catfile($ENV{XDG_CACHE_HOME} // File::Spec->catdir($target, '.cache'),
+    'ai-memory', 'native-runner', 'ai-memory');
+my $needs_jail = $installs_profile && ($ai_jail || ($installs_aliases && !executable_on_path('ai-jail')));
+my $needs_memory = $installs_profile && ($ai_memory || ($installs_aliases && (!-x $wrapper || !-x $native)));
+my @repo_packages;
+my @aur_packages;
+push @repo_packages, 'bubblewrap' if $needs_jail;
+push @aur_packages, 'ai-jail-bin' if $needs_jail;
+push @repo_packages, qw(curl docker docker-compose openssl iproute2) if $needs_memory;
+push @repo_packages, qw(python mesa vulkan-intel vulkan-icd-loader vulkan-tools
+    intel-media-driver libva-utils intel-compute-runtime level-zero-loader clinfo
+    intel-gpu-tools ffmpeg) if $installs_profile
+    && -f File::Spec->catfile($source_root, '.local', 'bin', 'check-ai-acceleration');
+push @repo_packages, 'git' if $openrgb || $plugin || $omastore || $theme || $omatuber;
+push @repo_packages, qw(curl fontconfig) if $fonts;
+push @repo_packages, qw(openrgb base-devel qt6-base qt6-tools hidapi libusb mbedtls3) if $openrgb;
+push @repo_packages, qw(python pavucontrol v4l-utils usbutils pciutils bluez-utils blueman rtkit) if $calibrate;
+push @repo_packages, qw(python rtkit thermald power-profiles-daemon pipewire pipewire-pulse
+    wireplumber jq util-linux mpv libvpl vpl-gpu-rt linux-firmware-intel) if $hardware;
+push @repo_packages, qw(git base-devel pkgconf libxkbcommon python obs-studio obs-studio-plugin-browser rust) if $omatuber;
+push @repo_packages, 'go' if $plugin;
+push @repo_packages, qw(unison zip unzip python btrfs-progs) if $home_backup;
+push @repo_packages, qw(python pacman-contrib smartmontools) if $maintenance;
+push @repo_packages, 'python-pillow' if $installs_profile
+    && -f File::Spec->catfile($source_root, '.local', 'bin', 'obs-theme-slates');
+if ($apps) {
+    push @repo_packages, qw(prismlauncher base-devel curl file);
+    push @aur_packages, qw(bitwarden-bin appflowy-bin curseforge);
+    push @aur_packages, 'chatgpt-desktop' unless package_present('chatgpt-bin') || package_present('chatgpt-desktop');
+}
+{ my %seen; @repo_packages = grep { !$seen{$_}++ } @repo_packages; }
+{ my %seen; @aur_packages = grep { !$seen{$_}++ } @aur_packages; }
+my $download_root = File::Spec->catdir($ENV{XDG_CACHE_HOME} // File::Spec->catdir($target, '.cache'),
+    'dotfiles', 'downloads');
+my $prepared = { sources => {}, assets => {}, packages => [], aur => [] };
+my $download_lock;
+if ($target eq $home_root) {
+    my @options = grep { $installation_options{$_} && ${$installation_options{$_}} }
+        qw(apps fonts omastore theme openrgb omatuber);
+    push @options, 'plugin' if $plugin;
+    push @options, 'ai-memory' if $needs_memory;
+    say 'PHASE   Download and verify all selected inputs';
+    if ($dry_run) {
+        say 'FETCH?  official packages: ' . join(', ', sort @repo_packages) if @repo_packages;
+        say 'FETCH?  AUR recipes, sources and dependencies: ' . join(', ', sort @aur_packages) if @aur_packages;
+        say 'FETCH?  assets and build dependencies: ' . join(', ', @options) if @options;
+    } else {
+        make_path($download_root);
+        open $download_lock, '>', File::Spec->catfile($download_root, 'install.lock')
+            or die "Cannot open download lock: $!\n";
+        flock($download_lock, LOCK_EX | LOCK_NB) or die "Another dotfiles installation is running\n";
+        my ($plan_fh, $plan_path) = tempfile('plan-XXXXXX', DIR => $download_root, UNLINK => 1);
+        print {$plan_fh} encode_json({ repo_packages => \@repo_packages,
+            aur_packages => \@aur_packages, options => \@options,
+            webapps => [grep { !webapp_present($_->{name}) } webapps()] });
+        close $plan_fh or die "Cannot save download plan: $!\n";
+        run_command('python3', File::Spec->catfile($repo_root, 'scripts', 'prepare-downloads.py'),
+            '--plan', $plan_path, '--cache', $download_root);
+        open my $ready, '<', File::Spec->catfile($download_root, 'ready.json')
+            or die "Missing verified download manifest: $!\n";
+        { local $/; $prepared = decode_json(<$ready>); }
+        close $ready;
     }
-    if ($needs_memory) {
-        ensure_repo_packages('curl', 'docker', 'docker-compose', 'openssl', 'iproute2');
-        run_command('perl', File::Spec->catfile($repo_root, 'scripts', 'docker-stack.pl'),
-            '--memory', '--agents');
-    }
-    if (!$dry_run && ($installs_aliases || $ai_jail || $ai_memory)) {
-        die "ai-jail or bubblewrap is unavailable; no dotfiles were copied\n"
-            if ($installs_aliases || $ai_jail)
-                && (!executable_on_path('ai-jail') || !executable_on_path('bwrap'));
-        die "ai-memory wrapper is unavailable; no dotfiles were copied\n"
-            if ($installs_aliases || $ai_memory) && !-x $wrapper;
-        die "ai-memory native launch client is unavailable; no dotfiles were copied\n"
-            if $installs_aliases && !-x $native;
+    # Known build tools must consume their prepared dependency caches.
+    $ENV{DOTFILES_CARGO_INSTALL_ROOT} = $ENV{CARGO_HOME} // File::Spec->catdir($target, '.cargo');
+    $ENV{CARGO_HOME} = File::Spec->catdir($download_root, 'cargo');
+    $ENV{GOPATH} = File::Spec->catdir($download_root, 'go');
+    $ENV{GOMODCACHE} = File::Spec->catdir($download_root, 'go', 'pkg', 'mod');
+    $ENV{GOCACHE} = File::Spec->catdir($download_root, 'go', 'build');
+    $ENV{CARGO_NET_OFFLINE} = 'true';
+    $ENV{GOPROXY} = 'off';
+    $ENV{GOSUMDB} = 'off';
+    $ENV{GOTOOLCHAIN} = 'local';
+    $ENV{AI_MEMORY_NO_VERSION_CHECK} = '1';
+    $ENV{DOTFILES_DOWNLOAD_MANIFEST} = File::Spec->catfile($download_root, 'ready.json') unless $dry_run;
+    $ENV{AI_MEMORY_NATIVE_BIN} = $native if $needs_memory && !$dry_run;
+    say 'PHASE   Install from prepared inputs';
+    if ($dry_run) {
+        ensure_repo_packages(@repo_packages) if @repo_packages;
+        ensure_aur_packages(@aur_packages) if @aur_packages;
+    } else {
+        run_command('pkexec', 'pacman', '-U', '--needed', '--noconfirm', '--', @{$prepared->{packages}})
+            if @{$prepared->{packages}};
+        for my $recipe (@{$prepared->{aur}}) {
+            run_command('makepkg', '--dir', $recipe->{dir}, '--holdver', '--noconfirm', '--force');
+            my @files = grep { length } split /\n/, command_output('makepkg', '--dir', $recipe->{dir}, '--packagelist');
+            die "No built packages for $recipe->{base}\n" unless @files && !grep { !-f $_ } @files;
+            run_command('pkexec', 'pacman', '-U', '--needed', '--noconfirm', '--', @files);
+        }
     }
 }
-
-# Install GPU API dependencies before publishing the corresponding helper.
-if ($target eq $home_root && !$only_home_backup
-    && -f File::Spec->catfile($source_root, '.local', 'bin', 'check-ai-acceleration')) {
-    ensure_repo_packages('python', 'mesa', 'vulkan-intel', 'vulkan-icd-loader',
-        'vulkan-tools', 'intel-media-driver', 'libva-utils', 'intel-compute-runtime',
-        'level-zero-loader', 'clinfo', 'intel-gpu-tools', 'ffmpeg');
+if ($needs_memory) {
+    run_command('perl', File::Spec->catfile($repo_root, 'scripts', 'docker-stack.pl'), '--memory', '--agents');
+}
+if (!$dry_run && ($installs_aliases || $needs_jail || $needs_memory)) {
+    die "ai-jail or bubblewrap is unavailable; no dotfiles were copied\n"
+        if ($installs_aliases || $needs_jail) && (!executable_on_path('ai-jail') || !executable_on_path('bwrap'));
+    die "ai-memory wrapper or native client is unavailable; no dotfiles were copied\n"
+        if ($installs_aliases || $needs_memory) && (!-x $wrapper || !-x $native);
 }
 
 # Passagem de aplicacao: so comeca depois que a validacao inteira passou.
@@ -310,11 +380,6 @@ if ($target eq $home_root && !$only_home_backup) {
     say 'SKIP    skill installation (using a test --target, not the real HOME)';
 }
 
-# Install dependencies before any optional integration consumes them.
-ensure_repo_packages('git') if $openrgb || $plugin || $omastore;
-ensure_repo_packages('curl', 'fontconfig') if $fonts;
-ensure_repo_packages('openrgb', 'base-devel', 'qt6-base', 'qt6-tools',
-    'hidapi', 'libusb', 'mbedtls3') if $openrgb;
 if ($clamshell) {
     for my $helper (qw(omarchy-hyprland-monitor-clamshell omarchy-hyprland-monitor-watch
                        omarchy-system-lid-close)) {
@@ -327,20 +392,13 @@ if ($clamshell) {
     run_command('systemctl', '--user', 'start', 'dotfiles-clamshell-recover.service');
 }
 if ($calibrate) {
-    ensure_repo_packages('python', 'pavucontrol', 'v4l-utils', 'usbutils', 'pciutils', 'bluez-utils', 'blueman', 'rtkit');
     run_command(File::Spec->catfile($target, '.local', 'bin', 'calibrate-devices'), '--scan');
     say 'Run calibrate-devices in a terminal to adjust connected hardware.';
 }
-ensure_repo_packages('python', 'rtkit', 'thermald', 'power-profiles-daemon',
-    'pipewire', 'pipewire-pulse', 'wireplumber', 'jq', 'util-linux',
-    'mpv', 'libvpl', 'vpl-gpu-rt', 'linux-firmware-intel') if $hardware;
 ensure_fonts()  if $fonts;
 ensure_chromium_bookmarks() if $apps || $bookmarks;
 ensure_apps()   if $apps;
 if ($omatuber) {
-    ensure_repo_packages('git', 'base-devel', 'pkgconf', 'libxkbcommon', 'python',
-        'obs-studio', 'obs-studio-plugin-browser');
-    ensure_repo_packages('rust') unless executable_on_path('cargo');
     run_command('bash', File::Spec->catfile($repo_root, 'scripts', 'install-omatuber.sh'));
     run_command('python3', File::Spec->catfile($repo_root, 'scripts', 'configure-omatuber.py'));
 }
@@ -352,11 +410,11 @@ ensure_ek75_knob() if $ek75_knob;
 ensure_home_backup() if $home_backup;
 if (!$only_home_backup && $target eq $home_root
     && -x File::Spec->catfile($target, '.local', 'bin', 'obs-theme-slates')) {
-    ensure_repo_packages('python-pillow');
     run_command(File::Spec->catfile($target, '.local', 'bin', 'obs-theme-slates'));
 }
 
-if ($plugin || $clamshell || $hardware || $reboot) {
+if (($installs_profile && -f File::Spec->catfile($source_root, '.config', 'hypr', 'hyprland.lua'))
+    || $plugin || $clamshell || $hardware || $reboot) {
     run_command('hyprctl', 'reload');
     unless ($dry_run) {
         my $errors = command_output('hyprctl', 'configerrors');
@@ -366,13 +424,12 @@ if ($plugin || $clamshell || $hardware || $reboot) {
 
 if ($openrgb || $ek75_knob || $home_backup || $clamshell || $maintenance || $hardware) {
     my @actions;
-    push @actions, ('--openrgb', File::Spec->catdir($target, '.local', 'share', 'dareu-ek75-openrgb')) if $openrgb;
+    push @actions, ('--openrgb', plugin_source('dareu-ek75-openrgb')) if $openrgb;
     push @actions, '--ek75-knob' if $ek75_knob;
     push @actions, '--clamshell' if $clamshell;
     push @actions, '--hardware' if $hardware;
     push @actions, '--home-backup' if $home_backup;
     if ($maintenance) {
-        ensure_repo_packages('python', 'pacman-contrib', 'smartmontools');
         push @actions, ('--maintenance', scalar getpwuid($<));
     }
     run_command('pkexec', '/usr/bin/bash',
@@ -397,6 +454,8 @@ if ($hardware) {
 }
 
 say $dry_run ? 'Dry-run finished.' : 'Dotfiles installed.';
+say 'Recommended: reboot to complete the installation (systemctl reboot).'
+    unless $dry_run || $reboot || $target ne $home_root;
 run_command('systemctl', 'reboot') if $reboot;
 exit 0;
 
@@ -551,42 +610,20 @@ sub ensure_fonts {
     }
 }
 
+sub prepared_asset {
+    my ($name) = @_;
+    return File::Spec->catfile($download_root, 'assets', $name) if $dry_run;
+    my $path = $prepared->{assets}{$name} or die "Unprepared asset: $name\n";
+    die "Prepared asset disappeared: $path\n" unless -f $path;
+    return $path;
+}
+
 sub ensure_lexend_font {
     my $font_dir = File::Spec->catdir($target, '.local', 'share', 'fonts', 'lexend');
-    my %weight_of_file = (
-        'Lexend-Regular.ttf' => 400,
-        'Lexend-Bold.ttf'    => 700,
-    );
-
-    if (!grep { !-f File::Spec->catfile($font_dir, $_) } keys %weight_of_file) {
-        say 'OK      Lexend font files already downloaded';
-        return;
+    run_command('mkdir', '-p', $font_dir);
+    for my $file (qw(Lexend-Regular.ttf Lexend-Bold.ttf)) {
+        run_command('install', '-m', '0644', prepared_asset($file), File::Spec->catfile($font_dir, $file));
     }
-
-    if ($dry_run) {
-        say 'FONT?   Lexend would be downloaded from Google Fonts to ' . $font_dir;
-        return;
-    }
-
-    make_path($font_dir) unless -d $font_dir;
-
-    # A generic user-agent makes the Google Fonts API respond with TrueType
-    # (instead of woff2), which is the format fontconfig/Linux expects.
-    my $css = qx{curl -sL -A 'Mozilla/5.0' 'https://fonts.googleapis.com/css2?family=Lexend:wght\@400;700'};
-    die "Could not fetch the Google Fonts CSS for Lexend\n" unless $css;
-
-    my %url_of_weight;
-    while ($css =~ /font-weight:\s*(\d+);\s*\n\s*src:\s*url\(([^)]+)\)/g) {
-        $url_of_weight{$1} = $2;
-    }
-
-    for my $file (sort keys %weight_of_file) {
-        my $weight = $weight_of_file{$file};
-        my $url    = $url_of_weight{$weight}
-            or die "Lexend font URL (weight $weight) not found in the Google Fonts CSS\n";
-        run_command('curl', '-sL', $url, '-o', File::Spec->catfile($font_dir, $file));
-    }
-
     run_command('fc-cache', '-f', $font_dir);
 }
 
@@ -607,10 +644,19 @@ sub ensure_apps {
         say 'SKIP    1Password is not installed';
     }
 
-    ensure_repo_packages('prismlauncher');
-    ensure_aur_packages('bitwarden-bin', 'appflowy-bin', 'curseforge');
+    for my $app (webapps()) {
+        if (webapp_present($app->{name})) {
+            say "OK      web app $app->{name}";
+            next;
+        }
 
-    my @webapps = (
+        run_command('omarchy', 'webapp', 'install', $app->{name}, $app->{url},
+            prepared_asset('icon:' . $app->{name}));
+    }
+}
+
+sub webapps {
+    return (
         { name => 'Casas Bahia',      url => 'https://www.casasbahia.com.br/'},
         { name => 'Ponto Frio',       url => 'https://www.pontofrio.com.br/'},
         { name => 'Magazine Luiza',   url => 'https://www.magazineluiza.com.br/'},
@@ -642,16 +688,6 @@ sub ensure_apps {
         { name => 'ChipArt',          url => 'https://www.chipart.com.br/'},
         { name => 'MakerWorld',       url => 'https://makerworld.com/en'},
     );
-
-    for my $app (@webapps) {
-        if (webapp_present($app->{name})) {
-            say "OK      web app $app->{name}";
-            next;
-        }
-
-        # The empty argument makes the official installer fetch the site's icon.
-        run_command('omarchy', 'webapp', 'install', $app->{name}, $app->{url}, '');
-    }
 }
 
 sub chromium_running {
@@ -785,22 +821,16 @@ sub ensure_skills {
 # Keep source checkouts outside the installed plugins: replacing runtime files
 # must not lose the installer, and the dotfiles checkout can still be removed.
 sub plugin_source {
-    my ($name, $url) = @_;
-    my $dir = File::Spec->catdir($target, '.local', 'share', 'dotfiles', 'sources', $name);
-    if (-d File::Spec->catdir($dir, '.git')) {
-        run_command('git', '-C', $dir, 'pull', '--ff-only');
-    } else {
-        die "Unmanaged source directory: $dir\n" if -e $dir;
-        run_command('git', 'clone', '--depth', '1', $url, $dir);
-    }
-    return $dir;
+    my ($name) = @_;
+    return File::Spec->catdir($download_root, 'sources', $name) if $dry_run;
+    return $prepared->{sources}{$name} // die "Source was not prepared: $name\n";
 }
 
 sub ensure_omastore {
-    my $source = plugin_source('OmaStore', 'https://github.com/KitsuneForgering/OmaStore.git');
+    my $source = plugin_source('OmaStore');
     # The maintained installer verifies the release checksum and installs into
     # ~/.local. Skill-Library already owns this profile's agent skills.
-    run_command('sh', File::Spec->catfile($source, 'packaging', 'install.sh'), '--no-skills');
+    run_command('sh', File::Spec->catfile($source, 'packaging', 'install.sh'), '--no-skills', prepared_asset('omastore'));
     $ENV{PATH} = File::Spec->catdir($target, '.local', 'bin') . ':' . ($ENV{PATH} // '');
 }
 
@@ -867,9 +897,8 @@ sub ensure_plugin {
         'plugins', 'kitsuneforgering.audio');
     die "Missing local audio plugin: $audio\n" unless -f File::Spec->catfile($audio, 'manifest.json');
     run_command('omarchy', 'plugin', 'validate', $audio);
-    ensure_repo_packages('go');
     run_command('mkdir', '-p', File::Spec->catdir($target, '.config', 'omarchy', 'plugins'));
-    my $feader = plugin_source('Feader-RSS', 'https://github.com/KitsuneForgering/Feader-RSS.git');
+    my $feader = plugin_source('Feader-RSS');
     backup_plugin('io.github.kitsunesemcalda.feader-rss');
     # Always rebuild when replacing the QML, so its protocol matches the backend.
     run_command('bash', File::Spec->catfile($feader, 'scripts', 'install.sh'));
@@ -877,9 +906,9 @@ sub ensure_plugin {
         'io.github.kitsunesemcalda.feader-rss', 'feader-rss-fetch');
     die "Feader RSS backend missing: $backend\n" unless $dry_run || -x $backend;
 
-    my $spaces = plugin_source('Spaces', 'https://github.com/tornikegomareli/omarchy-spaces.git');
+    my $spaces = plugin_source('Spaces');
     replace_plugin('tornikegomareli.spaces', $spaces);
-    my $glass = plugin_source('omarchy-glass', 'https://github.com/KitsuneForgering/omarchy-glass.git');
+    my $glass = plugin_source('omarchy-glass');
     replace_plugin('kitsuneforgering.glass', $glass);
     retire_plugin('kitsuneforgering.widget-on-glass');
 
@@ -902,15 +931,7 @@ sub ensure_plugin {
 }
 
 sub ensure_openrgb {
-    # Keep the build checkout outside the dotfiles repository.
-    my $url = 'https://github.com/KitsuneSemCalda/Dareu-EK75-OpenRGB-Compat.git';
-    my $dir = File::Spec->catdir($target, '.local', 'share', 'dareu-ek75-openrgb');
-
-    if (-d File::Spec->catdir($dir, '.git')) {
-        run_command('git', '-C', $dir, 'pull', '--ff-only');
-    } else {
-        run_command('git', 'clone', $url, $dir);
-    }
+    my $dir = plugin_source('dareu-ek75-openrgb');
 
     # The udev rule is installed with the other system changes in one pkexec.
     for my $step (qw(build.sh install-launcher.sh install-hook.sh)) {
@@ -924,14 +945,12 @@ sub ensure_ek75_knob {
 }
 
 sub ensure_home_backup {
-    ensure_repo_packages('unison', 'zip', 'unzip', 'python', 'btrfs-progs');
     run_command('systemctl', '--user', 'daemon-reload');
     run_command('systemctl', '--user', 'enable', '--now', 'home-dropbox-backup.timer');
     run_command('systemctl', '--user', 'enable', '--now', 'home-dropbox-monthly.timer');
 }
 
 sub ensure_theme {
-    my $url = 'https://github.com/KitsuneSemCalda/Sword-Art-Omarchy';
     my $dir = File::Spec->catdir($target, '.config', 'omarchy', 'themes', 'sword-art-omarchy');
 
     # A previous local checkout may have left a dangling symlink. Preserve it
@@ -958,7 +977,9 @@ sub ensure_theme {
     if (-d $dir) {
         say 'OK      Sword Art Omarchy theme already installed';
     } else {
-        run_command('omarchy', 'theme', 'install', $url);
+        my $source = plugin_source('Sword-Art-Omarchy');
+        run_command('mkdir', '-p', dirname($dir));
+        run_command('cp', '-a', $source, $dir);
     }
 
     run_command('omarchy', 'theme', 'set', 'Sword Art Omarchy');
@@ -974,19 +995,16 @@ sub ensure_repo_packages {
     my @packages = @_;
     my @missing  = grep { !package_present($_) } @packages;
     if (@missing) {
-        run_command('omarchy', 'pkg', 'add', @missing);
-    } else {
-        say 'OK      official packages already installed: ' . join(', ', @packages);
+        die "Unprepared official packages: @missing\n" unless $dry_run;
+        say 'INSTALL? official packages from download cache: ' . join(', ', @missing);
     }
 }
 
 sub ensure_aur_packages {
-    my @packages = @_;
-    my @missing  = grep { !package_present($_) } @packages;
+    my @missing = grep { !package_present($_) } @_;
     if (@missing) {
-        run_command('omarchy', 'pkg', 'aur', 'add', @missing);
-    } else {
-        say 'OK      AUR packages already installed: ' . join(', ', @packages);
+        die "Unprepared AUR packages: @missing\n" unless $dry_run;
+        say 'INSTALL? AUR packages from verified sources: ' . join(', ', @missing);
     }
 }
 
@@ -1052,7 +1070,7 @@ sub usage {
     print <<'USAGE';
 Usage: perl omarchy.pl [options]
 
-  --dry-run          shows the actions without creating links or running commands
+  --dry-run          previews download and install phases without changing files
   --backup           moves conflicts to ~/.local/state/dotfiles/backups/
   --restore          restores the most recent backup without deleting the copy
   --apps             removes old items and installs the requested apps/web apps

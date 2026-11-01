@@ -1,0 +1,211 @@
+#!/bin/bash
+# ABOUTME: Queries OpenAI API with a prompt
+# ABOUTME: Supports both v1/chat/completions and v1/responses endpoints
+
+set -euo pipefail
+
+# Source shared libraries
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../lib/retry.sh"
+source "$SCRIPT_DIR/../lib/tokens.sh"
+source "$SCRIPT_DIR/../lib/verbosity.sh"
+source "$SCRIPT_DIR/../lib/providers.sh"
+source "$SCRIPT_DIR/../lib/usage.sh"
+
+verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
+
+# Debug mode: set COUNCIL_DEBUG=1 to see request/response details
+DEBUG="${COUNCIL_DEBUG:-}"
+
+PROMPT="${1:-}"
+IMAGE_FILE=""
+IMAGE_MIME=""
+# A large prompt (e.g. a big --file) arrives via a temp file to stay off the
+# process argv, where the OS would reject it as "argument list too long".
+PROMPT_FILE=""
+if [[ "$PROMPT" == "--prompt-file" ]]; then
+    PROMPT_FILE="${2:?--prompt-file requires a path}"
+    PROMPT=""
+    shift 2
+elif [[ $# -gt 0 ]]; then
+    shift
+fi
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --image-file) IMAGE_FILE="${2:?--image-file requires a path}"; shift 2 ;;
+        --image-mime) IMAGE_MIME="${2:?--image-mime requires a value}"; shift 2 ;;
+        *) shift ;;
+    esac
+done
+
+if [[ -z "$PROMPT" && ! -s "$PROMPT_FILE" ]]; then
+    echo "Error: No prompt provided" >&2
+    exit 1
+fi
+
+# Check for API key
+API_KEY=${OPENAI_API_KEY:-}
+if [[ -z "$API_KEY" ]]; then
+    echo "Error: OPENAI_API_KEY not set" >&2
+    exit 1
+fi
+
+# Keep the API key and request body off the process argv (ps-visible / OS
+# argument-size limits): the key travels via a mode-600 curl config file and
+# the payload via a temp file, populated per endpoint below.
+CURL_CFG=$(curl_secret_config "Authorization: Bearer ${API_KEY}")
+PAYLOAD_FILE=$(mktemp "${TMPDIR:-/tmp}/council-openai-payload.XXXXXX")
+# Every name the trap expands has to exist before the trap does: under set -u an
+# exit before the assignment expands an unset variable, which ends the trap body
+# where it stands and leaves the config holding the bearer token behind.
+OWNED_PROMPT_FILE=""
+trap 'rm -f "$CURL_CFG" "$PAYLOAD_FILE" "$OWNED_PROMPT_FILE"' EXIT
+
+# Model selection (override via OPENAI_MODEL env var)
+MODEL="$(get_model openai)"
+
+# Token limit (override via COUNCIL_MAX_TOKENS env var)
+BASE_TOKENS="${COUNCIL_MAX_TOKENS:-2048}"
+
+stage_prompt_file
+
+# Determine which API to use based on model
+# Models requiring v1/responses: codex-*, *-codex, o3-*, o4-*, gpt-5.[4-9]*, gpt-[6-9]*
+if [[ "$MODEL" == codex-* ]] || [[ "$MODEL" == *-codex ]] || [[ "$MODEL" == o3-* ]] || [[ "$MODEL" == o4-* ]] || [[ "$MODEL" == gpt-5.[4-9]* ]] || [[ "$MODEL" == gpt-[6-9]* ]]; then
+    # Use v1/responses API
+    ENDPOINT="https://api.openai.com/v1/responses"
+
+    # Reasoning models need higher token limits (reasoning + output combined):
+    # bump to 8x base, minimum 32768. Same patterns that selected this endpoint.
+    bump_for_reasoning TOKENS "$MODEL" "$BASE_TOKENS" 'codex-*' '*-codex' 'o3-*' 'o4-*' 'gpt-5.[4-9]*' 'gpt-[6-9]*'
+
+    # Reasoning effort: low/medium/high (override via OPENAI_REASONING_EFFORT)
+    EFFORT="${OPENAI_REASONING_EFFORT:-medium}"
+
+    # System instruction
+    SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
+
+    if [[ -n "$IMAGE_FILE" ]]; then
+        PAYLOAD=$(jq -n --rawfile prompt "$PROMPT_FILE" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg effort "$EFFORT" --arg system "$SYSTEM" \
+            --rawfile b64 "$IMAGE_FILE" --arg mime "$IMAGE_MIME" '{
+            model: $model,
+            instructions: $system,
+            input: [{ role: "user", content: [
+                { type: "input_text",  text: $prompt },
+                { type: "input_image", image_url: ("data:" + $mime + ";base64," + $b64) }
+            ]}],
+            max_output_tokens: $tokens,
+            reasoning: { effort: $effort }
+        }')
+    else
+        PAYLOAD=$(jq -n --rawfile prompt "$PROMPT_FILE" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg effort "$EFFORT" --arg system "$SYSTEM" '{
+            model: $model,
+            instructions: $system,
+            input: $prompt,
+            max_output_tokens: $tokens,
+            reasoning: { effort: $effort }
+        }')
+    fi
+
+    if [[ -n "$DEBUG" ]]; then
+        echo "=== DEBUG: OpenAI v1/responses ===" >&2
+        echo "Model: $MODEL" >&2
+        echo "Max output tokens: $TOKENS" >&2
+        echo "Reasoning effort: $EFFORT" >&2
+    fi
+
+    printf '%s' "$PAYLOAD" > "$PAYLOAD_FILE"
+    RESPONSE=$(curl_with_retry -s -X POST "$ENDPOINT" \
+        --config "$CURL_CFG" \
+        -H "Content-Type: application/json" \
+        --data-binary @"$PAYLOAD_FILE")
+
+    emit_usage "$USAGE_RESPONSES" <<<"$RESPONSE"
+
+    if [[ -n "$DEBUG" ]]; then
+        echo "=== DEBUG: Response metadata ===" >&2
+        echo "$RESPONSE" | jq '{
+            status: .status,
+            usage: .usage,
+            output_types: [.output[].type],
+            incomplete_details: .incomplete_details
+        }' >&2
+    fi
+
+    # Extract text from v1/responses format
+    # Find the message output (skip reasoning outputs) and get the text.
+    # .output[]? tolerates an error body, which carries no .output field —
+    # without it jq raises on null and the script would exit 5, not the
+    # error handling below.
+    TEXT=$(echo "$RESPONSE" | jq -r '
+        [.output[]? | select(.type == "message") | .content[0].text] | first // empty
+    ')
+else
+    # Use v1/chat/completions API
+    ENDPOINT="https://api.openai.com/v1/chat/completions"
+
+    # Standard models use base token limit directly
+    TOKENS="$BASE_TOKENS"
+
+    # System instruction
+    SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
+
+    if [[ -n "$IMAGE_FILE" ]]; then
+        PAYLOAD=$(jq -n --rawfile prompt "$PROMPT_FILE" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg system "$SYSTEM" \
+            --rawfile b64 "$IMAGE_FILE" --arg mime "$IMAGE_MIME" '{
+            model: $model,
+            messages: [
+                { role: "system", content: $system },
+                { role: "user", content: [
+                    { type: "text",      text: $prompt },
+                    { type: "image_url", image_url: { url: ("data:" + $mime + ";base64," + $b64) } }
+                ]}
+            ],
+            temperature: 0.7,
+            max_completion_tokens: $tokens
+        }')
+    else
+        PAYLOAD=$(jq -n --rawfile prompt "$PROMPT_FILE" --arg model "$MODEL" --argjson tokens "$TOKENS" --arg system "$SYSTEM" '{
+            model: $model,
+            messages: [{
+                role: "system",
+                content: $system
+            }, {
+                role: "user",
+                content: $prompt
+            }],
+            temperature: 0.7,
+            max_completion_tokens: $tokens
+        }')
+    fi
+
+    printf '%s' "$PAYLOAD" > "$PAYLOAD_FILE"
+    RESPONSE=$(curl_with_retry -s -X POST "$ENDPOINT" \
+        --config "$CURL_CFG" \
+        -H "Content-Type: application/json" \
+        --data-binary @"$PAYLOAD_FILE")
+
+    emit_usage "$USAGE_CHAT" <<<"$RESPONSE"
+
+    # Extract text from chat completions format
+    TEXT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
+fi
+
+    # Whitespace-stripped, not just empty: a model that answers with a single
+    # space passes a bare -z test, and the council would store that as a
+    # successful answer and weigh it in the synthesis like any other.
+if [[ ! "$TEXT" =~ [^[:space:]] ]]; then
+    # Try multiple error paths
+    ERROR=$(echo "$RESPONSE" | jq -r '(if (.error | type) == "object" then (.error.message // .error.code // "") elif (.error | type) == "string" then .error else "" end) | select(. != "")')
+    if [[ -z "$ERROR" ]]; then
+        # Show raw response for debugging
+        echo "Error from OpenAI: Unable to parse response" >&2
+        echo "Raw response: $RESPONSE" >&2
+    else
+        echo "Error from OpenAI: $ERROR" >&2
+    fi
+    is_model_unavailable_error "$RESPONSE" && exit 3
+    exit 1
+fi
+
+echo "$TEXT"

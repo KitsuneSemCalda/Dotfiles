@@ -1,0 +1,103 @@
+#!/bin/bash
+# ABOUTME: Queries Claude Code itself in a blind headless session using subscription auth
+# ABOUTME: Never seated by discovery; it joins only when named in --providers or COUNCIL_PROVIDERS
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../lib/verbosity.sh"
+source "$SCRIPT_DIR/../lib/deadline.sh"
+source "$SCRIPT_DIR/../lib/cli-stderr.sh"
+source "$SCRIPT_DIR/../lib/usage.sh"
+source "$SCRIPT_DIR/../lib/seat-isolation.sh"
+
+verbosity_prefix VERBOSITY_PREFIX "${COUNCIL_VERBOSITY:-standard}"
+
+PROMPT="${1:-}"
+# A large prompt (e.g. a big --file) arrives via a temp file to stay off
+# the process argv, where the OS would reject it as "argument list too long".
+if [[ "$PROMPT" == "--prompt-file" ]]; then
+    PROMPT=$(cat "${2:?--prompt-file requires a path}")
+fi
+
+if [[ -z "$PROMPT" ]]; then
+    echo "Error: No prompt provided" >&2
+    exit 1
+fi
+
+if ! command -v claude >/dev/null 2>&1; then
+    echo "Error: claude CLI not found on PATH" >&2
+    exit 1
+fi
+
+SYSTEM="${VERBOSITY_PREFIX:+$VERBOSITY_PREFIX }$BASE_SYSTEM_PROMPT"
+FULL_PROMPT="${SYSTEM}
+
+${PROMPT}"
+
+# The seat must answer the prompt every other seat gets and nothing else, so
+# it starts blind to the user's setup:
+# --safe-mode: no CLAUDE.md, skills, plugins, hooks or MCP servers, so neither
+# the user's memory nor any plugin's Stop hook (this one's included) runs.
+# --setting-sources "": safe mode still reads the user's settings.json
+# (language and the like); this drops every settings file. Admin policy and
+# an org's server-side instructions still apply, and no flag removes them.
+# --tools "": the prompt can carry --file contents or another seat's answer,
+# so the seat gets no tool to act on them with.
+# --no-session-persistence: nothing of the run lands in the user's history.
+# --output-format json: an array of events whose "result" event carries the
+# answer. A reached usage limit or an API error still exits 0, with its message
+# as the result and is_error true; plain text could not tell the two apart.
+# A bare -p reads the prompt from stdin, which keeps the whole prompt off argv
+# (see cursor-cli.sh for the argument limit this avoids).
+ARGS=(-p --safe-mode --setting-sources "" --tools "" --no-session-persistence --output-format json)
+# --model only on an explicit override, so an unset CLAUDE_CLI_MODEL defers to
+# the account's default model (mirrors codex.sh).
+[[ -n "${CLAUDE_CLI_MODEL:-}" ]] && ARGS+=(--model "$CLAUDE_CLI_MODEL")
+# -p skips the workspace trust check, so in a repository the CLI adds its
+# branch, status, recent commits and git user to the prompt, with its commit
+# and PR instructions. CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS turns off both
+# (claude 2.1.310 gates the status read on it too, read from its bundle), and
+# the scratch working directory (lib/seat-isolation.sh), outside any
+# repository, leaves no status to read. Exported after the council's
+# environment scrub, so it reaches the CLI.
+export CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS=1
+seat_enter_scratch || exit 1
+
+# Bound the CLI the way API providers are bounded by curl --max-time:
+# run_with_deadline ends it after COUNCIL_TIMEOUT seconds, surfacing as exit
+# 143 (128 + SIGTERM).
+# One attempt, where the API providers retry — see COUNCIL_CLI_TIMEOUT in
+# docs/ARCHITECTURE.md for why the two defaults differ.
+COUNCIL_TIMEOUT="${COUNCIL_TIMEOUT:-${COUNCIL_CLI_TIMEOUT:-1200}}"
+
+ERR_TMP=$(mktemp "${TMPDIR:-/tmp}/council-claude-cli-err.XXXXXX")
+OUT_TMP=$(mktemp "${TMPDIR:-/tmp}/council-claude-cli-out.XXXXXX")
+trap 'rm -f "$ERR_TMP" "$OUT_TMP"' EXIT
+
+if printf '%s' "$FULL_PROMPT" | run_with_deadline "$COUNCIL_TIMEOUT" claude "${ARGS[@]}" >"$OUT_TMP" 2>"$ERR_TMP"; then rc=0; else rc=$?; fi
+# The last result event's usage, an error result's included: it was billed.
+# input_tokens leave out the cache reads and writes, which are input too.
+emit_usage '[if type == "array" then .[] else . end | objects | select(.type == "result")] | last | .usage
+    | select(.input_tokens != null)
+    | {input: (.input_tokens + (.cache_read_input_tokens // 0) + (.cache_creation_input_tokens // 0)),
+       cached: .cache_read_input_tokens, output: .output_tokens, reasoning: null}' "$OUT_TMP"
+if [[ $rc -eq 0 ]]; then
+    # The last result event, from an array or a lone object. Unparseable
+    # output reads as no answer rather than aborting under set -e.
+    RESULT=$(jq -c 'if type == "array" then .[] else . end
+                    | select(type == "object" and .type == "result")' "$OUT_TMP" 2>/dev/null | tail -1 || true)
+    RESPONSE=$(jq -r '.result // empty' <<<"$RESULT" 2>/dev/null || true)
+    if [[ "$(jq -r '.is_error // false' <<<"$RESULT" 2>/dev/null)" == "true" ]]; then
+        echo "Error from claude CLI: ${RESPONSE:-error result with no message}" >&2
+        exit 1
+    fi
+    if [[ ! "$RESPONSE" =~ [^[:space:]] ]]; then
+        echo "Error from claude CLI: no answer in response" >&2
+        exit 1
+    fi
+    echo "$RESPONSE"
+else
+    cli_failure_message "claude" "$rc" "$COUNCIL_TIMEOUT" "$ERR_TMP" >&2
+    exit 1
+fi
