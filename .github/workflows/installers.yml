@@ -29,6 +29,11 @@ jobs:
         run: python3 SamsungBook-Np550xda/tests/install.py
       - name: Test desktop app migration
         run: python3 SamsungBook-Np550xda/Omarchy/tests/ai_desktops.py
+      - name: Check Claude Desktop recipe and launcher
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libarchive-tools
+          python3 SamsungBook-Np550xda/Omarchy/tests/claude_desktop_recipe.py
       - name: Test OmaTuber installation and OBS integration
         run: python3 SamsungBook-Np550xda/Omarchy/tests/omatuber.py
       - name: Test ZIP backups and annual consolidation
