@@ -1,0 +1,1234 @@
+#!/bin/bash
+# ABOUTME: Queries multiple AI providers in parallel and collects responses
+# ABOUTME: Supports filtering by provider and outputs JSON results
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROVIDERS_DIR="${PROVIDERS_DIR:-${SCRIPT_DIR}/providers}"
+
+# Preflight the one hard dependency used on every path: jq marshals every
+# request and response. Fail with a clear message instead of a cryptic cascade.
+# (curl is required only for API providers; CLI-only users never call it.)
+command -v jq >/dev/null 2>&1 || { echo "Error: jq is required (macOS: brew install jq)." >&2; exit 1; }
+
+# Source libraries
+source "${SCRIPT_DIR}/lib/cache.sh"
+source "${SCRIPT_DIR}/lib/roles.sh"
+source "${SCRIPT_DIR}/lib/keys.sh"
+source "${SCRIPT_DIR}/lib/display.sh"
+source "${SCRIPT_DIR}/lib/verbosity.sh"
+resolve_grok_key
+
+source "${SCRIPT_DIR}/lib/providers.sh"
+source "${SCRIPT_DIR}/lib/clock.sh"
+source "${SCRIPT_DIR}/lib/model_fallback.sh"
+source "${SCRIPT_DIR}/lib/deadline.sh"
+
+usage() {
+    cat >&2 << 'EOF'
+Usage: query-council.sh [OPTIONS] [--] <prompt>
+
+Options:
+  --providers LIST    Comma-separated providers (gemini,openai,grok,perplexity)
+  --roles LIST        Assign roles to providers (security,performance,maintainability)
+                      Or use preset: balanced, security-focused, architecture, review
+  --verbosity LEVEL   Response verbosity: brief, standard (default), detailed
+  --debate            Enable two-round debate mode
+  --file PATH         Include file contents in query context
+  --output PATH       Export destination (passed in metadata for caller)
+
+Note: Flags accept both --flag=value and --flag value formats.
+  --quiet, -q         Suppress individual responses (passed in metadata)
+  --no-cache          Skip cache, force fresh queries
+  --no-auto-context   Disable auto file detection (passed in metadata)
+  --no-pane           Disable streaming tmux pane (default: on inside tmux)
+  --list-available    List configured providers (human-readable, with policy info)
+  --list-default      List providers that would be queried by default (machine-readable)
+  --list-default-models  Same set, one "<provider>\t<model>" per line (machine-readable)
+
+Output: JSON with metadata and provider responses
+EOF
+    exit 1
+}
+
+# Parse arguments
+FILTER_PROVIDERS=""
+PROMPT=""
+LIST_AVAILABLE=false
+LIST_DEFAULT=false
+LIST_DEFAULT_MODELS=false
+USE_CACHE=true
+ROLES=""
+DEBATE_MODE=false
+FILE_PATH=""
+IMAGE_PATH=""
+OUTPUT_PATH=""
+QUIET_MODE=false
+AUTO_CONTEXT=true
+NO_PANE=false
+VERBOSITY=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --providers=*)
+            FILTER_PROVIDERS="${1#*=}"
+            shift
+            ;;
+        --providers)
+            FILTER_PROVIDERS="$2"
+            shift 2
+            ;;
+        --roles=*)
+            ROLES="${1#*=}"
+            shift
+            ;;
+        --roles)
+            ROLES="$2"
+            shift 2
+            ;;
+        --verbosity=*)
+            VERBOSITY="${1#*=}"
+            shift
+            ;;
+        --verbosity)
+            VERBOSITY="$2"
+            shift 2
+            ;;
+        --debate)
+            DEBATE_MODE=true
+            shift
+            ;;
+        --file=*)
+            FILE_PATH="${1#*=}"
+            shift
+            ;;
+        --file)
+            FILE_PATH="$2"
+            shift 2
+            ;;
+        --image=*)
+            IMAGE_PATH="${1#*=}"
+            shift
+            ;;
+        --image)
+            IMAGE_PATH="$2"
+            shift 2
+            ;;
+        --output=*)
+            OUTPUT_PATH="${1#*=}"
+            shift
+            ;;
+        --output)
+            OUTPUT_PATH="$2"
+            shift 2
+            ;;
+        --quiet|-q)
+            QUIET_MODE=true
+            shift
+            ;;
+        --no-cache)
+            USE_CACHE=false
+            shift
+            ;;
+        --no-auto-context)
+            AUTO_CONTEXT=false
+            shift
+            ;;
+        --no-pane)
+            NO_PANE=true
+            shift
+            ;;
+        --list-available)
+            LIST_AVAILABLE=true
+            shift
+            ;;
+        --list-default)
+            LIST_DEFAULT=true
+            shift
+            ;;
+        --list-default-models)
+            LIST_DEFAULT_MODELS=true
+            shift
+            ;;
+        --prompt=*)
+            PROMPT="${1#*=}"
+            shift
+            ;;
+        --prompt)
+            PROMPT="$2"
+            shift 2
+            ;;
+        --help|-h)
+            usage
+            ;;
+        --)
+            shift
+            # Everything after -- is the prompt
+            PROMPT="$*"
+            break
+            ;;
+        -*)
+            echo "Error: Unknown flag: $1" >&2
+            usage
+            ;;
+        *)
+            # Accumulate prompt (allows multi-word without quotes)
+            if [[ -z "$PROMPT" ]]; then
+                PROMPT="$1"
+            else
+                PROMPT="$PROMPT $1"
+            fi
+            shift
+            ;;
+    esac
+done
+
+# --list-default: machine-readable list of providers that a default query
+# would actually run (post CLI-prefers-API filter). For tooling.
+if [[ "$LIST_DEFAULT" == true ]]; then
+    default_provider_set
+    exit 0
+fi
+
+# --list-default-models: the same set, each name paired with the model it would
+# actually query, tab-separated. The /ask picker labels an option by its model —
+# that is what distinguishes one from another, and router seats (openrouter-1..N)
+# carry no model in their name at all. Derived from default_provider_set and
+# get_model rather than restated, so it cannot name a provider --list-default
+# would not, or a model the query would not send.
+if [[ "$LIST_DEFAULT_MODELS" == true ]]; then
+    read -ra LDM_SET <<< "$(default_provider_set)"
+    for p in "${LDM_SET[@]+"${LDM_SET[@]}"}"; do
+        printf '%s\t%s\n' "$p" "$(get_model "$p")"
+    done
+    exit 0
+fi
+
+# --list-available: human-readable view of everything configured, grouped by
+# whether a default query would run them, and why the rest sit it out.
+if [[ "$LIST_AVAILABLE" == true ]]; then
+    read -ra DISCOVERED <<< "$(discover_providers)"
+    if [[ ${#DISCOVERED[@]} -eq 0 ]]; then
+        echo "No providers configured."
+        echo "  Set an API key (GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY/GROK_API_KEY, or PERPLEXITY_API_KEY)"
+        echo "  or install a CLI agent (codex, agy, grok, kimi) or ollama."
+        exit 0
+    fi
+    # Same source as --list-default, so the two views cannot disagree about
+    # what a default query would run when COUNCIL_PROVIDERS pins a roster.
+    read -ra DEFAULT_SET <<< "$(default_provider_set)"
+    # Space-padded set for bash 3.2 compat (no associative arrays).
+    in_default=" ${DEFAULT_SET[*]+${DEFAULT_SET[*]}} "
+    SHADOWED=()
+    for p in "${DISCOVERED[@]}"; do
+        [[ "$in_default" != *" $p "* ]] && SHADOWED+=("$p")
+    done
+
+    echo "Default query set (${#DEFAULT_SET[@]}):"
+    for p in "${DEFAULT_SET[@]+"${DEFAULT_SET[@]}"}"; do
+        echo "  $p"
+    done
+    if [[ ${#SHADOWED[@]} -gt 0 ]]; then
+        echo ""
+        # A pinned roster and the CLI-prefers-API policy leave providers out for
+        # different reasons, and naming the wrong one sends the reader looking
+        # for a shadow pair that was never involved.
+        if [[ -n "${COUNCIL_PROVIDERS:-}" ]]; then
+            echo "Outside the COUNCIL_PROVIDERS roster (use --providers=<name> to force):"
+            for p in "${SHADOWED[@]}"; do
+                printf '  %s\n' "$p"
+            done
+        else
+            echo "Shadowed by CLI policy (use --providers=<name> to force):"
+            for p in "${SHADOWED[@]}"; do
+                cli=$(shadow_origin "$p")
+                if [[ -n "$cli" ]]; then
+                    printf '  %-10s (%s preferred)\n' "$p" "$cli"
+                else
+                    printf '  %s\n' "$p"
+                fi
+            done
+        fi
+    fi
+    exit 0
+fi
+
+if [[ -z "$PROMPT" ]]; then
+    echo "Error: No prompt provided" >&2
+    usage
+fi
+
+# Validate --file exists if specified
+if [[ -n "$FILE_PATH" ]] && [[ ! -f "$FILE_PATH" ]]; then
+    echo "Error: File not found: $FILE_PATH" >&2
+    exit 1
+fi
+
+# Validate --output directory is writable if specified
+if [[ -n "$OUTPUT_PATH" ]]; then
+    output_dir=$(dirname "$OUTPUT_PATH")
+    if [[ "$output_dir" != "." ]] && [[ ! -d "$output_dir" ]]; then
+        if ! mkdir -p "$output_dir" 2>/dev/null; then
+            echo "Error: Cannot create output directory: $output_dir" >&2
+            exit 1
+        fi
+    fi
+fi
+
+# Validate --verbosity if specified, then export so provider scripts see it
+if [[ -n "$VERBOSITY" ]]; then
+    validate_verbosity "$VERBOSITY" || exit 1
+    export COUNCIL_VERBOSITY="$VERBOSITY"
+fi
+
+# Validate --roles if specified
+if [[ -n "$ROLES" ]]; then
+    if ! validate_roles "$ROLES"; then
+        exit 1
+    fi
+    # Normalize roles (expand presets)
+    ROLES=$(normalize_roles "$ROLES")
+fi
+
+# Get list of providers to query. Precedence: --providers beats COUNCIL_PROVIDERS
+# beats discovery — the latter two are resolved inside default_provider_set, so
+# every caller of it sees the same roster.
+if [[ -n "$FILTER_PROVIDERS" ]]; then
+    read -ra PROVIDERS <<< "$(parse_provider_list "$FILTER_PROVIDERS")"
+else
+    read -ra PROVIDERS <<< "$(default_provider_set)"
+fi
+
+if [[ ${#PROVIDERS[@]} -eq 0 ]]; then
+    # A roster that parses to nothing reaches here with providers installed and
+    # keys set, so the advice below would send the reader to fix what is not
+    # broken. Name the roster instead.
+    if [[ -n "$FILTER_PROVIDERS" ]]; then
+        echo "Error: --providers named no usable provider: '$FILTER_PROVIDERS'" >&2
+        exit 1
+    fi
+    if [[ -n "${COUNCIL_PROVIDERS:-}" ]]; then
+        echo "Error: COUNCIL_PROVIDERS names no usable provider: '$COUNCIL_PROVIDERS'" >&2
+        echo "  Expected a comma-separated list, e.g. COUNCIL_PROVIDERS=\"codex,antigravity\"." >&2
+        echo "  Unset it to fall back to discovering whatever is installed." >&2
+        exit 1
+    fi
+    echo "Error: No providers configured." >&2
+    echo "  Set an API key (GEMINI_API_KEY, OPENAI_API_KEY, XAI_API_KEY/GROK_API_KEY, or PERPLEXITY_API_KEY)" >&2
+    echo "  or install a CLI agent (codex, agy, grok, kimi) or ollama." >&2
+    echo "  Or run '/claude-council:ask --local' for a local Claude-only council (same-model, no API keys)." >&2
+    exit 1
+fi
+
+# Create temp directory for parallel results
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/council-query.XXXXXX")
+# Single-quoted so $TEMP_DIR/$COUNCIL_PANE_DIR are expanded (and quoted) at trap
+# time, not trap-definition time: this both avoids word-splitting a TMPDIR that
+# contains spaces and lets the trap close the streaming pane on ANY exit
+# (Ctrl-C, SIGTERM, errexit) so it never spins "waiting on…" forever.
+trap 'rm -rf "$TEMP_DIR"; [[ -n "${COUNCIL_PANE_DIR:-}" ]] && display_pane_close "$COUNCIL_PANE_DIR" 2>/dev/null || true' EXIT
+
+# Validate and prepare an --image, once, before any provider runs. The base64
+# rides its own temp file (never the prompt) and only its hash keys the cache.
+IMAGE_MIME=""
+IMAGE_B64_FILE=""
+if [[ -n "${IMAGE_PATH:-}" ]]; then
+    if [[ ! -f "$IMAGE_PATH" ]]; then
+        echo "Error: image not found: $IMAGE_PATH" >&2
+        exit 1
+    fi
+    ext=$(printf '%s' "${IMAGE_PATH##*.}" | tr '[:upper:]' '[:lower:]')
+    case "$ext" in
+        png)       IMAGE_MIME="image/png" ;;
+        jpg|jpeg)  IMAGE_MIME="image/jpeg" ;;
+        webp)      IMAGE_MIME="image/webp" ;;
+        gif)       IMAGE_MIME="image/gif" ;;
+        *) echo "Error: unsupported image type '.$ext' (use png/jpg/jpeg/webp/gif)" >&2; exit 1 ;;
+    esac
+    img_bytes=$(wc -c < "$IMAGE_PATH")
+    if [[ "$img_bytes" -gt 10485760 ]]; then
+        echo "Error: image too large (${img_bytes} bytes; cap is 10485760)" >&2
+        exit 1
+    fi
+    IMAGE_B64_FILE=$(mktemp "${TEMP_DIR}/image.XXXXXX")
+    base64 < "$IMAGE_PATH" | tr -d '\n' > "$IMAGE_B64_FILE"
+    COUNCIL_IMAGE_HASH=$(sha256_hex < "$IMAGE_PATH")
+    export COUNCIL_IMAGE_HASH
+fi
+
+# Invoke a provider script with the prompt delivered via a temp file
+# (--prompt-file), so a large --file prompt never rides the process argv where
+# Linux (MAX_ARG_STRLEN, 128KB) or MSYS (~32KB) would reject it as "argument
+# list too long". Providers still accept a literal prompt as $1 for direct use.
+# Merges stderr into stdout, matching the callers' original `2>&1` capture.
+run_provider_script() {
+    local provider="$1" script="$2" prompt="$3" image_file="${4:-}" image_mime="${5:-}" pfile rc args
+    pfile=$(mktemp "${TEMP_DIR}/prompt.XXXXXX")
+    printf '%s' "$prompt" > "$pfile"
+    args=(--prompt-file "$pfile")
+    if [[ -n "$image_file" ]]; then args+=(--image-file "$image_file" --image-mime "$image_mime"); fi
+    ( provider_env_scrub "$provider"; exec "$script" "${args[@]}" ) 2>&1
+    rc=$?
+    rm -f "$pfile"
+    return $rc
+}
+
+# One-line stderr notice, so a headless run — no pane, no rendered header —
+# still says why a different model answered.
+model_fallback_notice() {
+    echo "note: $2 unavailable for $1 (key/region) — answered with $3" >&2
+}
+
+# Run a provider, degrading to its fallback model when the preferred model is
+# unavailable for this key or region.
+#
+# Stdout on success (exit 0): {response, model, model_fallback}
+#   model          — the model that actually answered
+#   model_fallback — the displaced preferred model, or null
+# On failure: the provider's error text on stdout and a non-zero exit, matching
+# run_provider_script's contract, so the caller's existing error / CLI→API path
+# is unchanged.
+# Args: provider script prompt [image_file] [image_mime]
+run_provider_with_model_fallback() {
+    local provider="$1" script="$2" prompt="$3" img="${4:-}" mime="${5:-}"
+    local override_var preferred fallback keyhash resp rc=0
+
+    # Several seats can share one script (the router's roster), so the script
+    # cannot infer its own identity from its filename. Naming the seat here is
+    # what lets it resolve its own model instead of the script's default. Each
+    # provider runs in its own subshell, so this cannot leak between seats.
+    export COUNCIL_SEAT="$provider"
+
+    override_var="$(provider_env_prefix "$provider")_MODEL"
+    preferred=$(get_model "$provider")
+    fallback=$(model_fallback_for "$provider")
+
+    # An explicit override is respected verbatim, and a provider with no
+    # configured fallback has nothing to degrade to: one plain attempt.
+    if [[ -n "${!override_var:-}" || -z "$fallback" ]]; then
+        resp=$(run_provider_script "$provider" "$script" "$prompt" "$img" "$mime") || rc=$?
+        [[ $rc -eq 0 ]] || { printf '%s' "$resp"; return "$rc"; }
+        printf '%s' "$resp" | jq -Rs --arg m "$preferred" '{response: ., model: $m, model_fallback: null}'
+        return 0
+    fi
+
+    keyhash=$(model_fallback_key_hash "$provider")
+
+    # A fresh verdict means the preferred model is known-bad for this key: go
+    # straight to the fallback rather than spend a call that would fail again.
+    if model_unavailable_cached "$provider" "$preferred" "$keyhash"; then
+        model_fallback_notice "$provider" "$preferred" "$fallback"
+        resp=$(export "${override_var}=${fallback}"; run_provider_script "$provider" "$script" "$prompt" "$img" "$mime") || rc=$?
+        [[ $rc -eq 0 ]] || { printf '%s' "$resp"; return "$rc"; }
+        printf '%s' "$resp" | jq -Rs --arg m "$fallback" --arg p "$preferred" \
+            '{response: ., model: $m, model_fallback: $p}'
+        return 0
+    fi
+
+    resp=$(run_provider_script "$provider" "$script" "$prompt" "$img" "$mime") || rc=$?
+    if [[ $rc -eq 0 ]]; then
+        printf '%s' "$resp" | jq -Rs --arg m "$preferred" '{response: ., model: $m, model_fallback: null}'
+        return 0
+    fi
+    # Exit 3 is the providers' "this model is unavailable" signal. Any other
+    # failure — bad key, rate limit, 5xx — is not one a different model fixes.
+    if [[ $rc -ne 3 ]]; then
+        printf '%s' "$resp"
+        return "$rc"
+    fi
+
+    model_fallback_notice "$provider" "$preferred" "$fallback"
+    local fb_resp fb_rc=0
+    fb_resp=$(export "${override_var}=${fallback}"; run_provider_script "$provider" "$script" "$prompt" "$img" "$mime") || fb_rc=$?
+    if [[ $fb_rc -ne 0 ]]; then
+        # The fallback failed too, so this is account-level, not model-level.
+        # Remembering it would downgrade this provider for a whole TTL.
+        printf '%s' "$fb_resp"
+        return "$fb_rc"
+    fi
+    model_unavailable_remember "$provider" "$preferred" "$keyhash"
+    printf '%s' "$fb_resp" | jq -Rs --arg m "$fallback" --arg p "$preferred" \
+        '{response: ., model: $m, model_fallback: $p}'
+}
+
+# On a CLI provider failure, attempt its API-sibling fallback. Echoes a JSON
+# object {response, model, fallback} when the sibling exists, its key is set,
+# and the sibling script succeeds; echoes nothing otherwise (caller then keeps
+# the original CLI error). Shared by round 1 (query_provider) and round 2.
+attempt_api_fallback() {
+    local provider="$1" prompt="$2"
+    local sibling sibling_script key cached p
+    sibling=$(api_sibling "$provider")
+    [[ -n "$sibling" ]] && api_key_present "$sibling" || return 0
+    # Don't shadow-fall-back to a provider the user already selected — it
+    # answers in its own slot, so duplicating it would present one vendor's
+    # view twice and double the API call.
+    for p in ${PROVIDERS[@]+"${PROVIDERS[@]}"}; do
+        [[ "$p" == "$sibling" ]] && return 0
+    done
+    # Resolve the sibling's effective model before its answer cache is read:
+    # this cache is separate from query_provider's, and keying it by the
+    # preferred model would mislabel a cached repeat and drop its notification.
+    local sibling_preferred sibling_fallback sibling_model sibling_mf="" sib_override
+    sibling_preferred=$(get_model "$sibling")
+    sibling_model="$sibling_preferred"
+    sibling_fallback=$(model_fallback_for "$sibling")
+    sib_override="$(provider_env_prefix "$sibling")_MODEL"
+    if [[ -z "${!sib_override:-}" && -n "$sibling_fallback" ]]; then
+        local sib_keyhash
+        sib_keyhash=$(model_fallback_key_hash "$sibling")
+        if model_unavailable_cached "$sibling" "$sibling_preferred" "$sib_keyhash"; then
+            sibling_model="$sibling_fallback"
+            sibling_mf="$sibling_preferred"
+        fi
+    fi
+
+    # Reuse a cached sibling answer instead of re-hitting the paid API on a
+    # repeat run; the sibling script bypasses query_provider's own cache check.
+    local resp
+    if [[ "$USE_CACHE" == true ]]; then
+        key=$(cache_key "$sibling" "$sibling_model" "$prompt")
+        cached=$(cache_get "$key")
+        [[ -n "$cached" ]] && resp="$cached"
+    fi
+    if [[ -z "${resp:-}" ]]; then
+        sibling_script="$(provider_script_path "$sibling")"
+        local sib_img="" sib_mime=""
+        if [[ -n "${IMAGE_B64_FILE:-}" ]] && provider_vision_capable "$sibling"; then
+            sib_img="$IMAGE_B64_FILE"; sib_mime="$IMAGE_MIME"
+        fi
+        [[ -x "$sibling_script" ]] || return 0
+        local sib_envelope sib_rc=0
+        sib_envelope=$(run_provider_with_model_fallback "$sibling" "$sibling_script" "$prompt" "$sib_img" "$sib_mime") || sib_rc=$?
+        [[ $sib_rc -eq 0 ]] || return 0
+        resp=$(jq -r '.response' <<<"$sib_envelope")
+        sibling_model=$(jq -r '.model' <<<"$sib_envelope")
+        sibling_mf=$(jq -r '.model_fallback // empty' <<<"$sib_envelope")
+        [[ "$USE_CACHE" == true ]] && cache_set "$(cache_key "$sibling" "$sibling_model" "$prompt")" \
+            "$sibling" "$sibling_model" "$prompt" "$resp"
+    fi
+    printf '%s' "$resp" | jq -Rs --arg m "$sibling_model" --arg s "$sibling" --arg mf "$sibling_mf" \
+        '{response: ., model: $m, fallback: $s,
+          model_fallback: (if $mf == "" then null else $mf end)}'
+}
+
+# Compose a success slot from an attempt_api_fallback object ({response, model,
+# fallback}), adding the common status/cached/role fields and the reason the
+# seat did not answer itself (its CLI's error text, or why the image went
+# elsewhere). Single definition so round 1 and round 2 build the fallback slot
+# identically. Args: fb_json role reason
+fallback_slot_json() {
+    jq --arg role "$2" --arg reason "$3" \
+        '. + {status: "success", cached: false, role: (if $role == "" then null else $role end),
+              fallback_reason: $reason}' <<<"$1"
+}
+
+# Tell the pane a seat's answer came from its API sibling: the row's state is
+# "fallback", its model column names the API beside the model, and the reason
+# is stored where the pane shows a provider's error text. The CLI's name stays
+# on the row, so the reader sees which seat it was. Args: pane_dir provider
+# elapsed_ms fb_json reason
+pane_fallback_events() {
+    local pane_dir="$1" provider="$2" elapsed="$3" fb_json="$4" reason="$5"
+    pane_error_write "$pane_dir" "$provider" "$reason"
+    pane_status_event "$pane_dir" "$provider" fallback "$elapsed" \
+        "$(jq -r '"\(.model) via \(.fallback) API"' <<<"$fb_json")"
+    pane_response_write "$pane_dir" "$provider" "$(jq -r '.response' <<<"$fb_json")"
+}
+
+# Handle a CLI provider that is unusable (missing script or runtime failure):
+# try the API-sibling fallback, writing its answer (with pane events) on success
+# or the given error otherwise. Shared by query_provider's missing-script and
+# runtime-failure paths. Args: provider final_prompt output_file role error_msg start_ms
+finish_with_fallback_or_error() {
+    local provider="$1" final_prompt="$2" output_file="$3" role="$4"
+    local error_msg="$5" start_ms="$6"
+    local fb_json
+    fb_json=$(attempt_api_fallback "$provider" "$final_prompt")
+    if [[ -n "$fb_json" ]]; then
+        fallback_slot_json "$fb_json" "$role" "$error_msg" > "$output_file"
+        if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then
+            pane_fallback_events "$COUNCIL_PANE_DIR" "$provider" "$(( $(now_ms) - start_ms ))" "$fb_json" "$error_msg"
+        fi
+        return 0
+    fi
+    # No fallback available, or it failed too: preserve the original error.
+    printf '%s' "$error_msg" | jq -Rs --arg role "$role" \
+        '{status: "error", error: ., cached: false, role: (if $role == "" then null else $role end)}' > "$output_file"
+    if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then
+        pane_error_write "$COUNCIL_PANE_DIR" "$provider" "$error_msg"
+        pane_status_event "$COUNCIL_PANE_DIR" "$provider" error "" "$(get_model "$provider")"
+    fi
+}
+
+# Query provider and save result to temp file
+# Uses cache if available and USE_CACHE=true
+# Args: provider prompt output_file [role]
+query_provider() {
+    local provider="$1"
+    local prompt="$2"
+    local output_file="$3"
+    local role="${4:-}"
+    local script
+    script="$(provider_script_path "$provider")"
+    local preferred fallback keyhash override_var
+    local model model_fallback=""
+    preferred=$(get_model "$provider")
+    model="$preferred"
+    fallback=$(model_fallback_for "$provider")
+    override_var="$(provider_env_prefix "$provider")_MODEL"
+    # A known-bad preferred model must be resolved BEFORE the answer cache is
+    # read: the cache is keyed by model, and a cached fallback answer lives under
+    # the fallback's key. Resolving late would miss it and re-call the API.
+    if [[ -z "${!override_var:-}" && -n "$fallback" ]]; then
+        keyhash=$(model_fallback_key_hash "$provider")
+        if model_unavailable_cached "$provider" "$preferred" "$keyhash"; then
+            model="$fallback"
+            model_fallback="$preferred"
+        fi
+    fi
+
+    # Build the final prompt (with role injection if specified)
+    local final_prompt
+    if [[ -n "$role" ]]; then
+        final_prompt=$(build_prompt_with_role "$prompt" "$role")
+    else
+        final_prompt="$prompt"
+    fi
+
+    local start_ms
+    start_ms=$(now_ms)
+
+    if [[ ! -x "$script" ]]; then
+        # A missing/non-executable script is as unusable as a runtime failure,
+        # so it gets the same API-sibling fallback rather than a bare error.
+        finish_with_fallback_or_error "$provider" "$final_prompt" "$output_file" \
+            "$role" "Script not found or not executable" "$start_ms"
+        return
+    fi
+
+    [[ -n "${COUNCIL_PANE_DIR:-}" ]] && pane_status_event "$COUNCIL_PANE_DIR" "$provider" querying "" "$model"
+
+    # Image disposition: vision providers get the image; a provider with a
+    # usable vision sibling answers through it; others answer text-only with a tag.
+    local img_file="" img_mime="" image_note=""
+    if [[ -n "${IMAGE_B64_FILE:-}" ]]; then
+        if provider_vision_capable "$provider"; then
+            img_file="$IMAGE_B64_FILE"; img_mime="$IMAGE_MIME"
+        else
+            # The sibling must actually gain us vision. Every sibling used to be
+            # vision-capable, so existence alone was a safe proxy; kimi is the
+            # first that is not, and routing to it would spend a paid API call
+            # on an answer just as blind — while skipping the tag below, so the
+            # synthesis would weigh it as though it had seen the image.
+            local sibling; sibling=$(api_sibling "$provider")
+            if [[ -n "$sibling" ]] && provider_vision_capable "$sibling"; then
+                local fb_json
+                fb_json=$(attempt_api_fallback "$provider" "$final_prompt")
+                if [[ -n "$fb_json" ]]; then
+                    local image_reason="${provider} cannot read images; the ${sibling} API answered with the image"
+                    fallback_slot_json "$fb_json" "$role" "$image_reason" > "$output_file"
+                    if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then
+                        pane_fallback_events "$COUNCIL_PANE_DIR" "$provider" "$(( $(now_ms) - start_ms ))" "$fb_json" "$image_reason"
+                    fi
+                    return
+                fi
+            fi
+            image_note="(answered without the image)"$'\n\n'
+        fi
+    fi
+
+    # Check cache if enabled (cache key includes role)
+    if [[ "$USE_CACHE" == true ]]; then
+        local key
+        key=$(cache_key "$provider" "$model" "$final_prompt")
+        local cached_response
+        cached_response=$(cache_get "$key")
+        if [[ -n "$cached_response" ]]; then
+            # A cached repeat must render exactly like the fresh answer did, or
+            # the fallback notification silently disappears on the second run.
+            printf '%s' "$cached_response" | jq -Rs --arg role "$role" \
+                --arg m "$model" --arg mf "$model_fallback" \
+                '{status: "success", response: ., cached: true,
+                  role: (if $role == "" then null else $role end),
+                  model: $m,
+                  model_fallback: (if $mf == "" then null else $mf end)}' > "$output_file"
+            if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then
+                pane_status_event "$COUNCIL_PANE_DIR" "$provider" cached "" "$model"
+                pane_response_write "$COUNCIL_PANE_DIR" "$provider" "$cached_response"
+            fi
+            return
+        fi
+    fi
+
+    # Query provider with role-injected prompt
+    local envelope rc=0
+    envelope=$(run_provider_with_model_fallback "$provider" "$script" "$final_prompt" "$img_file" "$img_mime") || rc=$?
+    if [[ $rc -eq 0 ]]; then
+        local elapsed=$(( $(now_ms) - start_ms ))
+        # The envelope is authoritative: on a fresh discovery the wrapper fell
+        # back at query time, and only it knows which model actually answered.
+        response=$(jq -r '.response' <<<"$envelope")
+        model=$(jq -r '.model' <<<"$envelope")
+        model_fallback=$(jq -r '.model_fallback // empty' <<<"$envelope")
+        response="${image_note}${response}"
+        printf '%s' "$response" | jq -Rs --arg role "$role" \
+            --arg m "$model" --arg mf "$model_fallback" \
+            '{status: "success", response: ., cached: false,
+              role: (if $role == "" then null else $role end),
+              model: $m,
+              model_fallback: (if $mf == "" then null else $mf end)}' > "$output_file"
+        if [[ -n "${COUNCIL_PANE_DIR:-}" ]]; then
+            pane_status_event "$COUNCIL_PANE_DIR" "$provider" complete "$elapsed" "$model"
+            pane_response_write "$COUNCIL_PANE_DIR" "$provider" "$response"
+        fi
+        # Cache under the model that answered, so the repeat run reads its own key.
+        if [[ "$USE_CACHE" == true ]]; then
+            local key
+            key=$(cache_key "$provider" "$model" "$final_prompt")
+            cache_set "$key" "$provider" "$model" "$final_prompt" "$response"
+        fi
+    else
+        finish_with_fallback_or_error "$provider" "$final_prompt" "$output_file" \
+            "$role" "$envelope" "$start_ms"
+    fi
+}
+
+# Colors for terminal output
+BLUE='\033[34m'
+WHITE='\033[37m'
+RED='\033[31m'
+GREEN='\033[32m'
+CYAN='\033[36m'
+MAGENTA='\033[35m'
+BRIGHT_BLACK='\033[90m'
+LIGHT_YELLOW='\033[93m'
+ITALIC='\033[3m'
+DIM='\033[2m'
+RESET='\033[0m'
+
+# provider_color and provider_swatch are defined in lib/providers.sh
+# (sourced near the top of this file).
+
+# Get model name for provider (mirrors logic in provider scripts)
+# get_model is defined in lib/providers.sh (sourced near the top of this file).
+
+# Format provider list with colour swatches and names
+format_providers() {
+    local formatted=""
+    local color swatch
+    for p in "$@"; do
+        color=$(provider_color "$p")
+        swatch=$(provider_swatch "$p")
+        formatted+="${swatch} ${color}${p}${RESET} "
+    done
+    echo "$formatted"
+}
+
+# Assign roles to providers if specified
+ROLE_ASSIGNMENTS=""
+if [[ -n "$ROLES" ]]; then
+    ROLE_ASSIGNMENTS=$(assign_roles_to_providers "$ROLES" "${PROVIDERS[@]}")
+    echo -e "Provider roles:" >&2
+    for assignment in $ROLE_ASSIGNMENTS; do
+        local_provider="${assignment%%:*}"
+        local_role="${assignment#*:}"
+        if [[ -n "$local_role" ]]; then
+            local_role_name=$(get_role_name "$local_role")
+            local_color=$(provider_color "$local_provider")
+            echo -e "  ${local_color}${local_provider}${RESET}: ${local_role_name}" >&2
+        fi
+    done
+fi
+
+# Include file content in prompt if --file specified
+if [[ -n "$FILE_PATH" ]]; then
+    FILE_CONTENT=$(cat "$FILE_PATH")
+    PROMPT="Here is the content of ${FILE_PATH}:
+
+\`\`\`
+${FILE_CONTENT}
+\`\`\`
+
+${PROMPT}"
+fi
+
+# Open streaming pane (best effort) and signal "querying" via tab color.
+# An inherited COUNCIL_PANE_DIR naming a watch dir — one with the responses/
+# subdir display_pane_open creates — is a pane already streaming this run, and
+# it wins over --no-pane, which only stops a NEW pane from opening. The tests
+# drive the retry protocol through one, since bats has no tmux to open a real
+# pane in. The shape check keeps a leaked export naming some ordinary directory
+# from being taken for a pane: nothing would watch it, and the retry offer
+# would wait its whole window for nobody.
+if [[ ! -d "${COUNCIL_PANE_DIR:-}/responses" ]]; then
+    COUNCIL_PANE_DIR=""
+    if [[ "$NO_PANE" != true ]]; then
+        if pane_dir=$(display_pane_open 2>/dev/null); then
+            COUNCIL_PANE_DIR="$pane_dir"
+        fi
+    fi
+fi
+# Probe /dev/tty once and cache the result for the council_signal_* helpers.
+COUNCIL_HAS_TTY=0
+council_probe_tty && COUNCIL_HAS_TTY=1
+council_signal_state yellow
+COUNCIL_START_MS=$(now_ms)
+
+# Reap expired cache entries once per run so the response cache does not grow
+# without bound (the prune-on-the-hot-path analog of jobs_prune in run_async).
+[[ "$USE_CACHE" == true ]] && cache_prune 2>/dev/null || true
+
+# The error text a cancelled seat's slot carries; the pane's distinct state
+# is in the status log, the slot stays a plain error so the synthesis, the
+# transcript and the formatter treat the seat as absent.
+CANCELLED_MSG="cancelled from the pane"
+# Seats the pane cancelled this run; round 2 leaves them out.
+CANCELLED=()
+# Every round-1 launch this run, one entry per launch: a seat listed twice has
+# had its one retry, from its row or from the band, and is not offered another.
+LAUNCHES=()
+
+# Whether the first argument names one of the rest. Args: name list...
+seat_in() {
+    local name="$1" seat
+    shift
+    for seat in "$@"; do [[ "$seat" == "$name" ]] && return 0; done
+    return 1
+}
+
+# The mod pane cancels a seat by dropping its name in the watch dir's
+# cancel/ folder; the marker stays until the seat is logged as cancelled, so
+# the pane can draw the seat as cancelling meanwhile. Without a pane there is
+# no folder and nothing to spend.
+seat_cancelled() { [[ -n "${COUNCIL_PANE_DIR:-}" && -f "${COUNCIL_PANE_DIR}/cancel/$1" ]]; }
+spend_cancel() { [[ -z "${COUNCIL_PANE_DIR:-}" ]] || rm -f "${COUNCIL_PANE_DIR}/cancel/$1"; }
+# The retry/ folder is the same protocol for a seat's error row. The run says
+# which seats a press can re-query by writing their names in retriable/: a
+# name is there while the seat is parked in await_seats and another seat is
+# still live, and goes when the seat is relaunched or the loop returns, so
+# the pane offers the button only while a press can be honoured.
+seat_retry_pressed() { [[ -n "${COUNCIL_PANE_DIR:-}" && -f "${COUNCIL_PANE_DIR}/retry/$1" ]]; }
+spend_retry() { [[ -z "${COUNCIL_PANE_DIR:-}" ]] || rm -f "${COUNCIL_PANE_DIR}/retry/$1"; }
+offer_row_retry() { [[ -z "${COUNCIL_PANE_DIR:-}" ]] || { mkdir -p "${COUNCIL_PANE_DIR}/retriable" && : > "${COUNCIL_PANE_DIR}/retriable/$1"; }; }
+withdraw_row_retry() { [[ -z "${COUNCIL_PANE_DIR:-}" ]] || rm -f "${COUNCIL_PANE_DIR}/retriable/$1"; }
+
+# Whether a seat has been launched twice this run, which is its one retry spent.
+seat_retried() {
+    local provider="$1" seat n=0
+    for seat in ${LAUNCHES[@]+"${LAUNCHES[@]}"}; do [[ "$seat" == "$provider" ]] && n=$(( n + 1 )); done
+    (( n >= 2 ))
+}
+
+# Whether a seat's round-1 slot ended in an error with its retry still to
+# spend. A cancelled seat never reaches this: cancel_seat empties its place
+# in the loop as it writes the slot. Args: provider
+seat_errored() {
+    local provider="$1"
+    local slot="${TEMP_DIR}/${provider}.json"
+    [[ -f "$slot" ]] || return 1
+    seat_retried "$provider" && return 1
+    [[ "$(jq -r '.status' "$slot" 2>/dev/null)" == "error" ]]
+}
+
+# End a seat the pane cancelled: its whole process tree goes (the CLI, its
+# children, and the subshell that would otherwise try the API sibling next),
+# then its slot records the cancellation. The tree is listed once, before
+# the signal: a child left behind is reparented and no longer found under
+# the job. TERM first, then KILL for whatever is still there five seconds
+# on, since a CLI that traps TERM for a graceful exit, or a child that
+# ignores it, would otherwise outlive the job holding its stderr open. The
+# slot is written only after the job is reaped, so nothing the seat was
+# mid-way through writing lands on top of it. Any error file is removed
+# rather than written: the status line is the whole story, and a seat that
+# failed on a retry and was then cancelled would otherwise show its old
+# error. Args: provider pid output_file
+cancel_seat() {
+    local provider="$1" pid="$2" output_file="$3" role="" ticks=50
+    local -a tree
+    # shellcheck disable=SC2207 # pids hold no spaces or globs
+    tree=($(process_tree "$pid"))
+    kill -TERM "${tree[@]}" 2>/dev/null || true
+    while (( ticks-- > 0 )) && any_alive "${tree[@]}"; do sleep 0.1; done
+    kill -KILL "${tree[@]}" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+    [[ -z "$ROLE_ASSIGNMENTS" ]] || role=$(get_provider_role "$provider" "$ROLE_ASSIGNMENTS")
+    printf '%s' "$CANCELLED_MSG" | jq -Rs --arg role "$role" \
+        '{status: "error", error: ., cached: false, role: (if $role == "" then null else $role end)}' > "$output_file"
+    rm -f "${COUNCIL_PANE_DIR}/errors/${provider}.txt"
+    pane_status_event "$COUNCIL_PANE_DIR" "$provider" cancelled "" "$(get_model "$provider")"
+    spend_cancel "$provider"
+    CANCELLED+=("$provider")
+    echo -e "$(provider_color "$provider")${provider}${RESET}: ${DIM}${CANCELLED_MSG}${RESET}" >&2
+}
+
+# Start one round-1 seat as a background job and name it provider=pid in
+# LAUNCHED: the job must be this shell's child, which a $(...) would not
+# give, so nothing is printed. Shared by the round, the band's retry and a row's retry, so a
+# retried seat gets exactly the query it failed. A marker from before this
+# launch (a press that landed once the seat was over) is spent: the seat
+# starts afresh. Args: provider
+launch_seat() {
+    local provider="$1" provider_role=""
+    [[ -z "$ROLE_ASSIGNMENTS" ]] || provider_role=$(get_provider_role "$provider" "$ROLE_ASSIGNMENTS")
+    rm -f "${TEMP_DIR}/${provider}.json"
+    spend_cancel "$provider"
+    spend_retry "$provider"
+    withdraw_row_retry "$provider"
+    LAUNCHES+=("$provider")
+    query_provider "$provider" "$PROMPT" "${TEMP_DIR}/${provider}.json" "$provider_role" &
+    LAUNCHED="${provider}=$!"
+}
+
+# Wait for the round-1 seats launched as background jobs, ending any the pane
+# cancels meanwhile and re-querying any the pane presses retry on from its
+# error row. Polled in 0.2 s ticks rather than waited on: bash 3.2 has no
+# wait -n, and a blocking wait could not notice a marker. Without a pane
+# nothing can press, so the seats are simply waited on. A cancel that finds
+# the seat's slot already on disk is spent, whatever the slot says: the seat
+# has finished its work (the job lives on a moment after that write,
+# streaming the answer to the pane and the cache), and the reader cancelled
+# a wait that was already over; a slot caught mid-write is one such. A retry
+# is honoured only while the loop still runs, which is while some seat is
+# live: once the last seat ends the band's offer takes over, every parked
+# seat's retriable/ name is withdrawn, and a marker that lands after that
+# stays, and goes with the watch dir.
+# Args: provider=pid...
+await_seats() {
+    local -a seats=("$@")
+    local i provider pid live seat
+    if [[ -z "${COUNCIL_PANE_DIR:-}" ]]; then
+        for seat in "${seats[@]}"; do wait "${seat#*=}" 2>/dev/null || true; done
+        return 0
+    fi
+    while :; do
+        live=0
+        for i in "${!seats[@]}"; do
+            [[ -n "${seats[$i]}" ]] || continue
+            provider="${seats[$i]%%=*}"
+            pid="${seats[$i]#*=}"
+            if [[ "$pid" == "-" ]]; then
+                # A seat that ended in its own error keeps its place, with no
+                # job, so a row press can still re-query it this round.
+                if seat_retry_pressed "$provider"; then
+                    echo -e "🔁 Retrying $(format_providers "$provider") from its row..." >&2
+                    launch_seat "$provider"
+                    seats[i]="$LAUNCHED"
+                    live=1
+                fi
+            elif ! kill -0 "$pid" 2>/dev/null; then
+                wait "$pid" 2>/dev/null || true
+                spend_cancel "$provider"
+                if seat_errored "$provider"; then seats[i]="${provider}=-"; else spend_retry "$provider"; seats[i]=""; fi
+            elif seat_cancelled "$provider"; then
+                if [[ -e "${TEMP_DIR}/${provider}.json" ]]; then
+                    spend_cancel "$provider"
+                    live=1
+                else
+                    cancel_seat "$provider" "$pid" "${TEMP_DIR}/${provider}.json"
+                    seats[i]=""
+                fi
+            else
+                live=1
+            fi
+        done
+        # A parked seat is offered only once the tick knows another seat is
+        # still live, so the pane never sees an offer nothing could honour.
+        for seat in "${seats[@]}"; do
+            [[ "${seat#*=}" == "-" ]] || continue
+            if (( live )); then offer_row_retry "${seat%%=*}"; else withdraw_row_retry "${seat%%=*}"; fi
+        done
+        (( live )) || return 0
+        sleep 0.2
+    done
+}
+
+# Query the given providers in parallel with their round-1 roles and wait for
+# all of them. Shared by the first pass and the retry, so a retried provider
+# gets exactly the query it failed. Args: provider...
+query_round1() {
+    local provider
+    local seats=()
+    for provider in "$@"; do launch_seat "$provider"; seats+=("$LAUNCHED"); done
+    await_seats "${seats[@]}"
+}
+
+# Launch all queries in parallel
+FORMATTED_PROVIDERS=$(format_providers "${PROVIDERS[@]}")
+echo -e "🚀 Querying ${#PROVIDERS[@]} providers in parallel: ${FORMATTED_PROVIDERS}..." >&2
+query_round1 "${PROVIDERS[@]}"
+
+# Fold one provider's coerced result into an accumulator object under its
+# provider key. Both blobs reach jq via STDIN, never argv: on MSYS/Windows
+# ARG_MAX is ~32KB and a large response passed on the command line overflows it
+# ("jq: Argument list too long"), silently dropping output. printf is a bash
+# builtin, so the pipe is not bounded by ARG_MAX.
+# Args: accumulator-json provider result-json   Stdout: merged accumulator
+merge_result() {
+    printf '%s\n%s' "$1" "$3" | jq -s --arg p "$2" '.[0] + {($p): .[1]}'
+}
+
+# Fold the given providers' round-1 result files into RESULTS and print a
+# status line for each. ERRORS (the stderr summary lines) and FAILED (the
+# provider names) are rebuilt from scratch on every call: the retry collects
+# exactly the providers that failed before, so whatever is still failing
+# afterwards is the complete error list — and a provider that answered on
+# retry drops out of the red tab and the stderr summary. Args: provider...
+collect_round1() {
+    local provider result_file color model result status cached error_msg
+    ERRORS=()
+    FAILED=()
+    for provider in "$@"; do
+        result_file="${TEMP_DIR}/${provider}.json"
+        color=$(provider_color "$provider")
+        model=$(get_model "$provider")
+
+        if [[ -f "$result_file" ]]; then
+            # coerce_result_json adds the model and guarantees valid JSON, so a
+            # provider that wrote malformed output can't crash the whole run here.
+            result=$(coerce_result_json "$(cat "$result_file")" "$model")
+            RESULTS=$(merge_result "$RESULTS" "$provider" "$result")
+
+            # Show the model that actually answered: on a fallback the slot carries
+            # the API sibling's model, not this provider's CLI default. coerce_result_json
+            # guarantees .model is present.
+            model=$(echo "$result" | jq -r '.model')
+
+            # Track errors and show status
+            status=$(echo "$result" | jq -r '.status')
+            cached=$(echo "$result" | jq -r '.cached // false')
+
+            if [[ "$status" == "error" ]]; then
+                error_msg=$(echo "$result" | jq -r '.error')
+                echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${RED}error${RESET} - ${DIM}${error_msg}${RESET}" >&2
+                ERRORS+=("$provider: $error_msg")
+                # A seat the reader cancelled, or already retried from its
+                # row, is not offered back for retry.
+                seat_in "$provider" ${CANCELLED[@]+"${CANCELLED[@]}"} || seat_retried "$provider" || FAILED+=("$provider")
+            elif [[ "$cached" == "true" ]]; then
+                echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${CYAN}cached${RESET}" >&2
+            else
+                echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${GREEN}success${RESET}" >&2
+            fi
+        else
+            echo -e "${color}${provider}${RESET} ${ITALIC}${LIGHT_YELLOW}${model}${RESET}: ${RED}no response${RESET}" >&2
+            ERRORS+=("$provider: No response received")
+            FAILED+=("$provider")
+            RESULTS=$(echo "$RESULTS" | jq --arg p "$provider" --arg m "$model" '.[$p] = {status: "error", error: "No response received", model: $m, cached: false}')
+        fi
+    done
+}
+
+# Offer the pane one chance to re-query the providers that failed round 1.
+# The producer runs the retry rather than the pane: it holds the API keys, and
+# its JSON output is what the synthesis, transcript and cache are built from.
+# Waits up to COUNCIL_RETRY_WAIT seconds (0 disables) for the pane's answer.
+# Offered once per run — a second failure just shows its error.
+offer_retry() {
+    local wait="${COUNCIL_RETRY_WAIT:-45}" pane="${COUNCIL_PANE_DIR:-}"
+    [[ ${#FAILED[@]} -gt 0 ]] || return 0
+    [[ "$wait" =~ ^[0-9]+$ && $wait -gt 0 ]] || return 0
+    [[ -d "$pane" ]] || return 0
+
+    # A write that fails means the reader closed the pane: no offer, no wait.
+    pane_retry_offer_write "$pane" "$wait" "${FAILED[@]}" || return 0
+    council_signal_attention
+    pane_retry_await "$pane" "$wait" || return 0
+
+    # collect_round1 rebuilds FAILED, so the roster is copied first.
+    local retry=("${FAILED[@]}")
+    echo -e "🔁 Retrying ${#retry[@]} failed provider(s): $(format_providers "${retry[@]}")..." >&2
+    query_round1 "${retry[@]}"
+    collect_round1 "${retry[@]}"
+}
+
+# Collect results
+RESULTS="{}"
+collect_round1 "${PROVIDERS[@]}"
+offer_retry
+
+# Debate mode: Round 2 rebuttals
+ROUND2_RESULTS="{}"
+if [[ "$DEBATE_MODE" == true ]]; then
+    echo -e "\n🔄 Debate mode: Starting round 2 rebuttals..." >&2
+
+    # Build the shared part of the debate prompt: the ORIGINAL question (stateless
+    # provider calls have no memory of round 1) followed by every round-1 answer,
+    # each labeled by provider so a rebuttal can reference "its own" answer.
+    debate_common="The original question was:"
+    debate_common+=$'\n\n'
+    debate_common+="${PROMPT}"
+    debate_common+=$'\n\n'
+    debate_common+="Here are the round-1 answers to that question (yours is among them):"
+    debate_common+=$'\n\n'
+    for provider in "${PROVIDERS[@]}"; do
+        response=$(echo "$RESULTS" | jq -r --arg p "$provider" '.[$p].response // empty')
+        if [[ -n "$response" ]]; then
+            provider_upper=$(echo "$provider" | tr '[:lower:]' '[:upper:]')
+            debate_common+="[${provider_upper}'S RESPONSE]"
+            debate_common+=$'\n'
+            debate_common+="${response}"
+            debate_common+=$'\n\n'
+        fi
+    done
+
+    debate_common+="As a critical reviewer, analyze these responses:"
+    debate_common+=$'\n'
+    debate_common+="1. What are the strengths of each approach?"
+    debate_common+=$'\n'
+    debate_common+="2. What are the weaknesses or blind spots?"
+    debate_common+=$'\n'
+    debate_common+="3. What did the other responses miss?"
+    debate_common+=$'\n'
+    debate_common+="4. What would you change about your original recommendation after seeing these?"
+
+    # Query all providers for rebuttals (no roles, no cache). A seat cancelled
+    # in round 1 has no answer to defend. Round 2 logs no pane rows, so there
+    # is nothing to press and the seats are simply waited on.
+    ROUND2_PROVIDERS=()
+    for provider in "${PROVIDERS[@]}"; do
+        seat_in "$provider" ${CANCELLED[@]+"${CANCELLED[@]}"} || ROUND2_PROVIDERS+=("$provider")
+    done
+    ROUND2_PIDS=()
+    for provider in ${ROUND2_PROVIDERS[@]+"${ROUND2_PROVIDERS[@]}"}; do
+        # Round 2: no role, skip cache (rebuttals depend on round 1 content)
+        (
+            script="$(provider_script_path "$provider")"
+            model=$(get_model "$provider")
+            output_file="${TEMP_DIR}/${provider}_r2.json"
+
+            # Tell this provider which labeled answer is its own so it can
+            # actually revise "its" recommendation rather than a peer's.
+            provider_upper=$(echo "$provider" | tr '[:lower:]' '[:upper:]')
+            debate_prompt="You are ${provider_upper}. Your own round-1 answer is the one labeled [${provider_upper}'S RESPONSE] below."
+            debate_prompt+=$'\n\n'
+            debate_prompt+="$debate_common"
+
+            if [[ ! -x "$script" ]]; then
+                echo '{"status": "error", "error": "Script not found"}' > "$output_file"
+            else
+                envelope=$(run_provider_with_model_fallback "$provider" "$script" "$debate_prompt") && r2_rc=0 || r2_rc=$?
+                if [[ ${r2_rc:-0} -eq 0 ]]; then
+                    # The envelope carries the full rebuttal, which embeds every
+                    # round-1 answer: stdin, never argv — see merge_result for
+                    # the MSYS ARG_MAX rationale.
+                    printf '%s' "$envelope" | jq '{status: "success", response: .response, model: .model, model_fallback: .model_fallback}' > "$output_file"
+                else
+                    fb_json=$(attempt_api_fallback "$provider" "$debate_prompt")
+                    if [[ -n "$fb_json" ]]; then
+                        fallback_slot_json "$fb_json" "" "$envelope" > "$output_file"
+                    else
+                        printf '%s' "$envelope" | jq -Rs '{status: "error", error: .}' > "$output_file"
+                    fi
+                fi
+            fi
+        ) &
+        ROUND2_PIDS+=($!)
+    done
+
+    # Wait for round 2
+    for pid in ${ROUND2_PIDS[@]+"${ROUND2_PIDS[@]}"}; do
+        wait "$pid" 2>/dev/null || true
+    done
+
+    # Collect round 2 results
+    for provider in ${ROUND2_PROVIDERS[@]+"${ROUND2_PROVIDERS[@]}"}; do
+        result_file="${TEMP_DIR}/${provider}_r2.json"
+        color=$(provider_color "$provider")
+        model=$(get_model "$provider")
+
+        if [[ -f "$result_file" ]]; then
+            result=$(coerce_result_json "$(cat "$result_file")" "$model")
+            ROUND2_RESULTS=$(merge_result "$ROUND2_RESULTS" "$provider" "$result")
+
+            status=$(echo "$result" | jq -r '.status')
+            if [[ "$status" == "error" ]]; then
+                echo -e "${color}${provider}${RESET} rebuttal: ${RED}error${RESET}" >&2
+            else
+                echo -e "${color}${provider}${RESET} rebuttal: ${GREEN}success${RESET}" >&2
+            fi
+        else
+            echo -e "${color}${provider}${RESET} rebuttal: ${RED}no response${RESET}" >&2
+            ROUND2_RESULTS=$(echo "$ROUND2_RESULTS" | jq --arg p "$provider" --arg m "$model" '.[$p] = {status: "error", error: "No response received", model: $m}')
+        fi
+    done
+fi
+
+# Build metadata object
+TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+# Convert roles to JSON array
+if [[ -n "$ROLES" ]]; then
+    ROLES_JSON=$(echo "$ROLES" | tr ',' '\n' | jq -R . | jq -s .)
+else
+    ROLES_JSON="null"
+fi
+# Whether a pane (tmux or the Claude Code mod) streamed round 1 as it arrived.
+# The caller uses it to avoid reprinting answers the user has already read, so
+# it is claimed only when the watch dir still exists (closing the pane removes
+# it, and later answers go nowhere) and the run is not a detached --async job,
+# whose result is fetched later by someone who may never have watched it.
+PANE_SHOWN=false
+[[ -d "${COUNCIL_PANE_DIR:-}/responses" && -z "${COUNCIL_JOB_ID:-}" ]] && PANE_SHOWN=true
+# The prompt (large with file context) reaches jq as a raw string via STDIN,
+# not argv: -Rs slurps it to a JSON string exactly as --rawfile would, with no
+# argv-bounded path. See merge_result for the ARG_MAX rationale.
+METADATA=$(printf '%s' "$PROMPT" | jq -Rs \
+    --arg file_path "$FILE_PATH" \
+    --argjson roles_used "$ROLES_JSON" \
+    --argjson debate_mode "$DEBATE_MODE" \
+    --argjson quiet_mode "$QUIET_MODE" \
+    --argjson pane_shown "$PANE_SHOWN" \
+    --arg output_path "$OUTPUT_PATH" \
+    --argjson auto_context "$AUTO_CONTEXT" \
+    --arg timestamp "$TIMESTAMP" \
+    '{
+        prompt: .,
+        file_path: (if $file_path == "" then null else $file_path end),
+        roles_used: $roles_used,
+        debate_mode: $debate_mode,
+        quiet_mode: $quiet_mode,
+        pane_shown: $pane_shown,
+        output_path: (if $output_path == "" then null else $output_path end),
+        auto_context: $auto_context,
+        timestamp: $timestamp
+    }')
+
+# Output final JSON. Feed the large blobs (metadata + every provider response)
+# to jq via STDIN, not argv — see merge_result for the ARG_MAX rationale. Each
+# blob is exactly one JSON value, so `jq -s` slurps them into an array to index.
+if [[ "$DEBATE_MODE" == true ]]; then
+    printf '%s\n%s\n%s' "$METADATA" "$RESULTS" "$ROUND2_RESULTS" |
+        jq -s '{metadata: .[0], round1: .[1], round2: .[2]}'
+else
+    printf '%s\n%s' "$METADATA" "$RESULTS" |
+        jq -s '{metadata: .[0], round1: .[1]}'
+fi
+
+# Report errors to stderr
+if [[ ${#ERRORS[@]} -gt 0 ]]; then
+    echo "" >&2
+    echo "Errors:" >&2
+    for err in "${ERRORS[@]}"; do
+        echo "  - $err" >&2
+    done
+fi
+
+# Lifecycle closeout: tab color, dock attention, pane handoff to interactive close.
+if [[ ${#ERRORS[@]} -gt 0 ]]; then
+    council_signal_state red
+else
+    council_signal_state green
+fi
+
+COUNCIL_ELAPSED_MS=$(( $(now_ms) - COUNCIL_START_MS ))
+COUNCIL_ATTENTION_THRESHOLD_MS="${COUNCIL_ATTENTION_THRESHOLD:-2000}"
+if [[ $COUNCIL_ELAPSED_MS -ge $COUNCIL_ATTENTION_THRESHOLD_MS ]]; then
+    council_signal_attention
+fi
+
+if [[ -n "$COUNCIL_PANE_DIR" ]]; then
+    # Best-effort: the user closing the pane early already removed the watch
+    # dir, and a missing display must not fail an otherwise successful query
+    display_pane_close "$COUNCIL_PANE_DIR" || true
+fi

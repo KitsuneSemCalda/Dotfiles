@@ -78,20 +78,10 @@ def select_microphone():
 
 
 def apply_profiles():
-    power = command('busctl', 'get-property', 'org.freedesktop.UPower',
-                    '/org/freedesktop/UPower', 'org.freedesktop.UPower', 'OnBattery')
-    if power not in ('b true', 'b false'):
-        raise RuntimeError('Cannot determine AC/battery state')
-    expected = 'power-saver' if power == 'b true' else 'balanced'
-    # Each set applies immediately; configure the inactive supply first.
-    pairs = [('battery', 'power-saver'), ('ac', 'balanced')]
-    if power == 'b true':
-        pairs.reverse()
-    for supply, profile in pairs:
-        command('omarchy', 'powerprofiles', 'set', supply, profile)
-    if command('powerprofilesctl', 'get') != expected:
-        raise RuntimeError('Active power profile differs from the supply policy')
-    print(f'Energy policy verified: AC balanced, battery power-saver; active {expected}')
+    # Omarchy owns saved AC/battery choices. Reapply the current choice without
+    # replacing either preference with this repository's defaults.
+    command('omarchy', 'powerprofiles', 'init')
+    print('Energy profile restored through Omarchy preferences')
 
 
 def verify_hardware():
@@ -109,21 +99,6 @@ def verify_hardware():
             '-vf', 'format=nv12,hwupload', '-c:v', 'h264_vaapi', '-low_power', '1',
             '-b:v', '4M', '-maxrate', '4M', '-bufsize', '8M', '-f', 'null', '-')
     print('HuC low-power bitrate-control encoder test passed')
-
-
-def wait_for_hardware(timeout=45):
-    """Wait for this boot's atomic report, without accepting stale verification."""
-    deadline = time.monotonic() + timeout
-    while True:
-        try:
-            if json.loads(REPORT.read_text()).get('boot_id') == BOOT_ID.read_text().strip():
-                return
-        except (OSError, ValueError):
-            pass
-        if time.monotonic() >= deadline:
-            raise RuntimeError('No current-boot hardware report after 45s; check '
-                               'systemctl status dotfiles-samsung-hardware.service')
-        time.sleep(.25)
 
 
 def verify_displays():
@@ -146,12 +121,7 @@ def verify_displays():
         raise RuntimeError('Internal panel is still enabled with lid closed and an active external display')
 
 
-def main():
-    if Path('/sys/class/dmi/id/board_name').read_text().strip() != 'NP550XDA-KF2BR':
-        raise RuntimeError('Unsupported board')
-    wait_for_hardware()
-    verify_hardware()
-    apply_profiles()
+def configure_audio():
     restore_capture = subprocess.run(
         ['systemctl', '--user', 'is-active', '--quiet', 'capture-audio.service']).returncode == 0
     try:
@@ -161,18 +131,45 @@ def main():
             command('systemctl', '--user', 'restart', *SERVICES)
         wait_for(realtime_ready, 'realtime audio processing threads')
         wait_for(metadata_ready, 'WirePlumber default metadata')
-        # Metadata can appear before ALSA discovery. Wait for a source on this laptop.
         wait_for(lambda: any(o.get('info', {}).get('props', {}).get('media.class') == 'Audio/Source'
                              for o in audio_nodes()), 'ALSA source discovery')
         select_microphone()
     finally:
         if restore_capture:
             command('systemctl', '--user', 'restart', 'capture-audio.service')
-    verify_displays()
+
+
+def check_hardware():
+    # This unit runs after login: the early hardware unit has already completed.
+    # A failed report should not delay unrelated session setup by 45 seconds.
+    verify_hardware()
+
+
+def check_config():
     errors = command('hyprctl', 'configerrors')
     if errors:
         raise RuntimeError(errors)
-    print('Samsung session verified: realtime audio and preferred microphone policy applied')
+
+
+def run_checks(checks):
+    failures = []
+    for label, check in checks:
+        try:
+            check()
+        except (OSError, ValueError, KeyError, RuntimeError, subprocess.SubprocessError) as error:
+            failures.append(f'{label}: {error}')
+            print(f'FAILED: {label}: {error}', flush=True)
+    if failures:
+        raise RuntimeError('Session checks failed: ' + '; '.join(failures))
+
+
+def main():
+    if Path('/sys/class/dmi/id/board_name').read_text().strip() != 'NP550XDA-KF2BR':
+        raise RuntimeError('Unsupported board')
+    run_checks([('energy', apply_profiles), ('audio', configure_audio),
+                ('displays', verify_displays), ('Hyprland', check_config),
+                ('hardware', check_hardware)])
+    print('Samsung session checks passed')
 
 
 if __name__ == '__main__':

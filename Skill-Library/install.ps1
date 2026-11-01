@@ -13,6 +13,7 @@ Uso:
 
 param(
     [string]$Agent = '',
+    [string]$Skill = '',
     [switch]$DryRun,
     [switch]$List,
     [switch]$Help
@@ -24,7 +25,8 @@ if ($Help) {
     Write-Output @'
 Uso: pwsh install.ps1 [opcoes]
 
-  -Agent <nome>  instala em apenas um agente (claude, codex, opencode)
+  -Agent <nome>  instala em apenas um agente (claude, codex, opencode, gemini, cursor, grok)
+  -Skill <nome>  instala apenas a skill indicada
   -List          lista as skills da biblioteca e os agentes detectados
   -DryRun        mostra o que seria instalado sem copiar nada
   -Help          mostra esta ajuda
@@ -42,6 +44,9 @@ $Agents = [ordered]@{
     claude   = Join-Path $UserHome '.claude\skills'
     codex    = Join-Path $UserHome '.codex\skills'
     opencode = Join-Path $UserHome '.config\opencode\skills'
+    gemini   = Join-Path $UserHome '.gemini\skills'
+    cursor   = Join-Path $UserHome '.cursor\skills'
+    grok     = Join-Path $UserHome '.grok\skills'
 }
 
 $ScriptDir = $PSScriptRoot
@@ -56,6 +61,10 @@ function Get-LibrarySkills {
 }
 
 $Skills = @(Get-LibrarySkills)
+if ($Skill) {
+    if ($Skill -notin $Skills) { throw "Skill desconhecida '$Skill'" }
+    $Skills = @($Skill)
+}
 
 if ($List) {
     Write-Output 'Skills na biblioteca:'
@@ -90,7 +99,7 @@ foreach ($name in $AgentNames) {
 $Targets = @($AgentNames | Where-Object { Test-Path -LiteralPath (Split-Path -Path $Agents[$_] -Parent) })
 
 if ($Targets.Count -eq 0) {
-    Write-Output 'Nenhum agente CLI suportado detectado nesta maquina (procurei .claude, .codex e .config/opencode). Nada instalado.'
+    Write-Output 'Nenhum agente CLI suportado detectado nesta maquina. Nada instalado.'
     exit 0
 }
 

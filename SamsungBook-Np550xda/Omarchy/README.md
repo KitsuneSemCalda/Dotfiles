@@ -25,8 +25,9 @@ Hyprland. The full snapshot used to make these decisions is at
 The current choices follow this profile: scale 1, shell font size 14,
 terminal font size 11, preferred monitor mode and EDID color management for
 the internal BOE panel, plus moderate visual effects for the Iris Xe.
-GTK and the fontconfig minimum remain at 20; the shell and terminal settings
-do not impose a common physical font size across applications.
+GTK and the shell use size 14; terminals use size 11. Fontconfig selects
+Lexend without imposing a global minimum that can distort application layouts.
+These sizes do not guarantee identical physical text sizes across applications.
 The power profile is left to Omarchy's own
 `omarchy powerprofiles init`, which already runs at session start and picks
 `power-saver` or `balanced`/`performance` from the AC/battery signal.
@@ -185,6 +186,7 @@ docker/
 ├── docker-compose.yml           # postgres, redis, frankmd, ai-memory, pihole
 └── .env.example                 # documented variables (the real .env stays out of git)
 omarchy.pl                       # installer and orchestrator, written in Perl
+scripts/prepare-downloads.py    # prepares selected downloads before installation
 scripts/hardware-profile.pl     # updates the snapshot via inxi
 scripts/docker-stack.pl         # brings up the Docker stack and wires the AI agents
 scripts/hooks/pihole-dns-recover.sh       # post-boot hook: re-points resolved at Pi-hole
@@ -228,8 +230,8 @@ theme. `--plugin` (also `--plugins`) reinstalls three external shell plugins
 in the current profile: Feader RSS, Spaces, and
 [Glass](https://plugins.omarchy.org/plugin.html?id=kitsuneforgering.glass).
 It also validates and enables the local audio panel shipped in this repository.
-Spaces replaces the built-in workspace switcher; Glass provides the bar and menu. `SUPER + SPACE`
-opens the Glass menu.
+Spaces replaces the built-in workspace switcher; Glass provides the bar and
+its menu button. `SUPER + SPACE` keeps the native Omarchy menu available.
 Feader RSS feeds live at `~/.config/omarchy/rss-reader.json`.
 
 The saved bar layout under `home/` preserves the current Spaces, media and
@@ -242,7 +244,9 @@ snapshot, but `--plugin` no longer installs or enables Liquid Glass.
 published Glass plugin repository; unpublished edits to a local checkout
 are not part of a fresh installation.
 The source checkouts used by the plugin installers stay under
-`~/.local/share/dotfiles/sources/` and survive removal of this dotfiles clone.
+`~/.cache/dotfiles/downloads/sources/` (under `$XDG_CACHE_HOME` when set).
+Runtime plugins, the OpenRGB binary and hooks are installed as separate copies;
+the preparation cache can be recreated by the next installation.
 
 Existing plugin directories are preserved under
 `~/.local/state/dotfiles/plugin-backups/<timestamp>/` before replacement.
@@ -252,7 +256,8 @@ backups, not application versions, compiled plugins or services.
 The keyboard's RGB lighting needs the
 [Dareu EK75 OpenRGB driver](https://github.com/KitsuneSemCalda/Dareu-EK75-OpenRGB-Compat),
 because the packaged `openrgb` has no support for it. `--openrgb` clones it to
-`~/.local/share/dareu-ek75-openrgb`, or updates an existing clone, then runs its
+`~/.cache/dotfiles/downloads/sources/dareu-ek75-openrgb`, or updates its
+preparation checkout, then runs its
 installer steps: an OpenRGB build with the driver, the launcher, and a hook
 that colours the keyboard with each Omarchy theme's accent. The udev rule is
 installed in the installer's single `pkexec` call. It needs the Qt 6
@@ -275,6 +280,42 @@ and reconnect the keyboard to restore its original behavior.
 ```bash
 perl ./omarchy.pl --ek75-knob
 ```
+
+## Downloads and installation
+
+Every main-installer run first validates destination conflicts, then prepares
+all selected downloads in `${XDG_CACHE_HOME:-~/.cache}/dotfiles/downloads/`.
+No package installation, dotfile copy, plugin replacement or service activation
+starts until that phase succeeds. A failed transfer leaves only preparation
+caches; a stale success manifest is removed before each attempt. `--dry-run`
+shows both phases without downloading or installing anything.
+
+The preparation covers official packages and their dependencies, AUR recipes
+and verified sources, the local Claude recipe, fonts, web-app icons, theme and
+plugin checkouts, OmaStore's checksum-verified release, the pinned OpenRGB
+source, Cargo/Go dependencies, and ai-memory's wrapper, native client and image.
+Official package signatures and upstream checksum checks remain enabled.
+Downloads reuse completed cache files, while failed HTTP transfers never become
+completed files. Tracked source edits are preserved and stop the run. AUR/OpenRGB build
+outputs are retained between runs; conflicting untracked files stop Git updates.
+Only one installer may use the cache at a time.
+
+Installation consumes local package archives and prepared assets. Cargo uses
+offline mode and Go disables module downloads. If Docker is not running,
+preparation uses Skopeo to download an image archive without starting Docker;
+installation loads it before Compose starts ai-memory with `--pull never`.
+Preparation can unpack downloaded build tools into the cache to fetch build
+dependencies without installing those tools first. The base Omarchy commands
+Python, curl, Git, pacman, makepkg and bsdtar must already be available.
+AUR recipes are executable build scripts; their declared sources are verified
+before the installation phase. A build that requires undeclared online inputs
+needs an explicit preparation step rather than a network fallback.
+
+On successful installation the CLI recommends a reboot. It does not reboot
+automatically unless `--reboot` was explicitly passed. Failures never print the
+successful completion/reboot recommendation. Standalone helper scripts retain
+their focused installation behavior; the two-phase guarantee applies to
+`omarchy.pl` and the helpers it invokes with its prepared manifest.
 
 ## Installation
 
@@ -697,15 +738,21 @@ Veja [dependências, verificações e limites de suporte](docs/ai-acceleration.m
 
 `--hardware --backup` installs and reapplies the Samsung policy; `--all` includes
 it automatically. It requires board NP550XDA-KF2BR and implies `--clamshell`.
-The system service checks battery charge limit 80%, Ethernet runtime PM auto,
-and enabled/running thermald and power-profiles-daemon at installation and boot.
+The early system service checks battery charge limit 80% and Ethernet runtime
+PM auto. thermald and power-profiles-daemon are enabled at installation; the
+early service does not depend on them. Power Profiles starts after
+`multi-user.target`, so waiting for it before login creates an ordering cycle.
 The installer persists i915 enable_guc=2 and rebuilds the boot image.
 
-The graphical-session service reapplies AC balanced / battery power-saver,
-checks realtime audio threads, remembers the Fifine default microphone, and
+The graphical-session service restores the current Omarchy energy preference
+without overwriting the saved AC/battery choices, checks realtime audio
+threads, remembers the Fifine default microphone, and
 checks the known external display at 1600x900@60, scale 1, sRGB. The clamshell
 timer reconciles lid/display state every five seconds. Policy mismatches fail
-the applicable service instead of reporting success. These are boot/login
+the applicable service instead of reporting success. Session checks run
+independently and aggregate errors: a missing hardware report cannot skip
+audio, energy or display setup, and no 45-second report wait blocks them.
+These are boot/login
 defaults, not continuous enforcement of every knob; temporary performance
 holds remain possible. Disconnected microphones and HuC awaiting reboot are
 reported as PENDING. Once the configured driver option is active, a synthetic
@@ -713,10 +760,12 @@ low-power bitrate encode checks HuC functionality.
 
 Check `systemctl status dotfiles-samsung-hardware.service` and
 `systemctl --user status dotfiles-samsung-session.service
-dotfiles-clamshell-recover.timer`. The first live application and session checks
-passed; HuC still requires reboot. Physical Ethernet reconnect and suspend/resume
-validation remain outstanding. The complete `--all` path was dry-run checked;
-only the hardware and clamshell stages were reapplied live for this change.
+dotfiles-clamshell-recover.timer`. The 2026-10-29 repair was applied live with backups: both dotfiles services
+completed successfully, Hyprland reported no configuration errors, and the
+HuC low-power bitrate-control encoder test passed. A subsequent reboot and
+physical suspend/resume test have not been performed. The complete `--all`
+path is covered by a dry run and isolated installer tests; optional applications
+were not all reinstalled on the live desktop.
 
 `--backup` preserves conflicting installed home files; it is not a system
 snapshot. `--restore` does not roll back packages, root services or boot images.

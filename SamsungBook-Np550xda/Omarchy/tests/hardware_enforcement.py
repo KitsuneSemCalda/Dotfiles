@@ -26,22 +26,16 @@ session = load('samsung_session', ROOT / 'home/.local/bin/enforce-samsung-sessio
 
 
 class HardwarePolicy(unittest.TestCase):
-    def test_session_waits_for_current_boot_report(self):
-        report = Mock()
-        report.read_text.side_effect = [FileNotFoundError(), '{broken',
-                                      '{"boot_id": "old"}', '{"boot_id": "new"}']
-        boot = Mock(); boot.read_text.return_value = 'new\n'
-        with patch.object(session, 'REPORT', report), patch.object(session, 'BOOT_ID', boot), \
-                patch.object(session.time, 'sleep') as sleep:
-            session.wait_for_hardware()
-            self.assertEqual(sleep.call_count, 3)
-
-    def test_session_never_accepts_stale_report_after_timeout(self):
-        report = Mock(); report.read_text.return_value = '{"boot_id": "old"}'
-        boot = Mock(); boot.read_text.return_value = 'new'
-        with patch.object(session, 'REPORT', report), patch.object(session, 'BOOT_ID', boot), \
-                self.assertRaisesRegex(RuntimeError, 'current-boot hardware report'):
-            session.wait_for_hardware(timeout=0)
+    def test_hardware_failure_does_not_skip_audio_energy_or_displays(self):
+        calls = []
+        def failed():
+            calls.append('hardware')
+            raise RuntimeError('boot report missing')
+        checks = [('hardware', failed)] + [
+            (name, lambda n=name: calls.append(n)) for name in ('audio', 'energy', 'displays')]
+        with contextlib.redirect_stdout(io.StringIO()), self.assertRaisesRegex(RuntimeError, 'boot report missing'):
+            session.run_checks(checks)
+        self.assertEqual(calls, ['hardware', 'audio', 'energy', 'displays'])
 
     def test_rtkit_reset_on_fork_flag_is_realtime_but_timesharing_is_not(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -72,7 +66,7 @@ class HardwarePolicy(unittest.TestCase):
             report = root / 'report/hardware.json'
             with patch.object(system, 'SYS', root), patch.object(system, 'REPORT', report), \
                     patch.object(system, 'BOOT_ID', root / 'boot-id'), \
-                    patch.object(system, 'command', return_value=''), contextlib.redirect_stdout(io.StringIO()):
+                    patch.object(system, 'command', side_effect=RuntimeError('late daemon inactive')), contextlib.redirect_stdout(io.StringIO()):
                 self.assertTrue(system.reconcile()['huc_pending_reboot'])
                 battery = root / 'class/power_supply/BAT1/charge_control_end_threshold'
                 ethernet = root / 'bus/pci/devices/test/power/control'
@@ -90,26 +84,18 @@ class HardwarePolicy(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             system.enforce(path, '80')
 
-    def test_supply_order_and_profiles_are_reapplied_every_time(self):
-        for battery in (False, True):
-            expected = 'power-saver' if battery else 'balanced'
-            def command(*args):
-                if args[0] == 'busctl': return 'b true' if battery else 'b false'
-                if args[0] == 'powerprofilesctl': return expected
-                return ''
-            with patch.object(session, 'command', side_effect=command) as call, \
-                    contextlib.redirect_stdout(io.StringIO()):
-                session.apply_profiles(); session.apply_profiles()
-                settings = [c.args[-2:] for c in call.call_args_list if c.args[0] == 'omarchy']
-                pair = [('ac', 'balanced'), ('battery', 'power-saver')] if battery else \
-                       [('battery', 'power-saver'), ('ac', 'balanced')]
-                self.assertEqual(settings, pair * 2)
-
-    def test_profile_failure_is_not_hidden(self):
-        def command(*args):
-            return 'b false' if args[0] == 'busctl' else 'performance'
-        with patch.object(session, 'command', side_effect=command), self.assertRaises(RuntimeError):
+    def test_saved_energy_preferences_are_restored_without_rewriting_them(self):
+        with patch.object(session, 'command', return_value='') as command, \
+                contextlib.redirect_stdout(io.StringIO()):
             session.apply_profiles()
+        command.assert_called_once_with('omarchy', 'powerprofiles', 'init')
+
+    def test_profile_failure_is_reported_and_other_checks_still_run(self):
+        other = Mock()
+        with patch.object(session, 'command', side_effect=RuntimeError('daemon unavailable')), \
+                contextlib.redirect_stdout(io.StringIO()), self.assertRaisesRegex(RuntimeError, 'energy'):
+            session.run_checks([('energy', session.apply_profiles), ('audio', other)])
+        other.assert_called_once()
 
     def test_absent_mic_stores_preference_without_starting_recording(self):
         metadata = {'metadata': [{'key': 'default.configured.audio.source',

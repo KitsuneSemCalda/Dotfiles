@@ -1,0 +1,300 @@
+{
+  "commit": "b264cdec39b5df208954b4709c5fd2e70e947ca2",
+  "files": [
+    {
+      "path": "LICENSE",
+      "sha": "ed5dcc2ed060e43e4be575c6ada08ccff5e2fb21",
+      "mode": "100644"
+    },
+    {
+      "path": "README.md",
+      "sha": "72ec0c7631903439364fa3f01e60a1137f5875c1",
+      "mode": "100644"
+    },
+    {
+      "path": "config/roles.json",
+      "sha": "9c125152f08a02c9132cf72ad1b84c4643f2a31b",
+      "mode": "100644"
+    },
+    {
+      "path": "docs/REFERENCE.md",
+      "sha": "edfceb432bc933cebce86718fac82000da6c9e79",
+      "mode": "100644"
+    },
+    {
+      "path": "prompts/heads-up.md",
+      "sha": "8adfc8723d07afa438485a1857556459b15fdeb5",
+      "mode": "100644"
+    },
+    {
+      "path": "prompts/kimi-cli-agent.md",
+      "sha": "0cdae86d6912686eec9d325687326f3c7f1973eb",
+      "mode": "100644"
+    },
+    {
+      "path": "prompts/role-injection.md",
+      "sha": "99483396c719290357c94b5a85922b02347c73a4",
+      "mode": "100644"
+    },
+    {
+      "path": "prompts/stop-review-gate.md",
+      "sha": "6db5aeb11490c276f3c99be7f41dc7293c3c60f3",
+      "mode": "100644"
+    },
+    {
+      "path": "prompts/synthesis.md",
+      "sha": "7177d368e613ec9a21a9ac163eba54b5141d545c",
+      "mode": "100644"
+    },
+    {
+      "path": "schemas/agent-analysis.schema.json",
+      "sha": "7eda8d83b5ee1df3a0e8a77ebdedea9a028208f4",
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/check-status.sh",
+      "sha": "5c6e42f179cd69af82441e00b3baaaafb2681835",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/format-output.sh",
+      "sha": "5fd1276086efc9e6593345f8e7a2d6b7dc40fd4d",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/heads-up.schema.json",
+      "sha": "61c648b1db43e5086a2527aec0d6277223cec1b7",
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/heads-up.sh",
+      "sha": "897361274be088ebb8b143332ce4e98a870c6549",
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/lib/cache.sh",
+      "sha": "38e7c4d7ddb40db1d08f0d88994d91a2dbbc6068",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/lib/cli-stderr.sh",
+      "sha": "0f3462979cfa2fb0efe1ac65441a9c68214f3846",
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/lib/clock.sh",
+      "sha": "070fe79db6d9242fa507f34ccf8726d622236a9d",
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/lib/codex-home.sh",
+      "sha": "4027426656bd374a7e8d3fe88e6de6b2e22aac08",
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/lib/count.sh",
+      "sha": "56a2a271413f6c4840485ac22ff095fa8e7a3048",
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/lib/deadline.sh",
+      "sha": "bf64b839c17418c4944f5cc337dc726d2cd16b8a",
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/lib/display.sh",
+      "sha": "49a00eaee3b046c71a21d85d68ada124f453e8c1",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/lib/export.sh",
+      "sha": "69628bdbb85d8ffa83532f7c5c97e52dce89934c",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/lib/hash.sh",
+      "sha": "38455d760eb9f5d3bd43ddcb48beec1047aaf9ef",
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/lib/jobs.sh",
+      "sha": "562fe8d2e3e81e5c9af523b09e6ff243e1daa97e",
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/lib/keys.sh",
+      "sha": "d7f8aa24e39c5697d2bb828193c85acca80a92b0",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/lib/model_fallback.sh",
+      "sha": "525d0341868059cef83d19a65cf0905f2eea7200",
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/lib/pane-watcher.sh",
+      "sha": "2f056da92ecac2113a02a0d986d1409e1d5b3e35",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/lib/prompts.sh",
+      "sha": "feb27b9fdd3db2555511b1693eb391eb9d1d462f",
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/lib/providers.sh",
+      "sha": "5e8546c359ada636f040c5d07497af7d9738ebc2",
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/lib/render.pl",
+      "sha": "31b3b453f897ce201a3f1059ff4703e597296b93",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/lib/render.py",
+      "sha": "4ccf1afe99941294289c1ef0403c7aaf7681c94c",
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/lib/retry.sh",
+      "sha": "fc068d98860fb22c21cd3e79f8c018a122595ef5",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/lib/roles.sh",
+      "sha": "90c9367b78b8beed323822cee933e1e92cc41b50",
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/lib/seat-isolation.sh",
+      "sha": "346f245e31731d13633e80344411d9edee3c54f2",
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/lib/tokens.sh",
+      "sha": "5f26eb9a135de60127d31b529a6a0b2a3013fbd5",
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/lib/usage.sh",
+      "sha": "b3219ad5f8c6c708b134c3c557bbb728616fca8f",
+      "mode": "100644"
+    },
+    {
+      "path": "scripts/lib/verbosity.sh",
+      "sha": "2df64f178b4c98a33e36b16e4cfc9073c2148cc4",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/providers/antigravity.sh",
+      "sha": "6a17ae3373e74c1799551158f714346c5449a4d5",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/providers/claude-cli.sh",
+      "sha": "677b4964f1bd1a4b0c0537dd4f39c017f7e0417b",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/providers/codex.sh",
+      "sha": "c919401cc3e3b36c55c1d6b5e36a8e1ac627f372",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/providers/copilot-cli.sh",
+      "sha": "570ee60bcf96d336e6c86c8488ffd9e855f8008d",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/providers/cursor-cli.sh",
+      "sha": "1083b5d5e190f0129248624e6f81f7fc2a2f7d84",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/providers/gemini.sh",
+      "sha": "b377c8ebe0fc364a151f1681123e4875eb7d7197",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/providers/grok-cli.sh",
+      "sha": "78248b9bf8f14a19c65160a5eab772a56f839fba",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/providers/grok.sh",
+      "sha": "3e38ffd9580f2d2c3a13b4bbe7e0cfa438c26ac4",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/providers/kimi-cli.sh",
+      "sha": "f3d938dae8a36e6aa0217f8deb3347eb1f38ca06",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/providers/kimi.sh",
+      "sha": "fb9beb87e18a1f840b94f92ba467c99b8a7dc2b5",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/providers/ollama.sh",
+      "sha": "d94eb1c1cd531c5fecd856345ce65647e563b8b0",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/providers/openai.sh",
+      "sha": "9afb2eced1de9ccb962a36fc3c9d9d0273d1540a",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/providers/opencode.sh",
+      "sha": "e4ecf024a48f020fee803eba5d7dbd9ed4a27c12",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/providers/openrouter.sh",
+      "sha": "3c9a76261e9db6145e012c8e3157827669603c41",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/providers/perplexity.sh",
+      "sha": "19570915a3d370d2805786c755dab2a857e1bd7f",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/query-council.sh",
+      "sha": "af0e4405530b266141aede65881e4cfdcd93706b",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/run-council.sh",
+      "sha": "d4e7ecb3b6938d4911042ffd4f8ad7de4d2c6b5a",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/seat-info.sh",
+      "sha": "d1fbce695b7b1b52f130a89d5bbe472005e3e5a8",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/session-transcript.sh",
+      "sha": "64c8bccafd151932e6ec0daca34c0637ede77513",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/stop-review-gate.sh",
+      "sha": "be31a84c1ab51eed8dc7c9a51b88b641bd2c66fb",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/transcript-digest.sh",
+      "sha": "a3205baa009e9307a663bc79cebbba6f31ed0454",
+      "mode": "100755"
+    },
+    {
+      "path": "scripts/validate-analysis.sh",
+      "sha": "8b8a9558846b550fbe5a699308caa9ff4e1c0344",
+      "mode": "100755"
+    }
+  ]
+}

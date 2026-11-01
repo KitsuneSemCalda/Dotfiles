@@ -10,6 +10,7 @@ use File::Path qw(make_path);
 use File::Spec;
 use File::Temp qw(tempdir);
 use Getopt::Long qw(GetOptions);
+use JSON::PP qw(decode_json);
 
 my $up          = 0;
 my $down        = 0;
@@ -68,6 +69,14 @@ die "Missing docker/ directory at $docker_dir\n" unless -d $docker_dir;
 
 if ($up || $memory) {
     run_command('pkexec', 'systemctl', 'enable', '--now', 'docker.service');
+    if (my $manifest = $ENV{DOTFILES_DOWNLOAD_MANIFEST}) {
+        open my $fh, '<', $manifest or die "Cannot read prepared downloads: $!\n";
+        local $/;
+        my $data = decode_json(<$fh>);
+        close $fh;
+        run_command('docker', 'load', '-i', $data->{assets}{'ai-memory-image'})
+            if $data->{assets}{'ai-memory-image'};
+    }
 }
 
 if ($up) {
@@ -83,7 +92,7 @@ if ($memory && !$up) {
         unless $dry_run || system('docker', 'info', '--format', '{{.ServerVersion}}') == 0;
     # Only ai-memory is selected: other services and DNS remain independent.
     ensure_env(File::Spec->rel2abs($notes_dir), '127.0.0.1') unless -e $env_file;
-    compose('up', '-d', 'ai-memory');
+    compose('up', '-d', ($ENV{DOTFILES_DOWNLOAD_MANIFEST} ? ('--pull', 'never') : ()), 'ai-memory');
 }
 
 compose('down')  if $down;
@@ -185,6 +194,21 @@ sub compose {
 }
 
 sub cmd_agents {
+    if (my $manifest = $ENV{DOTFILES_DOWNLOAD_MANIFEST}) {
+        open my $fh, '<', $manifest or die "Cannot read prepared downloads: $!\n";
+        local $/;
+        my $data = decode_json(<$fh>);
+        close $fh;
+        if (my $source = $data->{native_runner}) {
+            my $destination = File::Spec->catdir($ENV{XDG_CACHE_HOME} //
+                File::Spec->catdir($ENV{HOME}, '.cache'), 'ai-memory', 'native-runner');
+            run_command('mkdir', '-p', $destination);
+            for my $name ('ai-memory', 'ai-memory-linux-x86_64.tar.gz', 'last-check') {
+                run_command('install', '-m', $name eq 'ai-memory' ? '0755' : '0644',
+                    File::Spec->catfile($source, $name), File::Spec->catfile($destination, $name));
+            }
+        }
+    }
     my $wrapper = ensure_wrapper();
     # Fetch and verify the native launch client on the host before the jail
     # hides the host cache and limits outbound release downloads.
@@ -213,6 +237,24 @@ sub ensure_wrapper {
 
     if ($dry_run) {
         say "WRAPPER? $wrapper would be downloaded and installed";
+        return $wrapper;
+    }
+
+    if (my $manifest = $ENV{DOTFILES_DOWNLOAD_MANIFEST}) {
+        open my $fh, '<', $manifest or die "Cannot read prepared downloads: $!\n";
+        local $/;
+        my $data = decode_json(<$fh>);
+        close $fh;
+        my $source = $data->{assets}{'ai-memory-wrapper'}
+            or die "ai-memory wrapper was not prepared\n";
+        open my $asset, '<:raw', $source or die "Missing cached wrapper: $!\n";
+        my $content = <$asset>;
+        close $asset;
+        die "Cached ai-memory wrapper checksum mismatch\n" unless sha256_hex($content) eq
+            '2906cdae7e405d7b64c3023cb0812311590b63223bd60b7f216cd898c89c9509';
+        run_command('mkdir', '-p', dirname($wrapper));
+        run_command('install', '-m', '0755', $source, $wrapper);
+        pin_wrapper_defaults($wrapper);
         return $wrapper;
     }
 

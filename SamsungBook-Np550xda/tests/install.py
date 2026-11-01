@@ -131,7 +131,7 @@ with tempfile.TemporaryDirectory() as tmp:
 import json, os, pathlib, shutil, sys
 name = pathlib.Path(sys.argv[0]).name
 args = sys.argv[1:]
-if name == 'omarchy' and 'ai-jail-bin' in args and os.environ.get('FAIL_AI_PACKAGE'):
+if name == 'pkexec' and args[:2] == ['pacman', '-U'] and os.environ.get('FAIL_AI_PACKAGE'):
     sys.exit(1)
 if name != 'pacman':
     with open(os.environ['COMMAND_LOG'], 'a') as f:
@@ -165,7 +165,36 @@ elif name == 'pgrep':
                  'omarchy-hyprland-monitor-watch', 'omarchy-system-lid-close', 'pacman']:
         (fake_bin / name).symlink_to(fake_tool)
     env = {**os.environ, 'HOME': str(target), 'PATH': f"{fake_bin}:{os.environ['PATH']}",
-           'FIXTURES': str(fixtures), 'COMMAND_LOG': str(log), 'FAKE_BIN': str(fake_bin)}
+           'FIXTURES': str(fixtures), 'COMMAND_LOG': str(log), 'FAKE_BIN': str(fake_bin),
+           'XDG_CACHE_HOME': str(root / 'cache')}
+
+    # Model the preparation barrier independently of the package/network tools.
+    # The real preparer has its own tests; this fixture checks orchestration.
+    (repo / 'scripts/prepare-downloads.py').write_text(r'''import json, os, pathlib, shutil, subprocess, sys
+args = sys.argv[1:]
+cache = pathlib.Path(args[args.index('--cache') + 1])
+plan = json.loads(pathlib.Path(args[args.index('--plan') + 1]).read_text())
+with open(os.environ['COMMAND_LOG'], 'a') as log:
+    log.write(json.dumps(['prepare-downloads', *plan['options']]) + '\n')
+if os.environ.get('FAIL_DOWNLOAD'): raise SystemExit('download failed')
+state = {'sources': {}, 'assets': {}, 'packages': [], 'aur': [], 'hashes': {}}
+options = set(plan['options'])
+names = []
+if 'plugin' in options: names += ['Feader-RSS', 'Spaces', 'omarchy-glass']
+if 'omastore' in options: names += ['OmaStore']
+if 'openrgb' in options: names += ['dareu-ek75-openrgb']
+for name in names:
+    dest = cache / 'sources' / name
+    if not dest.exists(): subprocess.run(['git', 'clone', 'fixture', str(dest)], check=True)
+    state['sources'][name] = str(dest)
+if 'omastore' in options:
+    archive = cache / 'omastore.tar.gz'; archive.touch()
+    state['assets']['omastore'] = str(archive)
+for package in plan['repo_packages']:
+    archive = cache / (package + '.pkg.tar.zst'); archive.touch()
+    state['packages'].append(str(archive))
+(cache / 'ready.json').write_text(json.dumps(state))
+''')
 
     # The main install delegates to the existing MCP/hooks installer. Exercise
     # that path with a disposable Compose directory and fake Docker/agents.
@@ -195,6 +224,26 @@ elif name == 'pgrep':
         assert ['ai-memory', 'install-hooks', '--agent', client, '--apply'] in stack_commands
     assert not any(cmd[:3] == ['omarchy', 'dns', 'Custom'] for cmd in stack_commands)
     assert stack_env.read_bytes() == original_env
+    # Prepared integrations must load local images and native clients, then
+    # prohibit Compose from pulling during installation.
+    native_source = root / 'prepared-native'; native_source.mkdir()
+    for name in ('ai-memory', 'ai-memory-linux-x86_64.tar.gz', 'last-check'):
+        (native_source / name).write_text('prepared native client')
+    manifest = root / 'prepared.json'
+    image = root / 'image.tar'; image.touch()
+    manifest.write_text(json.dumps({'native_runner': str(native_source),
+                                    'assets': {'ai-memory-image': str(image)}}))
+    log.write_text('')
+    prepared_result = subprocess.run(['perl', str(stack_script), '--memory', '--agents'],
+                                    capture_output=True, text=True,
+                                    env={**env, 'DOTFILES_DOWNLOAD_MANIFEST': str(manifest)})
+    assert prepared_result.returncode == 0, prepared_result.stdout + prepared_result.stderr
+    prepared_commands = [json.loads(line) for line in log.read_text().splitlines()]
+    loaded = prepared_commands.index(['docker', 'load', '-i', str(image)])
+    compose_index = next(i for i, cmd in enumerate(prepared_commands) if cmd[:2] == ['docker', 'compose'])
+    assert loaded < compose_index
+    assert prepared_commands[compose_index][-5:] == ['up', '-d', '--pull', 'never', 'ai-memory']
+    assert (root / 'cache/ai-memory/native-runner/ai-memory').read_text() == 'prepared native client'
     log.write_text('')
 
     def run_plugin(*args, success=True, extra_env=None):
@@ -203,6 +252,14 @@ elif name == 'pgrep':
         assert (result.returncode == 0) == success, result.stdout + result.stderr
         return result
 
+    before_download_failure = dest.read_bytes()
+    source.write_text('must not be published before downloads finish\n')
+    run_plugin('--plugin', success=False, extra_env={'FAIL_DOWNLOAD': '1'})
+    assert dest.read_bytes() == before_download_failure
+    failed_commands = [json.loads(line) for line in log.read_text().splitlines()]
+    assert failed_commands == [['prepare-downloads', 'plugin']]
+    source.write_text(before_download_failure.decode())
+    log.write_text('')
     run_plugin('--plugin', '--reboot')
     backend = target / '.config/omarchy/plugins/io.github.kitsunesemcalda.feader-rss/feader-rss-fetch'
     assert backend.stat().st_mode & 0o111
@@ -231,8 +288,8 @@ elif name == 'pgrep':
     normalize_pid = lambda output: re.sub(r'\.dotfiles-tmp-\d+', '.dotfiles-tmp-PID', output)
     assert normalize_pid(all_preview.stdout) == normalize_pid(explicit_preview.stdout)
     assert "'systemctl' 'reboot'" not in all_preview.stdout
-    assert "'omarchy' 'pkg' 'aur' 'add' 'ai-jail-bin'" in all_preview.stdout
-    assert "'omarchy' 'pkg' 'add' 'bubblewrap'" in all_preview.stdout
+    assert 'AUR packages from verified sources: ai-jail-bin' in all_preview.stdout
+    assert 'official packages from download cache:' in all_preview.stdout and 'bubblewrap' in all_preview.stdout
     assert "'--memory' '--agents'" in all_preview.stdout
     assert '/scripts/install-ai-desktops.sh' in all_preview.stdout
     assert "'webapp' 'install' 'ChatGPT'" not in all_preview.stdout
@@ -258,22 +315,22 @@ elif name == 'pgrep':
     run_plugin('--ek75-knob')
     knob_commands = [json.loads(line) for line in log.read_text().splitlines()]
     assert knob_commands == [
+        ['prepare-downloads'],
         ['pkexec', '/usr/bin/bash', str(system_installer), '--ek75-knob'],
     ]
     log.write_text('')
     run_plugin('--openrgb', '--ek75-knob', '--home-backup')
     combined_commands = [json.loads(line) for line in log.read_text().splitlines()]
-    assert [command for command in combined_commands if command[0] == 'pkexec'] == [
+    assert [command for command in combined_commands if command[:2] == ['pkexec', '/usr/bin/bash']] == [
         ['pkexec', '/usr/bin/bash', str(system_installer), '--openrgb',
-         str(target / '.local/share/dareu-ek75-openrgb'), '--ek75-knob', '--home-backup'],
+         str(root / 'cache/dotfiles/downloads/sources/dareu-ek75-openrgb'), '--ek75-knob', '--home-backup'],
     ]
     commands = [json.loads(line) for line in log.read_text().splitlines()]
     dependency_install = next(i for i, cmd in enumerate(commands)
-                              if cmd[:3] == ['omarchy', 'pkg', 'add'] and 'openrgb' in cmd)
-    first_rgb_step = next(i for i, cmd in enumerate(commands)
-                         if cmd[:2] == ['git', 'clone'] and cmd[-1].endswith('/dareu-ek75-openrgb'))
-    assert dependency_install < first_rgb_step
-    assert 'mbedtls3' in commands[dependency_install]
+                              if cmd[:3] == ['pkexec', 'pacman', '-U'])
+    last_download = max(i for i, cmd in enumerate(commands) if cmd[0] == 'git')
+    assert last_download < dependency_install
+    assert any('mbedtls3.pkg.tar.zst' in arg for arg in commands[dependency_install])
     assert (target / 'openrgb-steps').read_text().splitlines() == [
         'build.sh', 'install-launcher.sh', 'install-hook.sh',
     ]

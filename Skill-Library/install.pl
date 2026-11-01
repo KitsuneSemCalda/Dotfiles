@@ -14,15 +14,20 @@ my %AGENTS = (
     claude   => File::Spec->catdir($ENV{HOME}, '.claude', 'skills'),
     codex    => File::Spec->catdir($ENV{HOME}, '.codex',  'skills'),
     opencode => File::Spec->catdir($ENV{HOME}, '.config', 'opencode', 'skills'),
+    gemini   => File::Spec->catdir($ENV{HOME}, '.gemini', 'skills'),
+    cursor   => File::Spec->catdir($ENV{HOME}, '.cursor', 'skills'),
+    grok     => File::Spec->catdir($ENV{HOME}, '.grok', 'skills'),
 );
 
 my $only_agent = '';
+my $only_skill = '';
 my $dry_run    = 0;
 my $list       = 0;
 my $help       = 0;
 
 GetOptions(
     'agent=s' => \$only_agent,
+    'skill=s' => \$only_skill,
     'dry-run' => \$dry_run,
     'list'    => \$list,
     'help'    => \$help,
@@ -34,6 +39,10 @@ my $script_dir = abs_path(dirname(__FILE__)) or die "Could not locate the script
 my $skills_dir = File::Spec->catdir($script_dir, 'skills');
 
 my @skills = list_skills($skills_dir);
+if ($only_skill) {
+    die "Unknown skill '$only_skill'\n" unless grep { $_ eq $only_skill } @skills;
+    @skills = ($only_skill);
+}
 
 if ($list) {
     say 'Skills in the library:';
@@ -67,7 +76,7 @@ for my $agent (@agent_names) {
 my @targets = grep { -d dirname($AGENTS{$_}) } @agent_names;
 
 if (!@targets) {
-    say 'No supported agent CLI detected on this machine (looked for ~/.claude, ~/.codex and ~/.config/opencode). Nothing installed.';
+    say 'No supported agent CLI detected on this machine. Nothing installed.';
     exit 0;
 }
 
@@ -117,7 +126,8 @@ sub usage {
     print <<'USAGE';
 Usage: perl Skill-Library/install.pl [options]
 
-  --agent <name>  installs into only one agent (claude, codex, opencode)
+  --agent <name>  installs into only one agent (claude, codex, opencode, gemini, cursor, grok)
+  --skill <name>  installs only the named skill
   --list          lists the skills in the library and the agents detected
   --dry-run       shows what would be installed without copying anything
   --help          shows this help

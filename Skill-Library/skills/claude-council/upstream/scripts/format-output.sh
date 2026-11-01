@@ -1,0 +1,252 @@
+#!/bin/bash
+# ABOUTME: Formats council JSON output for terminal display
+# ABOUTME: Creates colored boxes, handles quiet mode, debate mode, and roles
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Colors (only if output is a terminal)
+if [[ -t 1 ]]; then
+    RED='\033[31m'
+    BOLD='\033[1m'
+    RESET='\033[0m'
+else
+    # No colors when redirected to file
+    RED=''
+    BOLD=''
+    RESET=''
+fi
+
+# Provider styling
+# provider_color and provider_swatch are defined in lib/providers.sh
+source "${SCRIPT_DIR}/lib/providers.sh"
+
+# Draw header bar (markdown compatible)
+# Args: swatch provider_name model [role] [header_type] [fallback] [model_fallback]
+# header_type: normal, rebuttal
+# fallback: a sibling PROVIDER answered instead (CLI→API swap)
+# model_fallback: the preferred MODEL was unavailable and a fallback model answered
+draw_header() {
+    local swatch="$1"
+    local provider="$2"
+    local model="${3:-}"
+    local role="${4:-}"
+    local header_type="${5:-normal}"
+    local fallback="${6:-}"
+    local model_fallback="${7:-}"
+
+    # Capitalize provider name
+    local provider_cap
+    provider_cap="$(echo "${provider:0:1}" | tr '[:lower:]' '[:upper:]')${provider:1}"
+
+    # Build header text
+    local header_text="${swatch} ${provider_cap}"
+    if [[ "$header_type" == "rebuttal" ]]; then
+        header_text="${swatch} ${provider_cap} REBUTTAL"
+    fi
+    if [[ -n "$role" ]] && [[ "$role" != "null" ]] && [[ "$header_type" != "rebuttal" ]]; then
+        header_text="${header_text} (${role})"
+    fi
+    if [[ -n "$model" ]] && [[ "$model" != "null" ]]; then
+        header_text="${header_text} - ${model}"
+    fi
+    if [[ -n "$fallback" ]] && [[ "$fallback" != "null" ]]; then
+        header_text="${header_text} (fell back to ${fallback} API)"
+    fi
+    if [[ -n "$model_fallback" ]] && [[ "$model_fallback" != "null" ]]; then
+        header_text="${header_text} (${model_fallback} unavailable)"
+    fi
+
+    # Draw markdown header
+    echo ""
+    echo "---"
+    echo "## ${header_text}"
+}
+
+# Why a seat's API sibling answered in its place, under the header that says
+# it did: the CLI's own error text, or that the image needed a vision model.
+# Only a fallback slot carries a reason, so the entry is read for one only
+# when the slot names a sibling. The reason is quoted, not emphasised: it is
+# arbitrary error text, and emphasis markers break on a space or an
+# underscore at its edge. Args: provider fallback entry
+draw_fallback_reason() {
+    local provider="$1" fallback="$2" entry="$3" reason
+    [[ -n "$fallback" ]] || return 0
+    reason=$(jq -r '.fallback_reason // empty' <<<"$entry")
+    [[ -n "$reason" ]] || return 0
+    echo ""
+    echo "> ${provider}: ${reason}"
+}
+
+# Draw synthesis header (markdown compatible)
+draw_synthesis_header() {
+    echo ""
+    echo "---"
+    echo "## 🧭 Synthesis"
+}
+
+# Render one provider entry's body. Output is never dropped: error status
+# shows the error, empty text gets a visible marker, and anything off-shape
+# is preserved raw in a fenced block so the user can see what came back.
+render_response() {
+    local entry="$1"
+
+    local status
+    status=$(echo "$entry" | jq -r '.status // empty')
+
+    if [[ "$status" == "error" ]]; then
+        local error
+        error=$(echo "$entry" | jq -r '.error // "Unknown error"')
+        echo -e "${RED}Error: ${error}${RESET}"
+        return
+    fi
+
+    if echo "$entry" | jq -e '.response | type == "string"' >/dev/null 2>&1; then
+        local response
+        response=$(echo "$entry" | jq -r '.response')
+        if [[ ! "$response" =~ [^[:space:]] ]]; then
+            echo "[empty response]"
+        else
+            echo "$response"
+        fi
+        return
+    fi
+
+    echo "[unparseable response] raw provider entry preserved:"
+    echo '```json'
+    echo "$entry" | jq .
+    echo '```'
+}
+
+# Format and display JSON council output
+format_output() {
+    local json="$1"
+
+    # Extract metadata
+    local quiet
+    quiet=$(echo "$json" | jq -r '.metadata.quiet_mode // false')
+    local debate
+    debate=$(echo "$json" | jq -r '.metadata.debate_mode // false')
+
+    if ! echo "$json" | jq -e '.round1 | type == "object"' >/dev/null 2>&1; then
+        echo "[unparseable council output] raw input preserved:"
+        echo '```json'
+        echo "$json" | jq . 2>/dev/null || echo "$json"
+        echo '```'
+        return 0
+    fi
+
+    # An HTML comment, so it renders as nothing, telling the caller that round 1
+    # already streamed into a pane and need not be reprinted in the chat.
+    if [[ "$(echo "$json" | jq -r '.metadata.pane_shown // false')" == "true" ]]; then
+        echo "<!-- council: round 1 was shown in the pane -->"
+    fi
+
+    # Get providers list from round1. Strip \r: jq's Windows build can
+    # CRLF-translate its stdout when piped rather than attached to a real
+    # console, and an unstripped \r riding along on the first provider name
+    # turns `.round1["gemini\r"]` into a silent key-miss (null) below.
+    local providers
+    providers=$(echo "$json" | jq -r '.round1 | keys[]' | tr -d '\r')
+
+    # If quiet mode, skip individual responses
+    if [[ "$quiet" != "true" ]]; then
+        # Show round 1 header if debate mode
+        if [[ "$debate" == "true" ]]; then
+            echo ""
+            echo -e "${BOLD}## Round 1: Initial Responses${RESET}"
+            echo ""
+        fi
+
+        # Display each provider's round 1 response
+        for provider in $providers; do
+            local swatch
+            swatch=$(provider_swatch "$provider")
+            local model
+            model=$(echo "$json" | jq -r ".round1[\"${provider}\"].model // \"unknown\"")
+            local role
+            role=$(echo "$json" | jq -r ".round1[\"${provider}\"].role // empty")
+            local fallback
+            fallback=$(echo "$json" | jq -r ".round1[\"${provider}\"].fallback // empty")
+            local model_fallback
+            model_fallback=$(echo "$json" | jq -r ".round1[\"${provider}\"].model_fallback // empty")
+            local entry
+            entry=$(echo "$json" | jq -c ".round1[\"${provider}\"]")
+
+            draw_header "$swatch" "$provider" "$model" "$role" "normal" "$fallback" "$model_fallback"
+            draw_fallback_reason "$provider" "$fallback" "$entry"
+            render_response "$entry"
+            echo ""
+        done
+
+        # Round 2 rebuttals if debate mode
+        if [[ "$debate" == "true" ]]; then
+            # Check if round2 exists
+            local has_round2
+            has_round2=$(echo "$json" | jq -r 'has("round2")')
+
+            if [[ "$has_round2" == "true" ]]; then
+                echo ""
+                echo -e "${BOLD}## Round 2: Rebuttals${RESET}"
+                echo ""
+
+                for provider in $providers; do
+                    # A seat cancelled in round 1 has no rebuttal slot and no block.
+                    local entry
+                    entry=$(echo "$json" | jq -c ".round2[\"${provider}\"] // empty")
+                    [[ -n "$entry" ]] || continue
+                    local swatch
+                    swatch=$(provider_swatch "$provider")
+                    local model
+                    model=$(echo "$json" | jq -r ".round2[\"${provider}\"].model // \"unknown\"")
+                    local fallback
+                    fallback=$(echo "$json" | jq -r ".round2[\"${provider}\"].fallback // empty")
+                    local model_fallback
+                    model_fallback=$(echo "$json" | jq -r ".round2[\"${provider}\"].model_fallback // empty")
+
+                    draw_header "$swatch" "$provider" "$model" "" "rebuttal" "$fallback" "$model_fallback"
+                    draw_fallback_reason "$provider" "$fallback" "$entry"
+                    render_response "$entry"
+                    echo ""
+                done
+            fi
+        fi
+    fi
+
+    # Always show synthesis header (synthesis content generated by Claude)
+    echo ""
+    draw_synthesis_header
+}
+
+# Main entry point
+main() {
+    local json
+
+    if [[ $# -eq 0 ]]; then
+        # Read JSON from stdin
+        json=$(cat)
+    elif [[ "$1" == "-" ]]; then
+        # Explicit stdin
+        json=$(cat)
+    elif [[ -f "$1" ]]; then
+        # Read from file
+        json=$(cat "$1")
+    else
+        # Assume it's JSON string
+        json="$1"
+    fi
+
+    # Validate JSON
+    if ! echo "$json" | jq -e . >/dev/null 2>&1; then
+        echo "Error: Invalid JSON input" >&2
+        exit 1
+    fi
+
+    format_output "$json"
+}
+
+# Run if executed directly
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

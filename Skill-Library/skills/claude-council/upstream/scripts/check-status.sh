@@ -1,0 +1,618 @@
+#!/bin/bash
+# ABOUTME: Checks connectivity and configuration status of all council providers
+# ABOUTME: Outputs status table with connection times and model info
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/keys.sh"
+source "$SCRIPT_DIR/lib/providers.sh"
+source "$SCRIPT_DIR/lib/clock.sh"
+source "$SCRIPT_DIR/lib/retry.sh"
+resolve_grok_key
+
+# Only rejected_key needs jq, and only to read a 400 body. Warn instead of
+# aborting, because every other probe result stands without it; staying silent
+# would report a rejected Gemini or xAI key as an ordinary HTTP 400.
+if ! jq --version >/dev/null 2>&1; then
+    echo "Warning: jq not found; a rejected Gemini or xAI key will report as a generic HTTP 400." >&2
+fi
+
+# Colors
+BLUE='\033[34m'
+WHITE='\033[37m'
+RED='\033[31m'
+GREEN='\033[32m'
+MAGENTA='\033[35m'
+BRIGHT_BLACK='\033[90m'
+CYAN='\033[36m'
+DIM='\033[2m'
+RESET='\033[0m'
+
+# Does a 400 from this provider mean the key was rejected?
+# Usage: rejected_key <provider> <body_file>
+#
+# Vendors disagree on how a rejected key comes back. Most answer 401, which the
+# status code alone classifies. Gemini and xAI answer 400, so for those two the
+# response body has to separate a rejected key from a malformed request.
+#
+# Both bury the key signal under a marker they also use for unrelated faults:
+# Gemini's INVALID_ARGUMENT is its status for the whole 400 class, including a
+# model name that fails its format check, and xAI files an unknown model under
+# the same invalid-argument code as a bad key. Matching on those alone tells a
+# user with a typo in their model to regenerate a working key, so each test reads
+# the field that names the key: Gemini's details[].reason, xAI's error text.
+#
+# jq errors (missing key, wrong type, unparseable body) mean the vendor's marker
+# is absent, which is not evidence of a rejected key, so they resolve to false.
+rejected_key() {
+    local provider="$1" body_file="$2"
+    case "$provider" in
+        gemini)
+            jq -e 'try any(.error.details[]?; .reason == "API_KEY_INVALID") catch false' \
+                "$body_file" >/dev/null 2>&1
+            ;;
+        grok)
+            # xAI offers no structured reason, so the error text is the only
+            # discriminator. Should it ever be reworded past "api key", a rejected
+            # key degrades to a plain HTTP 400: the safe direction to fail, unlike
+            # matching the code alone, which would urge a good key be regenerated.
+            jq -e 'try ((.code == "invalid-argument")
+                        and ((.error | type) == "string")
+                        and (.error | ascii_downcase | contains("api key"))) catch false' \
+                "$body_file" >/dev/null 2>&1
+            ;;
+        *)  return 1 ;;
+    esac
+}
+
+# Does this failed inference probe say the account is out of quota or credit?
+# Usage: out_of_quota <provider> <body_file>
+#
+# A 429 is also how every vendor answers a plain rate limit, which a working key
+# hits too, so only each vendor's own quota marker, never the code, may say the
+# account cannot run inference. What each one documents (checked 2026-09-25):
+# - OpenAI (developers.openai.com/api/docs/guides/error-codes): 429 with
+#   error.code credit_balance_exhausted or insufficient_quota; error.type
+#   can still read insufficient_quota.
+# - Moonshot (platform.kimi.ai/docs/api/errors): 429 with error.type
+#   exceeded_current_quota_error, apart from rate_limit_reached_error.
+# - xAI documents no billing error. The one observed shape is a 403 whose
+#   code starts personal-team-blocked and whose text says credits run out.
+# - Gemini (ai.google.dev/gemini-api/docs/api-errors) answers a depleted
+#   prepay balance with 402, caught by code alone; its daily quota and its
+#   rate limit are both a 429, so neither is read as blocked.
+out_of_quota() {
+    local provider="$1" body_file="$2"
+    case "$provider" in
+        openai)
+            jq -e 'try ((.error.code == "insufficient_quota") or (.error.code == "credit_balance_exhausted")
+                        or (.error.type == "insufficient_quota")) catch false' "$body_file" >/dev/null 2>&1
+            ;;
+        kimi)   jq -e 'try (.error.type == "exceeded_current_quota_error") catch false' "$body_file" >/dev/null 2>&1 ;;
+        grok)
+            jq -e 'try ((((.code | type) == "string") and (.code | startswith("personal-team-blocked")))
+                        or (((.error | type) == "string") and (.error | ascii_downcase | contains("credit")))) catch false' \
+                "$body_file" >/dev/null 2>&1
+            ;;
+        *)      return 1 ;;
+    esac
+}
+
+# After a passed key check, can the key run inference? A models listing answers
+# 200 for any valid key, even one whose account has no billing left, so this
+# sends one chat request capped at 16 output tokens: the one paid call a status
+# check makes per provider. Prints nothing when inference ran,
+# "inference_blocked:<code>" or "rate_limited:429" for a recognised refusal,
+# and "unverified:<code>" for anything else (a 400 over request shape, a 500, a
+# timeout): the key works, but nothing proved it can run inference, and an
+# answer nobody expected must show rather than pass as healthy.
+# Usage: inference_state <provider> <api_key> <model>
+inference_state() {
+    local name="$1" api_key="$2" model="$3"
+    # jq builds the request so a model name can never break out of its string;
+    # without jq the probe is skipped and the warning above already stands.
+    jq --version >/dev/null 2>&1 || return 0
+    local url header payload
+    case "$name" in
+        openai)
+            url="https://api.openai.com/v1/chat/completions"
+            header="Authorization: Bearer ${api_key}"
+            # Reasoning models take max_completion_tokens, which caps their
+            # thinking too, so 16 bounds the cost whatever the model is.
+            payload=$(jq -nc --arg m "$model" '{model: $m, messages: [{role: "user", content: "hi"}], max_completion_tokens: 16}')
+            ;;
+        grok|kimi)
+            [[ "$name" == grok ]] && url="https://api.x.ai/v1/chat/completions" || url="https://api.moonshot.ai/v1/chat/completions"
+            header="Authorization: Bearer ${api_key}"
+            payload=$(jq -nc --arg m "$model" '{model: $m, messages: [{role: "user", content: "hi"}], max_tokens: 16}')
+            ;;
+        gemini)
+            url="https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent"
+            header="x-goog-api-key: ${api_key}"
+            payload=$(jq -nc '{contents: [{parts: [{text: "hi"}]}], generationConfig: {maxOutputTokens: 16}}')
+            ;;
+        *)  return 0 ;;
+    esac
+    local cfg body_file code
+    cfg=$(curl_secret_config "$header")
+    body_file=$(mktemp "${TMPDIR:-/tmp}/council-probe.XXXXXX")
+    code=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 10 \
+        -X POST \
+        --config "$cfg" \
+        -H "Content-Type: application/json" \
+        -d "$payload" \
+        "$url" 2>/dev/null || true)
+    rm -f "$cfg"
+    code="${code:-000}"
+    if [[ "$code" != "200" ]] && { [[ "$code" == "402" ]] || out_of_quota "$name" "$body_file"; }; then
+        echo "inference_blocked:${code}"
+    elif [[ "$code" == "429" ]]; then
+        echo "rate_limited:429"
+    elif [[ "$code" != 2?? ]]; then
+        echo "unverified:${code}"
+    fi
+    rm -f "$body_file"
+}
+
+# Check a single provider
+# Usage: check_provider <name> <api_key_var> <model>
+check_provider() {
+    local name="$1"
+    local api_key="${!2:-}"
+    local model="$3"
+
+    if [[ -z "$api_key" ]]; then
+        echo "no_key"
+        return
+    fi
+
+    # The Perplexity probe always sends perplexity/sonar, so it would read
+    # Connected for a model value every query fails on.
+    local refusal
+    if [[ "$name" == perplexity ]] && ! refusal=$(perplexity_model_field "$model"); then
+        echo "bad_model:${refusal}"
+        return
+    fi
+
+    # Measure response time with a minimal request
+    local start_time end_time duration
+    start_time=$(now_ms)
+
+    # Keys travel via a mode-600 curl --config file, never the argv (ps-visible)
+    # or the URL. Mirrors the provider scripts' curl_secret_config hardening.
+    # Gemini and xAI reveal a rejected key only in the response body, so theirs is
+    # kept in a temp file that mktemp creates mode-600: read by jq, never printed,
+    # and unlinked before this function returns. A signal that lands mid-probe
+    # leaves it, and the config file holding the key, behind; trapping the signal
+    # here would make Ctrl-C stop interrupting the probe.
+    local http_code cfg body_file rejected
+    # An explicit template keeps the file in TMPDIR on every platform, since a
+    # bare mktemp ignores TMPDIR on BSD, and names it for anyone reading the dir.
+    body_file=$(mktemp "${TMPDIR:-/tmp}/council-probe.XXXXXX")
+    case "$name" in
+        gemini)
+            cfg=$(curl_secret_config "x-goog-api-key: ${api_key}")
+            http_code=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 10 \
+                --config "$cfg" \
+                "https://generativelanguage.googleapis.com/v1beta/models/${model}" 2>/dev/null || true)
+            rm -f "$cfg"
+            ;;
+        openai)
+            # No body is kept: OpenAI marks a rejected key with 401, and its error
+            # body echoes a redacted copy of the key that nothing here reads.
+            cfg=$(curl_secret_config "Authorization: Bearer ${api_key}")
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+                --config "$cfg" \
+                "https://api.openai.com/v1/models" 2>/dev/null || true)
+            rm -f "$cfg"
+            ;;
+        grok)
+            cfg=$(curl_secret_config "Authorization: Bearer ${api_key}")
+            http_code=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 10 \
+                --config "$cfg" \
+                "https://api.x.ai/v1/models" 2>/dev/null || true)
+            rm -f "$cfg"
+            ;;
+        kimi)
+            cfg=$(curl_secret_config "Authorization: Bearer ${api_key}")
+            http_code=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 10 \
+                --config "$cfg" \
+                "https://api.moonshot.ai/v1/models" 2>/dev/null || true)
+            rm -f "$cfg"
+            ;;
+        openrouter)
+            # Not /api/v1/models: that answers 200 with no key at all and with a
+            # rejected one, so the openai-shaped probe would report a dead seat
+            # as Connected. /api/v1/key is the endpoint that actually authenticates,
+            # answering 401 for both an absent and an invalid key.
+            cfg=$(curl_secret_config "Authorization: Bearer ${api_key}")
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+                --config "$cfg" \
+                "https://openrouter.ai/api/v1/key" 2>/dev/null || true)
+            rm -f "$cfg"
+            ;;
+        perplexity)
+            # Perplexity has no /models endpoint, so auth can only be probed with
+            # a (billable) Agent API request. A bare perplexity/sonar with no
+            # tools runs no web search (~$0.00004 against ~$0.0012 for a preset,
+            # measured 2026-10-19), and 16 output tokens was the old API's floor.
+            # The body is kept: a 403 can name a cause other than the key.
+            cfg=$(curl_secret_config "Authorization: Bearer ${api_key}")
+            http_code=$(curl -s -o "$body_file" -w "%{http_code}" --max-time 10 \
+                -X POST \
+                --config "$cfg" \
+                -H "Content-Type: application/json" \
+                -d '{"model":"perplexity/sonar","input":"hi","max_output_tokens":16}' \
+                "https://api.perplexity.ai/v1/agent" 2>/dev/null || true)
+            rm -f "$cfg"
+            ;;
+    esac
+
+    # curl exits non-zero when a transfer fails, so the `|| true` above keeps
+    # set -e from aborting. When no response status was received it also reports
+    # the code as 000 through -w. An empty code means curl wrote nothing to
+    # stdout.
+    http_code="${http_code:-000}"
+
+    rejected=0
+    if [[ "$http_code" == "400" ]] && rejected_key "$name" "$body_file"; then
+        rejected=1
+    fi
+    # Perplexity marks a bad key invalid_api_key, and only that marker reads as
+    # a rejected key. Any other 403 (chat_completions_not_available for a
+    # retired endpoint, a proxy's HTML page) is a plain error carrying the
+    # vendor's message, flattened to one line, with its backslashes doubled for
+    # the echo -e that prints the row.
+    local other_403=""
+    if [[ "$name" == perplexity && "$http_code" == "403" ]] \
+        && ! jq -e 'try (.error.type == "invalid_api_key") catch false' "$body_file" >/dev/null 2>&1; then
+        other_403=$(jq -r 'try (.error.message | strings | gsub("[[:cntrl:]]+"; " ") | gsub("\\\\"; "\\\\")) catch empty' \
+            "$body_file" 2>/dev/null || true)
+        other_403="error:403${other_403:+:${other_403}}"
+    fi
+    rm -f "$body_file"
+    if [[ -n "$other_403" ]]; then
+        echo "$other_403"
+        return
+    fi
+    if (( rejected )); then
+        # This branch only runs on 400, so report it under the code the vendor sent
+        echo "auth_error:400"
+        return
+    fi
+
+    end_time=$(now_ms)
+
+    # Calculate duration
+    duration=$((end_time - start_time))
+
+    if [[ "$http_code" == "200" ]]; then
+        local inference
+        inference=$(inference_state "$name" "$api_key" "$model")
+        case "$inference" in
+            "")           echo "ok:${duration}:${model}" ;;
+            # Still an ok: row, so it counts as available; the detail says what is unproven.
+            unverified:*) echo "ok:${duration}:${model} · inference unverified (HTTP ${inference#unverified:})" ;;
+            *)            echo "$inference" ;;
+        esac
+    elif [[ "$http_code" == "000" ]]; then
+        echo "timeout"
+    elif [[ "$http_code" == "401" ]] || [[ "$http_code" == "403" ]]; then
+        echo "auth_error:${http_code}"
+    else
+        echo "error:${http_code}"
+    fi
+}
+
+# Check a CLI-based provider in two tiers: binary present (--version), then
+# authenticated (optional auth probe command). A binary that exists but fails
+# its auth probe reports "unauthed" so the fix is obvious from the listing.
+# Usage: check_cli_provider <name> <binary> [auth_probe_args...]
+check_cli_provider() {
+    local name="$1"
+    local binary="$2"
+    shift 2
+
+    if ! command -v "$binary" >/dev/null 2>&1; then
+        echo "no_binary"
+        return
+    fi
+
+    local start_time end_time duration version
+    start_time=$(now_ms)
+
+    if ! version=$("$binary" --version 2>/dev/null | head -1); then
+        echo "error:exec_failed"
+        return
+    fi
+
+    # A probe can signal a logged-out state two ways: a non-zero exit (codex
+    # login status) or a message with exit 0 ("You are not authenticated." from
+    # grok models, "Not logged in" from cursor-agent status, "No authenticated
+    # integrations" from opencode auth list), so both the exit code and the
+    # output classify auth.
+    local probe_out
+    if [[ $# -gt 0 ]]; then
+        if ! probe_out=$("$binary" "$@" 2>/dev/null); then
+            echo "unauthed"
+            return
+        fi
+        if echo "$probe_out" | grep -qiE "not authenticated|not logged in|no authenticated integrations"; then
+            echo "unauthed"
+            return
+        fi
+    fi
+
+    end_time=$(now_ms)
+    duration=$((end_time - start_time))
+    echo "ok:${duration}:${version:-cli}"
+}
+
+# Exact next action for a provider in a failure state, shown in the listing.
+# Usage: remediation_for <provider_id> <state>
+remediation_for() {
+    case "$1:$2" in
+        gemini:no_key)        echo "export GEMINI_API_KEY=<key>" ;;
+        openai:no_key)        echo "export OPENAI_API_KEY=<key>" ;;
+        grok:no_key)          echo "export XAI_API_KEY=<key>" ;;
+        perplexity:no_key)    echo "export PERPLEXITY_API_KEY=<key>" ;;
+        kimi:no_key)          echo "export KIMI_API_KEY=<key>" ;;
+        # A roster names every row openrouter-N, and one key serves all of them,
+        # so the hint must not vanish exactly when the feature is configured.
+        openrouter:no_key|openrouter-*:no_key) echo "export OPENROUTER_API_KEY=<key>" ;;
+        codex:no_binary)      echo "npm install -g @openai/codex" ;;
+        codex:unauthed)       echo "codex login" ;;
+        antigravity:no_binary) echo "install the Antigravity CLI (agy)" ;;
+        grok-cli:no_binary)   echo "install the Grok CLI (grok)" ;;
+        kimi-cli:no_binary)   echo "install the Kimi Code CLI (kimi)" ;;
+        kimi-cli:unauthed)    echo "kimi login" ;;
+        cursor-cli:no_binary) echo "install the Cursor CLI (cursor-agent)" ;;
+        cursor-cli:unauthed)  echo "cursor-agent login" ;;
+        claude-cli:no_binary) echo "install Claude Code (claude)" ;;
+        claude-cli:unauthed)  echo "claude auth login" ;;
+        copilot-cli:no_binary) echo "install the GitHub Copilot CLI (copilot)" ;;
+        opencode:no_binary)   echo "install the OpenCode CLI (opencode)" ;;
+        opencode:unauthed)    echo "opencode auth login" ;;
+        ollama:no_binary)     echo "install Ollama (ollama.com)" ;;
+        ollama:unauthed)      echo "start the daemon: ollama serve" ;;
+        grok-cli:unauthed)    echo "grok login" ;;
+        *:auth_error)         echo "key rejected - regenerate it" ;;
+        *:inference_blocked)  echo "check the account's billing or credits" ;;
+        *:rate_limited)       echo "rate limited - check again in a minute" ;;
+        *)                    echo "" ;;
+    esac
+}
+
+# Main output
+echo ""
+echo -e "${DIM}Provider Status:${RESET}"
+echo ""
+
+# Check each provider
+# get_model resolves the override too, so the status check cannot report a model
+# the council would not actually query.
+gemini_status=$(check_provider "gemini" "GEMINI_API_KEY" "$(get_model gemini)")
+openai_status=$(check_provider "openai" "OPENAI_API_KEY" "$(get_model openai)")
+grok_status=$(check_provider "grok" "GROK_API_KEY" "$(get_model grok)")
+perplexity_status=$(check_provider "perplexity" "PERPLEXITY_API_KEY" "$(get_model perplexity)")
+kimi_status=$(check_provider "kimi" "KIMI_API_KEY" "$(get_model kimi)")
+openrouter_status=$(check_provider "openrouter" "OPENROUTER_API_KEY" "$(get_model openrouter)")
+# The measured round-trip, kept so a roster can stamp it onto every seat's row
+# without probing again. Empty unless the probe succeeded.
+openrouter_probe_ms=""
+if [[ "$openrouter_status" == ok:* ]]; then
+    openrouter_probe_ms="${openrouter_status#ok:}"
+    openrouter_probe_ms="${openrouter_probe_ms%%:*}"
+fi
+# codex login status exits non-zero when logged out; agy has no
+# equivalent offline auth probe, so it stays a single-tier check. `grok models`
+# prints "You are not authenticated." with exit 0 when logged out, which the
+# probe's output match classifies, giving grok-cli the same two tiers as codex.
+codex_status=$(check_cli_provider "codex" "codex" login status)
+antigravity_status=$(check_cli_provider "antigravity" "agy")
+grokcli_status=$(check_cli_provider "grok-cli" "grok" models)
+kimicli_status=$(check_cli_provider "kimi-cli" "kimi")
+cursorcli_status=$(check_cli_provider "cursor-cli" "cursor-agent" status)
+# Probed under the seat's own scrubbed environment: an ANTHROPIC_API_KEY makes
+# `claude auth status` report logged in, but the seat never receives it and
+# runs on the claude.ai login. Logged out exits 1. Discovery never seats it,
+# so a healthy row says how to.
+claudecli_status=$(provider_env_scrub claude-cli; check_cli_provider "claude-cli" "claude" auth status)
+[[ "$claudecli_status" == ok:* ]] && claudecli_status="${claudecli_status} · seat with --providers=claude-cli"
+# copilot has no auth status command, and a logged-in prompt run bills the
+# plan, so like agy it stays a single-tier check. Discovery never seats it.
+copilotcli_status=$(check_cli_provider "copilot-cli" "copilot")
+[[ "$copilotcli_status" == ok:* ]] && copilotcli_status="${copilotcli_status} · seat with --providers=copilot-cli"
+# Probed with --standalone under the seat's own scrubbed environment: without
+# it, auth list asks the user's background service, which reports the vendor
+# keys of the shell that started it, keys the seat never receives.
+# opencode_blind_env, shared with the seat, keeps the probe's private server
+# from loading the user's plugins and starting their MCP servers. Listing the stored logins sends no
+# prompt, so the probe bills nothing. With none stored it prints "No
+# authenticated integrations" and exits 0.
+# Discovery never seats it, so a healthy row says how to.
+opencode_status=$(provider_env_scrub opencode
+    OPENCODE_CONFIG_DIR=$(mktemp -d "${TMPDIR:-/tmp}/council-opencode-config.XXXXXX")
+    opencode_blind_env "$OPENCODE_CONFIG_DIR"
+    check_cli_provider "opencode" "opencode" auth list --standalone
+    rm -rf "$OPENCODE_CONFIG_DIR")
+[[ "$opencode_status" == ok:* ]] && opencode_status="${opencode_status} · seat with --providers=opencode"
+ollama_status=$(check_cli_provider "ollama" "ollama" list)
+
+# Format output
+# Usage: format_status <display_name> <provider_id> <status>
+# Column widths, measured in display cells. A literal tab was used here once and
+# could not work: a tab stop lands at a different place depending on how long the
+# preceding name is, so "Grok" and "Perplexity" pushed their status to different
+# columns. Padding is computed from the PLAIN text instead — the coloured strings
+# carry SGR escape bytes that occupy no width, so measuring them would pad every
+# row by a different wrong amount.
+STATUS_NAME_W=14    # fits "OpenRouter 10" and "Antigravity"
+STATUS_STATE_W=28   # fits the longest states, "Installed, not authenticated" and
+                    # "Inference blocked (HTTP 429)"
+
+format_status() {
+    local name="$1"
+    local provider_id="$2"
+    local status="$3"
+
+    # The footer's denominator, counted here rather than written down. A literal
+    # has been hand-bumped 3 -> 4 -> 6 -> 7 -> 10 as the roster grew, and each
+    # bump was a chance to forget; counting a row as it prints makes the total
+    # equal to what the user can actually see, by construction. Assignment form,
+    # not ((n++)): under set -e a post-increment returning 0 aborts the script.
+    provider_total=$((provider_total + 1))
+
+    local swatch color
+    swatch=$(provider_swatch "$provider_id")
+    color=$(provider_color "$provider_id")
+    local state="$status"
+    [[ "$status" == auth_error:* ]] && state="auth_error"
+    [[ "$status" == inference_blocked:* ]] && state="inference_blocked"
+    [[ "$status" == rate_limited:* ]] && state="rate_limited"
+    local fix
+    fix=$(remediation_for "$provider_id" "$state")
+
+    # Each column is built as a (plain, painted) pair: the plain form sets the
+    # width, the painted form is what prints. The icon is its own two-cell field
+    # so a one-glyph tick and a two-character dash still align.
+    local icon plain_state painted_state plain_detail painted_detail
+    case "$status" in
+        no_key)
+            icon="${DIM}--${RESET}"
+            plain_state="API key not set";     painted_state="${DIM}${plain_state}${RESET}"
+            ;;
+        no_binary)
+            icon="${DIM}--${RESET}"
+            plain_state="CLI not installed";   painted_state="${DIM}${plain_state}${RESET}"
+            ;;
+        unauthed)
+            icon="${RED}✗ ${RESET}"
+            plain_state="Installed, not authenticated"; painted_state="${RED}${plain_state}${RESET}"
+            ;;
+        timeout)
+            icon="${RED}✗ ${RESET}"
+            plain_state="Connection timeout";  painted_state="${RED}${plain_state}${RESET}"
+            ;;
+        auth_error:*)
+            icon="${RED}✗ ${RESET}"
+            plain_state="Auth failed (HTTP ${status#auth_error:})"
+            painted_state="${RED}${plain_state}${RESET}"
+            ;;
+        inference_blocked:*)
+            icon="${RED}✗ ${RESET}"
+            plain_state="Inference blocked (HTTP ${status#inference_blocked:})"
+            painted_state="${RED}${plain_state}${RESET}"
+            ;;
+        rate_limited:*)
+            icon="${RED}✗ ${RESET}"
+            plain_state="Rate limited (HTTP ${status#rate_limited:})"
+            painted_state="${RED}${plain_state}${RESET}"
+            ;;
+        bad_model:*)
+            icon="${RED}✗ ${RESET}"
+            plain_state="Unsupported model";   painted_state="${RED}${plain_state}${RESET}"
+            plain_detail="${status#bad_model:}"; painted_detail="${DIM}${plain_detail}${RESET}"
+            ;;
+        error:*)
+            # error:<code>, or error:<code>:<vendor message> for the detail column
+            local rest="${status#error:}"
+            icon="${RED}✗ ${RESET}"
+            plain_state="Error (HTTP ${rest%%:*})"
+            painted_state="${RED}${plain_state}${RESET}"
+            if [[ "$rest" == *:* ]]; then
+                plain_detail="${rest#*:}"; painted_detail="${DIM}${plain_detail}${RESET}"
+            fi
+            ;;
+        ok:*)
+            local rest="${status#ok:}"
+            local duration="${rest%%:*}"
+            local model="${rest#*:}"
+            icon="${GREEN}✓ ${RESET}"
+            plain_state="Connected (${duration}ms)"
+            painted_state="${GREEN}Connected${RESET} ${DIM}(${duration}ms)${RESET}"
+            plain_detail="$model"; painted_detail="${DIM}${model}${RESET}"
+            ;;
+    esac
+
+    # The last column carries the model when there is one and the remediation
+    # otherwise, so a failing row still says what to do without widening every
+    # healthy row to make room for it.
+    if [[ -z "${plain_detail:-}" && -n "$fix" ]]; then
+        plain_detail="fix: ${fix}"; painted_detail="${DIM}fix: ${fix}${RESET}"
+    fi
+
+    local name_gap state_gap
+    printf -v name_gap  '%*s' "$(( STATUS_NAME_W  > ${#name}        ? STATUS_NAME_W  - ${#name}        : 1 ))" ''
+    printf -v state_gap '%*s' "$(( STATUS_STATE_W > ${#plain_state} ? STATUS_STATE_W - ${#plain_state} : 1 ))" ''
+
+    echo -e "  ${swatch}  ${color}${name}${RESET}${name_gap}${icon} ${painted_state}${state_gap}${painted_detail:-}"
+}
+
+# Both counters are initialised before the rows so the router roster, which
+# renders a variable number of rows in a loop, can count as it prints rather
+# than needing a second pass over names that are not known until runtime.
+provider_total=0
+available_count=0
+format_status "Gemini"     "gemini"     "$gemini_status"
+format_status "OpenAI"     "openai"     "$openai_status"
+format_status "Grok"       "grok"       "$grok_status"
+format_status "Perplexity" "perplexity" "$perplexity_status"
+format_status "Kimi" "kimi" "$kimi_status"
+
+# A roster (OPENROUTER_MODELS) turns the one router script into several seats.
+# They share a key, and the key is what the probe tests, so one probe result is
+# reused for every row; only the model column differs. Without a roster this
+# loop does not run and the single row below is printed instead.
+openrouter_seats=()
+openrouter_seat_models openrouter_seats
+if (( ${#openrouter_seats[@]} > 0 )); then
+    for (( seat_index = 1; seat_index <= ${#openrouter_seats[@]}; seat_index++ )); do
+        # check_provider stamps the model onto an ok: result, so the shared probe
+        # is re-stamped per seat rather than re-run. get_model, not the roster
+        # entry: an OPENROUTER_<N>_MODEL override is what the query would send,
+        # and the status check must not report a model the council would not.
+        seat_status="$openrouter_status"
+        if [[ "$openrouter_status" == ok:* ]]; then
+            seat_status="ok:${openrouter_probe_ms}:$(get_model "openrouter-${seat_index}")"
+            available_count=$((available_count + 1))
+        fi
+        format_status "OpenRouter ${seat_index}" "openrouter-${seat_index}" "$seat_status"
+    done
+else
+    format_status "OpenRouter" "openrouter" "$openrouter_status"
+    [[ "$openrouter_status" == ok:* ]] && available_count=$((available_count + 1))
+fi
+format_status "Kimi CLI" "kimi-cli" "$kimicli_status"
+format_status "Cursor CLI" "cursor-cli" "$cursorcli_status"
+format_status "Claude CLI" "claude-cli" "$claudecli_status"
+format_status "Copilot CLI" "copilot-cli" "$copilotcli_status"
+format_status "OpenCode" "opencode" "$opencode_status"
+format_status "Ollama" "ollama" "$ollama_status"
+format_status "Codex CLI"  "codex"      "$codex_status"
+format_status "Antigravity" "antigravity" "$antigravity_status"
+format_status "Grok CLI"   "grok-cli"   "$grokcli_status"
+
+echo ""
+
+# Summary. available_count=$((...)) rather than ((available_count++)): under
+# set -e a post-increment returning 0 would abort the script on the first hit.
+# The router seats already counted themselves above, where their number is known.
+[[ "$gemini_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$openai_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$grok_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$perplexity_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$kimi_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$kimicli_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$cursorcli_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$claudecli_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$copilotcli_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$opencode_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$ollama_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$codex_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$antigravity_status" == ok:* ]] && available_count=$((available_count + 1))
+[[ "$grokcli_status" == ok:* ]] && available_count=$((available_count + 1))
+
+echo -e "${DIM}${available_count}/${provider_total} providers available${RESET}"
+echo ""
