@@ -75,7 +75,8 @@ GetOptions(
 usage(0) if $help;
 
 if ($all) {
-    $$_ = 1 for values %installation_options;
+    # Automatic backups stay opt-in: --all never enables the Dropbox timers.
+    $$_ = 1 for grep { $_ != \$home_backup } values %installation_options;
 }
 $clamshell = 1 if $hardware;
 my $installation_requested = grep { $$_ } values %installation_options;
@@ -1090,7 +1091,7 @@ Usage: perl omarchy.pl [options]
   --ai-memory        starts ai-memory and configures MCP/hooks for detected AI CLIs
   --ai-jail          installs ai-jail and its bubblewrap sandbox dependency
   --omatuber         installs pinned OmaTuber, OBS browser support and authenticated integration
-  --all              runs all optional installation actions, including backups and maintenance
+  --all              runs all optional installation actions except --home-backup, which must be explicit
   --target PATH      uses a different root directory only to test file installation
   --help             shows this help
 USAGE

@@ -371,8 +371,8 @@ before running either option; the Default profile must already exist.
 
 To reinstall the complete profile, including bookmarks, apps, plugins,
 OmaStore, fonts, theme, OpenRGB, the EK75 knob rule, clamshell configuration,
-hardware inventory, automatic maintenance, ai-memory MCP/hooks, ai-jail and
-the home backup timers:
+hardware inventory, automatic maintenance, ai-memory MCP/hooks and ai-jail.
+The home backup timers are not part of `--all`; add `--home-backup` to enable them:
 
 ```bash
 perl ./omarchy.pl --all --backup
