@@ -397,8 +397,8 @@ if ($calibrate) {
     say 'Run calibrate-devices in a terminal to adjust connected hardware.';
 }
 ensure_fonts()  if $fonts;
-ensure_chromium_bookmarks() if $apps || $bookmarks;
 ensure_apps()   if $apps;
+ensure_chromium_bookmarks() if $apps || $bookmarks;
 if ($omatuber) {
     run_command('bash', File::Spec->catfile($repo_root, 'scripts', 'install-omatuber.sh'));
     run_command('python3', File::Spec->catfile($repo_root, 'scripts', 'configure-omatuber.py'));
@@ -688,6 +688,8 @@ sub webapps {
         { name => 'Pichau',           url => 'https://www.pichau.com.br/'},
         { name => 'ChipArt',          url => 'https://www.chipart.com.br/'},
         { name => 'MakerWorld',       url => 'https://makerworld.com/en'},
+        { name => 'Duolingo',         url => 'https://www.duolingo.com/lesson'},
+        { name => 'Khan Academy',     url => 'https://pt.khanacademy.org/profile/me/courses'},
     );
 }
 
